@@ -15,6 +15,10 @@ fn 0x1077e save_clear_bin            # crea/escribe "A:CLEAR.BIN" (0x291c bytes)
 fn 0x107a2 write_named_file          # fcreate+fwrite+fclose
 
 # ==== pantalla ====
+fn 0x10fec screen_address            # direccion planar de (x,y) sobre screen_ptr_a (d0<<2)
+fn 0x10fee screen_address_raw        # idem sin lsl.w #2 (d0 ya escalado)
+fn 0x10ff4 screen_offset             # cuerpo comun: suma el offset a A0; d7 = d0 & 0xf
+fn 0x121c4 copy_screen_a6            # addq.l #1,a6 + copy_screen
 fn 0x121c6 copy_screen               # copia 8000 longs (32000 B) DAT_0001a462 -> DAT_0001a45e
 fn 0x121de swap_screens              # intercambia los dos buffers de pantalla
 fn 0x13572 load_named_screen         # prepara buffer (len 0x7d22) y llama a load_resource
@@ -74,7 +78,6 @@ fn 0x162da set_palette_current       # idem con indice de 0x1acf4
 fn 0x162ce set_palette_from_entry    # idem con indice de A6[1]
 fn 0x162d8 set_palette_advance       # addq.l #1,a6 + set_palette_current
 fn 0x11014 noop_11014                # `rts` (stub sin efecto)
-fn 0x121c4 copy_screen_a6            # addq.l #1,a6 + copy_screen
 fn 0x106e2 load_resource_list_a      # A5=0x1a3aa -> load_resource_list
 fn 0x106ea load_resource_list_b      # A5=0x1a3e4 -> load_resource_list
 
