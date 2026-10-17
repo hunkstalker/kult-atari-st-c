@@ -1,0 +1,1620 @@
+/* shim.c — Musashi (MAME 68000 core) backing the differential oracle.
+ *
+ * Musashi calls back into these m68k_read/write_memory_* functions for every access;
+ * we service them from a flat big-endian image supplied by Python and log every written
+ * address (the write-set). osh_run() sets registers, runs a function to its return
+ * (detected via a sentinel return address), and leaves final memory in the shared buffer.
+ */
+#include <stdint.h>
+#include "m68k.h"
+/* The oracle's CPU takes no trace exception — a stated modelling decision (TRAP_MODEL.md, "The CPU
+ * configuration"), set by -DM68K_EMULATE_TRACE=0 in kit.mk's OCFLAGS. m68k.h pulls in m68kconf.h,
+ * so by here the macro holds its EFFECTIVE value however it was arrived at, and this refuses the
+ * build if that value is ever ON. It is the kit-wide half of the pin: the -D would otherwise be
+ * silently undone by a `make OCFLAGS=...`, a dropped continuation, or an upstream m68kconf.h whose
+ * #ifndef guard went away, and the only thing that would notice is one project's test suite
+ * (projects/wonderboy/recreate/test/test_copylock.py::test_the_oracles_cpu_takes_no_trace_exception,
+ * which stays as the behavioural half — it checks that Musashi HONOURS the setting). Same reasoning
+ * as OS_NO_REFUSAL_TALLY below: a build flag can be forgotten where an adjacent check cannot. */
+#if M68K_EMULATE_TRACE != M68K_OPT_OFF
+#error "the oracle requires M68K_EMULATE_TRACE OFF (kit.mk OCFLAGS); see TRAP_MODEL.md"
+#endif
+/* The oracle keeps its own refusal tally — g_unmodeled, below — so os.h must give it the no-op
+ * os_refused() rather than the candidate-side counter in ../src/os_refusal.c, which the oracle does
+ * not link. Declared here rather than as a -D in kit.mk because this is the only oracle translation
+ * unit that includes os.h, and a build flag can be forgotten where an adjacent #define cannot. */
+#define OS_NO_REFUSAL_TALLY 1
+#include "os.h"
+
+static uint8_t *g_mem;
+static uint32_t g_size;
+
+/* THE WRITE LEDGER'S CAP, and `logw` SATURATES at it rather than wrapping — so a run past it leaves
+ * `g_wn` sitting here and every further address is dropped uncounted. That silence is why the cap is
+ * EXPORTED (osh_max_writes): emu.py mirrors it, cross-checks the mirror against this, reports the
+ * saturation per run, and harness.differential refuses a comparison made against a truncated set.
+ *
+ * SIZED FROM THE REAL RUNS RATHER THAN ROUNDLY: the biggest differential in the workspace is
+ * BuggyBoy's `unpack_graphics`, measured at 1,315,224 events, which overflowed the previous
+ * 1 << 20 cap by a quarter and had been comparing against a truncated write set unnoticed. This
+ * leaves it 3.2x of headroom. The cost is BSS, committed a page at a time as a run fills it. */
+#define MAX_WRITES (1u << 22)
+static uint32_t g_waddr[MAX_WRITES];
+static uint32_t g_wn;
+
+/* --- optional executed-PC coverage (off by default; osh_cov_enable turns it on) --------------
+ * A bit per image byte address, accumulated ACROSS osh_run calls (reset with osh_cov_reset), so a
+ * whole test session's oracle execution can be queried. tools/coverage_gap.py uses it to flag
+ * side-effecting call sites (Dosound/INITTUNE/INITFX/stop_music/... bsr sites) that no test ever
+ * executes — i.e. sound/OS triggers whose effect is off-image and thus invisible to the diff.
+ * Gated so it adds nothing to a normal `make test`. */
+#define COV_SIZE (1u << 20)                 /* one bit per address in [0, 1 MiB) */
+static uint8_t g_cov[COV_SIZE / 8];
+static int     g_cov_on;
+void osh_cov_enable(int on) { g_cov_on = on; }
+void osh_cov_reset(void)    { for (uint32_t i = 0; i < sizeof g_cov; i++) g_cov[i] = 0; }
+int  osh_cov_visited(uint32_t pc) { return pc < COV_SIZE && ((g_cov[pc >> 3] >> (pc & 7)) & 1); }
+
+/* --- optional cycle-per-PC profile (off by default; osh_prof_enable turns it on) -------------
+ * One uint32 cycle tally per even PC in [0, PROF_SIZE), accumulated across osh_run_bench calls
+ * (reset with osh_prof_reset). Sized for the cross-compiled recon/remaster ELFs, which link at
+ * base 0 and stay well under 1 MiB of text. remaster's tools/profile.py maps the tallies back to
+ * symbols. Gated so it adds nothing to a normal bench run. */
+#define PROF_SIZE (1u << 20)                /* PCs covered: [0, 1 MiB) */
+static uint32_t g_prof[PROF_SIZE / 2];      /* tally per even PC */
+static int      g_prof_on;
+void osh_prof_enable(int on) { g_prof_on = on; }
+void osh_prof_reset(void)    { for (uint32_t i = 0; i < PROF_SIZE / 2; i++) g_prof[i] = 0; }
+const uint32_t *osh_prof_data(void)  { return g_prof; }
+uint32_t        osh_prof_slots(void) { return PROF_SIZE / 2; }
+
+/* --- SCHEDULED WRITES: the oracle side of the external-agent model (os.h, "Phase 8") ---------
+ *
+ * A routine that busy-waits on a byte its own instructions never write needs something outside it
+ * to store one. os.h owns the encoding and says why; this holds the run's list, counts arrivals at
+ * each entry's trigger PC, and applies each entry ONCE when it comes due.
+ *
+ * THE AGENT'S STORE IS NOT IN THE WRITE-SET. It goes straight into g_mem rather than through
+ * m68k_write_memory_*, because the write-set is what the FUNCTION stored — the harness's attribution
+ * pass poisons exactly those bytes and re-runs, and a byte the agent supplies is an input to the run,
+ * not an output of it. The candidate applies the identical store from the identical list, so the
+ * final images still agree byte for byte. */
+static uint32_t g_sched[OS_SCHED_MAX][OS_SCHED_FIELDS];
+static uint32_t g_sched_n;
+static uint8_t  g_sched_fired[OS_SCHED_MAX];  /* whether an entry has already been applied */
+static uint32_t g_sched_applied;              /* entries applied this run */
+static uint32_t g_sched_arrivals;             /* total arrivals over every declared wait site */
+static uint32_t g_sched_refused;              /* entries whose store os_sched_store would not make */
+
+/* THE RUN'S DECLARED WAIT SITES (os.h, "WAIT SITES") and their arrival counts. An arrival is
+ * counted for the SITE and not for the entry, which is what makes it the same event as the
+ * candidate's poll AT THAT SITE: two waits in one run have two counters here and two there, and the
+ * harness compares them pairwise instead of comparing two totals that can cancel. */
+static uint32_t g_sched_sites[OS_SCHED_SITE_MAX];
+static uint32_t g_sched_site_n;
+static uint32_t g_sched_site_arrivals[OS_SCHED_SITE_MAX];
+
+/* Install the run's schedule: the entries AND the wait sites their triggers name, as one
+ * declaration, because an AT_PC entry whose trigger is not a declared site can never come due.
+ * Entries past OS_SCHED_MAX (and sites past OS_SCHED_SITE_MAX) are DROPPED and reported through
+ * osh_sched_count()/osh_sched_site_count(), which emu.run checks against what it passed
+ * (`_install_schedule`): silently carrying fewer than the case declared would leave the wait loop
+ * spinning to the instruction cap with no cause named.
+ *
+ * NEITHER LIST IS PER-RUN STATE and sched_enter_run does not clear them — only the counters. What
+ * makes a schedule not leak into the next case is that emu.run calls this before EVERY run, an
+ * empty one included; a C caller that drives osh_run directly (the probes in ../test) inherits
+ * whatever the last install left and must install its own, empty or not. */
+void osh_schedule(const uint32_t *entries, uint32_t n, const uint32_t *sites, uint32_t site_n) {
+    g_sched_n = os_sched_install(g_sched, entries, n);
+    g_sched_site_n = os_sched_install_sites(g_sched_sites, sites, site_n);
+}
+
+/* Apply every entry the instruction about to run brings due. Called once per instruction, BEFORE it
+ * executes, so an AT_PC entry with nth = 1 lands before the compare at that PC reads its byte —
+ * which is what makes it the same event as the candidate's first `sched_poll8`. */
+static void sched_fire(uint32_t pc, uint32_t insn_index) {
+    /* ONE ARRIVAL PER INSTRUCTION, however many entries name this PC — the harness compares the
+     * count against the candidate's POLLS AT THE SAME SITE, and a wait polls once per iteration
+     * whether the case declared one store on it or three. Counted after an entry has fired too: a
+     * port that polls a different number of times is what the comparison is for. */
+    uint32_t site = os_sched_site_index(g_sched_sites, g_sched_site_n, pc);
+    uint32_t arrival = 0;
+    if (site != OS_SCHED_NO_SITE) {
+        arrival = ++g_sched_site_arrivals[site];
+        g_sched_arrivals++;
+    }
+    for (uint32_t i = 0; i < g_sched_n; i++) {
+        int due;
+        if (g_sched[i][OS_SCHED_F_KIND] == OS_SCHED_AT_PC)
+            due = site != OS_SCHED_NO_SITE && pc == g_sched[i][OS_SCHED_F_TRIGGER]
+                  && arrival == g_sched[i][OS_SCHED_F_NTH];
+        else
+            due = insn_index == g_sched[i][OS_SCHED_F_TRIGGER];   /* 1-based; see osh_run's loop */
+        if (!due || g_sched_fired[i])
+            continue;
+        g_sched_fired[i] = 1;
+        if (os_sched_store(g_mem, g_size, g_sched[i][OS_SCHED_F_ADDR],
+                           g_sched[i][OS_SCHED_F_WIDTH], g_sched[i][OS_SCHED_F_VALUE]))
+            g_sched_applied++;
+        else
+            g_sched_refused++;
+    }
+}
+
+static void sched_enter_run(void) {
+    g_sched_applied = 0;
+    g_sched_arrivals = 0;
+    g_sched_refused = 0;
+    for (uint32_t i = 0; i < OS_SCHED_MAX; i++)
+        g_sched_fired[i] = 0;
+    for (uint32_t i = 0; i < OS_SCHED_SITE_MAX; i++)
+        g_sched_site_arrivals[i] = 0;
+}
+
+uint32_t osh_sched_count(void)     { return g_sched_n; }
+uint32_t osh_sched_applied(void)   { return g_sched_applied; }
+uint32_t osh_sched_arrivals(void)  { return g_sched_arrivals; }
+uint32_t osh_sched_refused(void)   { return g_sched_refused; }
+uint32_t osh_sched_max(void)       { return OS_SCHED_MAX; }
+uint32_t osh_sched_fields(void)    { return OS_SCHED_FIELDS; }
+uint32_t osh_sched_site_max(void)  { return OS_SCHED_SITE_MAX; }
+uint32_t osh_sched_site_count(void) { return g_sched_site_n; }
+
+/* Arrivals at the `i`th DECLARED site, in the order the run declared them — what the harness
+ * compares against the candidate's `g_sched_site_polls(i)`. Out of range reads 0 rather than past
+ * the table: the caller is ctypes and a bad index is a test bug, not a model state. */
+uint32_t osh_sched_site_arrivals(uint32_t i) {
+    return i < OS_SCHED_SITE_MAX ? g_sched_site_arrivals[i] : 0u;
+}
+
+/* The 68000 has a 24-bit address bus, so the top byte of an address is ignored: $ffff8800 and
+ * $fffffc00 reach the same hardware as $ff8800 and $fffc00. Every hardware-address comparison below
+ * masks with this first, so the idiom a game uses to reach a register cannot decide whether the
+ * guard sees it. */
+#define BUS_ADDR_MASK 0xffffffu
+
+/* --- IKBD 6850 ACIA (keyboard/joystick), $fffffc00/02 -> 24-bit bus alias $fffc00/02 -----
+ * read_joystick busy-waits on the status TDRE bit then sends a command; the joystick reply
+ * arrives via an interrupt we don't run (input state is instead scripted as an image global —
+ * see HARNESS.md). The status byte used to be answered by a hard-coded `return 0x02` right here;
+ * since Phase 10 it is os.h's OS_HW_ACIA_STATUS — a SEEDED-READ slot whose MODEL DEFAULT is that
+ * same byte, so the wait loop still terminates, a case may declare another status, and the read is
+ * LEDGERED like every other modeled one instead of being invisible. os_hw_model_defaults() carries
+ * the argument for why this is the one address the model may answer on its own.
+ * The command byte written to the data port next door lands above the image; it is dropped from
+ * memory exactly as before, and recorded in the hardware WRITE ledger below. */
+
+/* --- PSG (YM2149) capture -----------------------------------------------------------
+ * The sound driver talks to the PSG by writing a register number to $ff8800 (select
+ * latch) then the value to $ff8802 (data). Those addresses sit above the 1 MiB image, so
+ * the accesses would otherwise vanish. Tap them here into an ordered event log the sound
+ * tools read after each REFRESH run — the register stream that drives a Python YM2149. */
+/* The canonical pair is os.h's OS_PSG_PORT_SELECT / OS_PSG_PORT_DATA — one definition, because
+ * test/psg_model_probe.c plants 68000 code that must reach the same two addresses this decodes.
+ * (The 68000's 24-bit bus aliases $ffff8800 onto $ff8800; BUS_ADDR_MASK above is what makes the
+ * comparison see both.)
+ *
+ * The ST decodes the YM2149 incompletely: it answers across the whole $ff8800..$ff88ff block, of
+ * which those two are the canonical pair. The guards below cover the BLOCK, not the pair — a driver
+ * reaching the chip through a mirror is using the direct path just as much, and guarding only the
+ * pair would let it disarm the mixed-path check. */
+#define PSG_BLOCK_END 0xff8900
+/* The ledger's cap is os.h's OS_PSG_LOG_MAX — ONE cap for both sides, like OS_DOSOUND_LOG_MAX:
+ * harness.differential compares this ledger against the candidate's (src/psg.c), and were the two
+ * caps to differ a long run would drop entries on one side only and diverge for a reason that has
+ * nothing to do with the reconstruction. */
+static uint8_t  g_psg_kind[OS_PSG_LOG_MAX];   /* OS_PSG_EVENT_WRITE / OS_PSG_EVENT_READ (os.h) */
+static uint8_t  g_psg_reg[OS_PSG_LOG_MAX];
+static uint8_t  g_psg_val[OS_PSG_LOG_MAX];
+static uint32_t g_psgn;        /* captured direct accesses this run — READS INCLUDED */
+/* Accesses this run that did NOT fit in the ledger. The ledger is the audio-capture mode's PRIMARY
+ * DATA FEED (an extractor reads a whole song out of it, tick by tick), so a silent truncation would
+ * not merely lose diagnostics: it would read as a complete capture with a section of the song
+ * missing. emu.run names it as its own cause, the same way it names the PSG refusals. */
+static uint32_t g_psg_dropped;
+static uint8_t  g_psg_latch;   /* register selected by the last $ff8800 write */
+/* Has ANYTHING selected a register yet? A read of $ff8800 answers the LATCHED register, so with no
+ * select the model would be answering a register the run never named — g_psg_latch's initial 0 is
+ * this file's convention, not the chip's state, and on a real ST the latch holds whatever the last
+ * driver to touch the chip left there. That is the same "the value is an input, do not invent it"
+ * argument the register file rests on, so it gets the same answer: refuse, and name the missing
+ * select. It is NOT seedable, deliberately — see TRAP_MODEL.md, Phase 6. */
+static int      g_psg_latch_known;
+
+/* --- the modeled YM2149 register file (the direct path's READABLE state) ---------------------
+ * The ledger above records the ORDER of the writes; this records their EFFECT — what the chip hands
+ * back to a `move.b $ff8800,dn` read of the currently selected register. It is what makes a
+ * read-modify-write ("select the mixer, read it, merge in this module's channels, write it back")
+ * runnable at all, and every PSG writer in Wonder Boy is one.
+ *
+ * THE CASE DECLARES THE CHIP'S PRIOR CONTENTS; THE MODEL NEVER INVENTS THEM. An RMW preserves
+ * exactly the bits the game does NOT write — `ori.b #$3f,d1` on register 7 keeps the two port
+ * DIRECTION bits, the floppy drive-select keeps port A's upper five — so the value the chip held on
+ * entry steers the result and is an INPUT of the run, like a poked keystroke. Answering 0, or
+ * replaying a ledger that is empty on the first read, would verify a reconstruction against a value
+ * no real machine ever holds. So a register is readable only once it is KNOWN: declared by the case
+ * (osh_psg_seed) or written earlier in the same run. A read of an unknown register is REFUSED —
+ * g_psg_unseeded records which registers, and emu.run rejects the run and names them. */
+static uint8_t  g_psg_file[OS_PSG_NREGS];   /* os.h owns the count, its mask, and the uint16_t check */
+static uint16_t g_psg_known;       /* bit R set = register R's contents are known this run */
+static uint8_t  g_psg_seed[OS_PSG_NREGS];   /* the contents the case declares each run STARTS from */
+static uint16_t g_psg_seed_known;           /* ...and which registers it declared */
+static uint16_t g_psg_unseeded;    /* registers this run read while UNKNOWN (see emu.run's cause) */
+static uint32_t g_psg_no_select;   /* reads this run made before ANYTHING selected a register */
+
+/* Which of the two PSG paths this run used. ONE chip, TWO modeled register files: the trap path's
+ * lives in the image (os.h OS_PSG_REGS) and is fed by XBIOS Giaccess only; the direct path's is
+ * g_psg_file above and is fed by $ff8802 writes only. Neither sees the other's stores, so a run
+ * that uses BOTH would be served a read from a file it knows is stale — whichever way round. Rather
+ * than answer from it, count the run unmodeled and let emu.run reject it with the diagnostic
+ * osh_psg_mixed_paths backs. Joust reaches both (its sound driver calls Giaccess; its floppy
+ * routine at image 0x1553c selects and rewrites PSG port A directly), so this is a live guard, not
+ * a hypothetical one — and the seeded read model does not retire it: it gives the direct file
+ * readable contents, which is a different question from the two files agreeing. */
+static uint32_t g_psg_direct;          /* direct $ff8800/$ff8802 accesses this run (any width) */
+static uint32_t g_psg_giaccess_calls;  /* XBIOS Giaccess traps served this run */
+int osh_psg_mixed_paths(void) { return g_psg_direct && g_psg_giaccess_calls; }
+
+/* Direct PSG accesses the model cannot serve at all (counted separately from g_psg_direct, which
+ * merely arms the mixed-path guard). osh_run rejects the whole run on either, rather than let it be
+ * verified against a fabricated value. Two kinds:
+ *   - a SELECT of a register number outside 0..15. The YM2149 requires the upper nibble of the
+ *     select byte to be zero; the ST's port is not a "the top bits are ignored" register but one
+ *     whose behaviour with them set this does not model. Masking the value down (which this file
+ *     used to do) would silently turn `move.b #$1e,$ff8800` into a select of register 14 here while
+ *     the candidate's psg_port_write refuses the same call — so both sides refuse instead. No input
+ *     binary writes one; the day one does it needs a model, not a mask.
+ *   - a WIDE access to the chip's block. The whole block mirrors the four bytes every four, on BYTE
+ *     accesses (see m68k_read/write_memory_8); a .w/.l access decodes address pairs the byte
+ *     callbacks never see, and the ST's behaviour there is not modeled. Tallying it is also what
+ *     stops such an idiom from slipping past the byte callback's equality test and silently
+ *     DISARMING the mixed-path guard.
+ *
+ * A byte READ of anything in the block but the read-back addresses is NOT in this list: the chip is
+ * inactive there and the real ST answers the open-bus byte OS_PSG_DATA_READ, which
+ * m68k_read_memory_8 serves directly (see os.h). It is a property of the bus rather than a register
+ * access, so it is neither logged nor counted. */
+static uint32_t g_psg_unmodeled;
+
+/* --- optional AUDIO CAPTURE mode (off by default; osh_audio_capture turns it on) --------------
+ * An asset-extraction tool drives a game's music replayer tick by tick and reads the register
+ * stream back out of the PSG ledger above. It runs the ORIGINAL only — there is no candidate and no
+ * diff — so it needs answers the differential will not give, and it gets them by RELAXING the
+ * seeded model above rather than by keeping a second register file of its own. Three relaxations
+ * and two extra bytes:
+ *
+ *   - an UNKNOWN register reads 0 instead of being refused. A capture cannot declare a seed per
+ *     tick, and a refusal would end the extraction at the replayer's first mixer read-back; the
+ *     0 is the mode's own fabrication, and is precisely why a differential may not run under it.
+ *     A register the capture has already written reads back its own value, exactly as before.
+ *   - an UNSELECTED latch likewise reads register 0 rather than refusing. Same argument, and the
+ *     same fabrication: a replayer selects before it reads, so this only affects a capture whose
+ *     first tick does not — but refusing there would be a refusal the extractor cannot answer.
+ *   - the register file and the select latch PERSIST across osh_run calls. An extractor calls
+ *     osh_run once per VBL tick, and tick N's read-back must see what tick N-1 wrote, exactly as the
+ *     chip's own latch and registers survive a VBL. Off the mode both are reset per run from the
+ *     case's seed, which is what makes a differential deterministic (see psg_enter_run).
+ *   - $fffa01 bit 7 (MFP GPIP: the monitor-detect line) and $ff820a bit 1 (the shifter's sync mode).
+ *     A replayer picks its tempo from those two. Both read 0 off-image, and 0/0 is the MONOCHROME
+ *     profile — so a capture ticked at 50 Hz would run the mono tick-drop rate and render every
+ *     song at the wrong tempo, silently. This mode reports the 50 Hz colour ST instead. Since
+ *     Phase 7 it does that by INSTALLING A SEED over the seeded-hardware model below — the same
+ *     door a case uses — rather than by keeping a switch of its own in the read callback, so the
+ *     mode's answers and a case's travel one code path and cannot diverge (see hw_enter_run).
+ *
+ * WHY IT IS OPT-IN, AND MUST STAY SO. Every one of those answers is fabricated with respect to the
+ * differential: it is the model's invention, not the game's data, so a reconstruction "verified"
+ * against it would be verified against this file. That is the exact false green g_psg_unseeded and
+ * emu.run's refusal exist to prevent. The mode is for a tool that runs the ORIGINAL only and wants
+ * its register stream; it is never valid for a differential run, and the default is unchanged.
+ *
+ * osh_audio_reset() clears the register file AND the select latch, which is where a new capture
+ * begins; nothing else does while the mode is on. Arming is a pure toggle, so re-arming mid-capture
+ * keeps it (the cov_enable/cov_reset and prof_enable/prof_reset shape) — but arming from OFF clears,
+ * because the chip state is shared with the differential's model (see osh_audio_capture). */
+static int     g_audio_capture;
+
+/* --- the SEEDED HARDWARE READ model (TRAP_MODEL.md, "Phase 7") -------------------------------
+ * os.h names the modeled set (OS_HW_MFP_GPIP, OS_HW_SHIFTER_SYNC, the two video-counter bytes
+ * OS_HW_SHIFTER_VCOUNT_MID/_LOW and the IKBD ACIA's status byte OS_HW_ACIA_STATUS) and says why
+ * those five and not the rest of the I/O map.
+ * This is the state behind it, and it is Phase 6's shape exactly: a file
+ * of bytes, a mask saying which of them the CASE DECLARED, a per-run reinstall from the declared
+ * seed, and an ordered ledger of every read the run made — because the byte a `btst #7,$fffa01`
+ * answers steers a branch, so it is an INPUT of the run and the model must not invent it.
+ *
+ * ONE DIVERGENCE FROM PHASE 6, deliberate: an undeclared read is NOT refused here. It is served 0 —
+ * the answer the shim gave before this model existed — and recorded in g_hw_unseeded, and the
+ * refusal fires one level up, in harness.differential. emu.run is what drives a game's relocator,
+ * its Copylock and its bootstrap, whose hardware reads are nobody's enumerated list; refusing there
+ * would sink those runs for a false-green class that only exists where something is being VERIFIED.
+ * TRAP_MODEL.md, "Phase 7", argues it at length. */
+static uint8_t  g_hw_file[OS_HW_NSLOTS];   /* what a byte read of each modeled address answers */
+static uint32_t g_hw_known;                /* bit S = slot S's contents were declared this run */
+static uint8_t  g_hw_seed[OS_HW_NSLOTS];   /* the bytes the case declares each run STARTS from */
+static uint32_t g_hw_seed_known;           /* ...and which slots it declared */
+static uint32_t g_hw_unseeded;             /* slots this run read while UNDECLARED */
+static uint32_t g_hw_written;              /* slots this run WROTE (see hw_note_write) */
+static uint32_t g_hw_stale;                /* ...and then READ: the seed no longer describes them */
+/* Slots read MORE THAN ONCE in one run while os.h calls them VOLATILE. A per-run constant answers
+ * the second read with the first read's byte; the machine would not, so the case is verified
+ * against a value the counter cannot have held twice. Recorded rather than refused here, exactly as
+ * g_hw_unseeded is, because emu.run drives bootstraps nobody enumerates — harness.differential is
+ * where it becomes a refusal. */
+static uint32_t g_hw_reread;
+static uint32_t g_hw_seen;                 /* slots read at least once this run, for the above */
+/* Slots taken in by a wide (16/32-bit) read. Only a BYTE read of a modeled address is served; a
+ * wider one takes in neighbouring MFP/shifter registers the model knows nothing about, so answering
+ * it would fabricate them as 0. Recorded rather than served — under audio capture emu.run sinks the
+ * run on it (an extractor has no second chance), and in a differential
+ * harness._vet_hw_reads_are_declared does.
+ *
+ * A MASK, like the two above and for their reason: the refusal has to name the address the case
+ * must do something about, and "you read one of these N wide" is a refusal a reader has to bisect. */
+static uint32_t g_hw_wide;
+/* The ordered READ stream, slot + value per entry, compared against the candidate's (src/hw.c).
+ * Reads only: a WRITE to one of these addresses does not change what a later read is served — it
+ * makes the seed STALE and the run refused (hw_note_write) — and is recorded, comparably, in the
+ * separate hardware WRITE ledger below. */
+static uint8_t  g_hw_log_slot[OS_HW_LOG_MAX];
+static uint8_t  g_hw_log_val[OS_HW_LOG_MAX];
+static uint32_t g_hw_log_n;
+static uint32_t g_hw_dropped;              /* reads past the cap: never silently truncated */
+
+/* --- the HARDWARE WRITE ledger (TRAP_MODEL.md, "Phase 10") -------------------------------------
+ * Every store the memory callbacks drop AT A DECODED I/O REGISTER (os.h's three OS_HW_IO_* blocks)
+ * — the shifter's colour row, the MFP's in-service registers, the IKBD ACIA's data port — in the
+ * order the run made them, as (24-bit address, width in bytes, value). A store anywhere else above
+ * the image is a runaway pointer rather than a device, and os.h says why it is left alone. Without it a reconstruction that made none of
+ * those stores is byte-for-byte identical to one that made them all, which is Phase 6's argument
+ * for the YM2149 applied to the rest of the I/O map.
+ *
+ * NOT the two canonical PSG ports: m68k_write_memory_8 returns on those before it reaches here, so
+ * they land in the PSG ledger and this one exactly once each. Every OTHER off-image write is
+ * recorded, the odd $ff8801/$ff8803 aliases included — those already make the run unmodeled
+ * (psg_note_unmodeled), so nothing is verified against them either way.
+ *
+ * Three parallel arrays rather than an array of structs, for the read ledger's reason: the harness
+ * casts each one straight through ctypes. */
+static uint32_t g_hw_write_addr[OS_HW_WRITE_LOG_MAX];
+static uint8_t  g_hw_write_width[OS_HW_WRITE_LOG_MAX];
+static uint32_t g_hw_write_val[OS_HW_WRITE_LOG_MAX];
+static uint32_t g_hw_write_n;
+static uint32_t g_hw_write_dropped;        /* writes past the cap: never silently truncated */
+
+/* The machine profile the AUDIO-CAPTURE mode declares, and the ONLY bits of it that are modeled: a
+ * 50 Hz colour ST, the machine these games were written for. Mono would be GPIP bit 7 clear and
+ * 60 Hz sync bit 1 clear — which is what an undeclared read's 0 already says, hence the mode.
+ *
+ * GPIP bits 4 and 5 are the ACIA (keyboard/MIDI) and FDC/HDC interrupt lines. They are ACTIVE LOW,
+ * so IDLE is 1: serving bit 7 alone would report both devices as interrupting, which is a state no
+ * quiescent machine is in. Every OTHER bit of the byte is a fabricated 0 (the parallel-port busy and
+ * ring-indicator lines, the DMA/blitter line on an STE) — this is a two-bit answer for a tempo
+ * selector, not a machine model.
+ *
+ * It is a SEED over the model above, not a switch beside it: hw_enter_run installs it exactly where
+ * it installs a case's, so "what the mode serves" and "what a case that declared the same bytes
+ * serves" are the same code answering the same file. osh_hw_capture_profile() exports it so a test
+ * can pin those two against each other instead of against a copy of the constants. */
+#define MFP_GPIP_COLOUR         0x80       /* bit 7 = monitor detect; SET = colour monitor */
+#define MFP_GPIP_IRQ_LINES_IDLE 0x30       /* bits 5/4 = FDC + ACIA interrupts, active low: idle */
+#define SHIFTER_SYNC_50HZ       0x02       /* bit 1 SET = 50 Hz */
+static const uint8_t g_hw_capture_profile[OS_HW_NSLOTS] = {
+    [OS_HW_SLOT_MFP_GPIP]     = MFP_GPIP_COLOUR | MFP_GPIP_IRQ_LINES_IDLE,
+    [OS_HW_SLOT_SHIFTER_SYNC] = SHIFTER_SYNC_50HZ,
+};
+/* Which slots the profile DECLARES — named one by one rather than "all of them". The array above is
+ * a designated initializer, so a slot added to os.h's table gets a silent 0 here; declaring it too
+ * would mark that fabricated 0 as a real answer, which is the mono-profile failure the mode exists
+ * to close, one address over. Spelled this way, adding a slot leaves it UNDECLARED under capture —
+ * which reads 0 exactly as before and lands in g_hw_unseeded, where it is visible. */
+#define HW_CAPTURE_PROFILE_KNOWN \
+    ((1u << OS_HW_SLOT_MFP_GPIP) | (1u << OS_HW_SLOT_SHIFTER_SYNC))
+
+/* Clear the modeled chip state — where a new capture begins.
+ *
+ * The SELECT LATCH goes with the register file, and that is not cosmetic: it is the other half of
+ * the chip state a capture carries across runs, so a reset that cleared the file and left the latch
+ * would start the next capture selecting the previous one's last register. That leak was measured —
+ * select register 10, arm, write the data port bare, and the byte landed in register 10 of a capture
+ * that had never named it. Every clear takes both. */
+void osh_audio_reset(void) {
+    for (int i = 0; i < OS_PSG_NREGS; i++) g_psg_file[i] = 0;
+    g_psg_known = 0;                 /* the three move together: a cleared chip knows nothing, */
+    g_psg_latch = 0;                 /* and has no register selected — 0 is a placeholder, not a */
+    g_psg_latch_known = 0;           /* claim, which is exactly what g_psg_latch_known records */
+}
+
+/* Arm or disarm audio capture.
+ *
+ * Re-arming an ALREADY-ARMED capture is a no-op: an extractor that arms defensively before each
+ * tick, or a caller that nests the mode, must not silently wipe the capture it is in the middle of
+ * (the cov_enable/cov_reset shape). osh_audio_reset() is what clears the file mid-capture.
+ *
+ * But arming from OFF starts a fresh one, because the chip state is now SHARED with the
+ * differential's seeded model: a run made while the mode was off leaves its own registers AND its
+ * own select latch behind, so without this a capture armed bare would inherit whatever the last
+ * differential left — under `pytest -n auto`, an unrelated case's mixer and an unrelated case's
+ * selected register, unreproducibly. (The latch half was measured, not theorised: select register 10
+ * in a run, arm, write the data port bare, and the byte landed in 10.) Every caller goes through
+ * emu.audio_capturing(), which resets anyway; this makes structural what was otherwise a
+ * convention. */
+void osh_audio_capture(int on) {
+    if (on && !g_audio_capture) osh_audio_reset();
+    g_audio_capture = on;
+}
+/* Is the mode armed? The differential must never run under it (every served read is fabricated with
+ * respect to one), and harness.differential vets this rather than trusting the caller. */
+int  osh_audio_capture_on(void) { return g_audio_capture; }
+
+/* ---- the seeded-hardware model's ABI (see g_hw_file above; emu.py binds every one) ---- */
+/* Declare the bytes every FOLLOWING run starts from. `known` is a bitmask of the SLOTS `values`
+ * declares (os.h's OS_HW_SLOT_*); a slot outside it stays undeclared, and a read of it is served 0
+ * and recorded in g_hw_unseeded. Stored rather than installed, for osh_psg_seed's reason: a seed set
+ * between runs cannot reach a run already in flight, and two runs given the same seed start
+ * identical whatever ran between them. */
+void osh_hw_seed(const uint8_t *values, uint32_t known) {
+    g_hw_seed_known = known;
+    for (int slot = 0; slot < OS_HW_NSLOTS; slot++)
+        g_hw_seed[slot] = (known & (1u << slot)) ? values[slot] : 0;   /* read only where declared */
+}
+const uint8_t  *osh_hw_file(void)      { return g_hw_file; }
+uint32_t        osh_hw_known(void)     { return g_hw_known; }
+/* Slots this run read while UNDECLARED — a refusal mask, not a count, so harness.differential can
+ * name the addresses a case must seed. NOT raised by emu.run: see g_hw_file's header. */
+uint32_t        osh_hw_unseeded(void)  { return g_hw_unseeded; }
+/* Slots this run WROTE and then READ. The seed declares the byte the chip held ON ENTRY, and the
+ * run's own store has replaced it — so the served byte contradicts an instruction that ran. */
+uint32_t        osh_hw_stale(void)     { return g_hw_stale; }
+/* Slots a wide read took in — a mask, so the refusal names the address rather than the whole set. */
+uint32_t        osh_hw_wide(void)      { return g_hw_wide; }
+uint32_t        osh_hw_count(void)     { return g_hw_log_n; }
+const uint8_t  *osh_hw_log_slots(void) { return g_hw_log_slot; }
+const uint8_t  *osh_hw_log_vals(void)  { return g_hw_log_val; }
+uint32_t        osh_hw_dropped(void)   { return g_hw_dropped; }
+/* The hardware WRITE ledger (Phase 10), in the order the run stored. harness.differential compares
+ * all three arrays against the candidate's (src/hw.c) entry by entry. */
+uint32_t        osh_hw_write_count(void)   { return g_hw_write_n; }
+const uint32_t *osh_hw_write_addrs(void)   { return g_hw_write_addr; }
+const uint8_t  *osh_hw_write_widths(void)  { return g_hw_write_width; }
+const uint32_t *osh_hw_write_vals(void)    { return g_hw_write_val; }
+uint32_t        osh_hw_write_dropped(void) { return g_hw_write_dropped; }
+/* The modeled set itself, so Python names the addresses from the .so it actually loaded rather than
+ * from a second copy of os.h's table (osh_psg_nregs's argument). */
+uint32_t        osh_hw_nslots(void)    { return OS_HW_NSLOTS; }
+uint32_t        osh_hw_reread(void)    { return g_hw_reread; }
+uint32_t        osh_hw_volatile(void)  { return os_hw_volatile_slots(); }
+/* The capture profile's KNOWN mask, exported for the same reason the profile itself is: a Python
+ * caller that rebuilt "which slots the mode declares" from the table's length would report the
+ * fabricated 0 of every slot the mask withholds as a declared byte. */
+uint32_t        osh_hw_capture_profile_known(void) { return HW_CAPTURE_PROFILE_KNOWN; }
+const uint32_t *osh_hw_addr_table(void) { return os_hw_addrs(); }
+/* The bytes the audio-capture mode declares, by slot — what a test pins the mode against. */
+const uint8_t  *osh_hw_capture_profile(void) { return g_hw_capture_profile; }
+
+/* Declare the register contents every FOLLOWING run starts from — the case's seed, and the only way
+ * a register becomes readable before this run writes it. `known` is a bitmask of the registers
+ * `values` declares; a register outside it stays unknown and reading it refuses the run.
+ *
+ * The seed is stored rather than installed here: osh_run copies it into the live file, so a seed set
+ * between runs cannot reach a run already in flight, and two runs given the same seed start
+ * identical whatever ran between them (the ENTRY_SR determinism argument). */
+void osh_psg_seed(const uint8_t *values, uint32_t known) {
+    g_psg_seed_known = (uint16_t)known;
+    for (int i = 0; i < OS_PSG_NREGS; i++)
+        g_psg_seed[i] = (known & (1u << i)) ? values[i] : 0;   /* `values` is read only where declared */
+}
+/* The modeled register file after the last run, and which of it is known — the differential's
+ * off-image PSG state surface (harness.differential compares both against the candidate's). Under
+ * audio capture the same file is the extractor's view of the chip. */
+const uint8_t *osh_psg_file(void)  { return g_psg_file; }
+uint32_t       osh_psg_known(void) { return g_psg_known; }
+/* Registers this run READ while their contents were unknown — a refusal mask, not a count: emu.run
+ * names the registers a case must seed, which is the whole remedy. */
+uint32_t       osh_psg_unseeded(void) { return g_psg_unseeded; }
+/* Reads this run made before any $ff8800 write selected a register (see g_psg_latch_known). Its own
+ * cause because its remedy is its own: the case is missing a SELECT, not a seed. */
+uint32_t       osh_psg_no_select(void) { return g_psg_no_select; }
+/* Direct-path accesses this run made, READS INCLUDED. It is what "did this run use the chip?" means
+ * — a run that only READS writes no register, so the ledger's write projection cannot answer it —
+ * so harness.differential keys on this when deciding whether a candidate that exports no PSG ABI may
+ * be served, and emu.run reports it as the witness the seed-door guard tests. */
+uint32_t       osh_psg_direct(void) { return g_psg_direct; }
+/* XBIOS Giaccess traps this run served — the OTHER door to the same chip. harness.differential reads
+ * it to catch a case that seeded the direct path while the routine drove the trap path (see
+ * _vet_psg_seed_reaches_the_path); osh_psg_mixed_paths above is the same pair, ANDed. */
+uint32_t       osh_psg_giaccess(void) { return g_psg_giaccess_calls; }
+/* Pins the C array's size for Python, so emu.py sizes its cast from the .so it actually loaded
+ * rather than keeping a second copy of the count. */
+uint32_t       osh_psg_nregs(void) { return OS_PSG_NREGS; }
+
+/* Does an access of `n` bytes at `a` fall in the YM2149's address block? */
+static int psg_block_touched(uint32_t a, uint32_t n) {
+    uint32_t lo = a & BUS_ADDR_MASK;               /* the 68000 aliases $ffff88xx to $ff88xx */
+    return lo < PSG_BLOCK_END && lo + n > OS_PSG_PORT_SELECT;
+}
+
+/* Tally a PSG access the model cannot serve (see g_psg_unmodeled). Callers reach this only after
+ * the in-image fast path has missed, so it costs nothing on a normal access. */
+static void psg_note_unmodeled(uint32_t a, uint32_t n) {
+    if (!psg_block_touched(a, n)) return;
+    g_psg_direct++;                                /* it is still a use of the direct path */
+    g_psg_unmodeled++;
+}
+
+/* Record a WIDE read that took in a modeled hardware byte (see g_hw_wide). Unlike the byte path it
+ * serves nothing: the caller returns its ordinary off-image 0, and the mask is what makes the
+ * fabrication visible to emu.run (under capture) and to harness._vet_hw_reads_are_declared (in a
+ * differential). */
+static void hw_note_wide_read(uint32_t a, uint32_t n) {
+    g_hw_wide |= os_hw_slots_touched(a & BUS_ADDR_MASK, n);   /* the 68000 aliases $fffffa01 here */
+}
+
+/* Note a write of `n` bytes at `a` that landed on a modeled hardware byte.
+ *
+ * The write itself is DROPPED, exactly as every other hardware write off the PSG ports is dropped —
+ * Phase 7 models what these addresses ANSWER, not what storing to them does, and a game's
+ * `move.b #2,$ff820a` has no readable effect this model claims to reproduce. What is recorded is
+ * that it happened, because a later READ of the same address is then served the case's seed — the
+ * byte the chip held on ENTRY — while an instruction of this very run has replaced it. That
+ * combination is refused rather than served (g_hw_stale); a write nothing reads back is the
+ * ordinary invisible hardware write it has always been. */
+/* Record one dropped hardware store. `width` is the byte count the 68000 would have stored, and the
+ * value is masked to it so that a candidate handing hw_write8() a full longword cannot pass where
+ * the original stored only its low byte.
+ *
+ * IT DOES NOT REPLACE hw_note_write BELOW, it runs beside it. The ledger makes the write COMPARABLE;
+ * the staleness mask is about a different question — whether the seed still describes a modeled
+ * READ address after the run stored to it — and a comparable write does not make a stale seed
+ * honest. A run that writes $ff820a and then reads it back is refused exactly as before, and the
+ * write is now in the ledger as well. */
+static void hw_log_write(uint32_t a, uint32_t width, uint32_t value) {
+    uint32_t bus = a & BUS_ADDR_MASK;      /* the 68000 aliases $ffff8240 onto $ff8240 */
+
+    /* Only one of the three decoded I/O blocks (os.h's OS_HW_IO_* bounds). A store anywhere else
+     * above the image — past its end, or in the unmapped gaps between the blocks — is a runaway
+     * pointer rather than a device, and is dropped as it always was. */
+    if (!os_hw_is_io(bus))
+        return;
+    if (g_hw_write_n >= OS_HW_WRITE_LOG_MAX) {
+        g_hw_write_dropped++;
+        return;
+    }
+    g_hw_write_addr[g_hw_write_n] = bus;
+    g_hw_write_width[g_hw_write_n] = (uint8_t)width;
+    g_hw_write_val[g_hw_write_n] = value & os_hw_write_mask(width);
+    g_hw_write_n++;
+}
+
+static void hw_note_write(uint32_t a, uint32_t n) {
+    /* A SPLIT-REGISTER SLOT IS EXEMPT — os.h's os_hw_split_slots() has the argument: the ACIA's data
+     * port answers a READ from different silicon than a WRITE lands in, so storing to it cannot make
+     * a declaration about what a read yields stale. Every other modeled address is one register. */
+    g_hw_written |= os_hw_slots_touched(a & BUS_ADDR_MASK, n) & ~os_hw_split_slots();
+}
+
+/* Append one read to the ordered ledger. Overflow is counted, never silent: two ledgers that
+ * diverge only past the cap would truncate to the same stream and compare equal. */
+static void hw_log(int slot, uint8_t value) {
+    if (g_hw_log_n >= OS_HW_LOG_MAX) {
+        g_hw_dropped++;
+        return;
+    }
+    g_hw_log_slot[g_hw_log_n] = (uint8_t)slot;
+    g_hw_log_val[g_hw_log_n] = value;
+    g_hw_log_n++;
+}
+
+/* What a BYTE read of a modeled hardware address answers: the byte the case declared.
+ *
+ * An UNDECLARED slot answers 0 — the same 0 every unmodeled off-image read has always answered, so
+ * a run that was green before this model existed is green after it — and is recorded in
+ * g_hw_unseeded so that a differential can refuse it. The read is ledgered EITHER WAY: it happened,
+ * the candidate's side ledgers its own refused read too, and a stream missing it on one side would
+ * diverge for the wrong reason. */
+static unsigned int hw_read(int slot) {
+    unsigned int served = 0;
+    if (g_hw_known & (1u << slot)) served = g_hw_file[slot];
+    else                           g_hw_unseeded |= 1u << slot;
+    if (g_hw_written & (1u << slot)) g_hw_stale |= 1u << slot;
+    /* The SECOND read of a volatile slot, tallied on the read that repeats rather than on the one
+     * that opened it — so the mask names the slot a case must do something about. */
+    if ((g_hw_seen & (1u << slot)) && (os_hw_volatile_slots() & (1u << slot)))
+        g_hw_reread |= 1u << slot;
+    g_hw_seen |= 1u << slot;
+    hw_log(slot, (uint8_t)served);
+    return served;
+}
+
+/* Append one direct-path event to the ordered ledger. Reads are recorded alongside writes so that
+ * "this run read register 7" is a comparable fact: a reconstruction that reads the WRONG register
+ * still writes the right one, leaving the write stream AND the register file identical on both
+ * sides. Overflow is counted, never silent — the ledger is also the capture mode's data feed. */
+static void psg_log(uint8_t kind, uint8_t reg, uint8_t value) {
+    if (g_psgn >= OS_PSG_LOG_MAX) {
+        g_psg_dropped++;                           /* see g_psg_dropped: never silently */
+        return;
+    }
+    g_psg_kind[g_psgn] = kind;
+    g_psg_reg[g_psgn] = reg;
+    g_psg_val[g_psgn] = value;
+    g_psgn++;
+}
+
+/* What a byte read of $ff8800 answers: the contents of the currently latched register.
+ *
+ * It is always a USE of the direct path, served or not, so it arms the mixed-path guard exactly as a
+ * write does — the file it answers from never saw a Giaccess store. Two things must be known for an
+ * answer to exist: WHICH register (something must have selected one this capture/run — see
+ * g_psg_latch_known) and WHAT IT HOLDS (seeded by the case or written earlier). Either missing is
+ * refused, in its own tally, because the remedies differ: add the select, or add the seed.
+ *
+ * Under audio capture both refusals relax — a capture cannot declare a seed per tick, and a refusal
+ * would end the extraction at the replayer's first read-back — and the answer becomes the file's
+ * byte, 0 where nothing wrote it. That is the mode's own fabrication, and why no differential may
+ * run under it. */
+static unsigned int psg_read_back(void) {
+    g_psg_direct++;
+    unsigned int served = 0;
+    if (g_audio_capture) {
+        /* Both refusals relaxed at once: an unselected latch reads register 0 (its placeholder) and
+         * an unknown register reads whatever the file holds, which is 0 after a clear. Exactly the
+         * answer this gave before the seeded model existed, so a capture is unchanged by it. */
+        served = g_psg_file[g_psg_latch];
+    } else if (!g_psg_latch_known) {
+        g_psg_no_select++;                         /* refused; emu.run rejects the whole run */
+    } else if (!(g_psg_known & (uint16_t)(1u << g_psg_latch))) {
+        g_psg_unseeded |= (uint16_t)(1u << g_psg_latch);   /* likewise refused, other remedy */
+    } else {
+        served = g_psg_file[g_psg_latch];
+    }
+    psg_log(OS_PSG_EVENT_READ, g_psg_latch, (uint8_t)served);
+    return served;
+}
+
+/* --- memory callbacks: big-endian, bounds-checked to the image --- */
+unsigned int m68k_read_memory_8(unsigned int a) {
+    if (a < g_size) return g_mem[a];
+    uint32_t lo = a & BUS_ADDR_MASK;               /* the 68000 aliases $ffff88xx to $ff88xx */
+    /* The WHOLE chip block answers on BYTE accesses: the ST decodes only bit 1 (and, for a read,
+     * bit 0), so $ff8800/$ff8804/... are the select latch and $ff8802/$ff8806/... the data port.
+     * Hatari (tested on STF) records that only a read of $ff8800 returns data, with
+     * $ff8801/$ff8802/$ff8803 always 0xff; the block-wide form here is (addr & 3) == 0 for the
+     * read-back and the open bus for everything else. It is what makes movep.l — KULT's PCM ISR
+     * writes a long at $ff8800, landing on $ff8800/$ff8802/$ff8804/$ff8806 — decodable, and it
+     * reads no register on the open-bus halves. */
+    if (lo >= OS_PSG_PORT_SELECT && lo < PSG_BLOCK_END) {
+        if ((lo & 3u) == 0) return psg_read_back();
+        return OS_PSG_DATA_READ;
+    }
+    /* The seeded-hardware model (Phase 7). Ahead of the audio-capture mode, which no longer has a
+     * switch of its own here: it arms this same model with a seed (see hw_enter_run). */
+    int hw_slot = os_hw_slot(lo);
+    if (hw_slot >= 0) return hw_read(hw_slot);
+    psg_note_unmodeled(a, 1);
+    return 0;                                      /* off-image, like any unmapped address */
+}
+unsigned int m68k_read_memory_16(unsigned int a) {
+    if (a + 1 < g_size) return (unsigned)(g_mem[a] << 8 | g_mem[a + 1]);
+    psg_note_unmodeled(a, 2);
+    hw_note_wide_read(a, 2);
+    return 0;
+}
+unsigned int m68k_read_memory_32(unsigned int a) {
+    if (a + 3 >= g_size) { psg_note_unmodeled(a, 4); hw_note_wide_read(a, 4); return 0; }
+    return (unsigned)(g_mem[a] << 24 | g_mem[a + 1] << 16 | g_mem[a + 2] << 8 | g_mem[a + 3]);
+}
+
+static void logw(uint32_t a) { if (g_wn < MAX_WRITES) g_waddr[g_wn++] = a; }
+
+/* --- XBIOS Dosound (fn 0x20) side-effect ledger -------------------------------------------
+ * Dosound hands the YM2149 a command list via A0; that pointer touches no RAM, so a wrong or
+ * missing list is invisible to the image diff even when the call runs. Record each Dosound's
+ * list pointer (the runtime A0 == a Ghidra image address) in an ordered ledger, reset per run
+ * like the PSG tap. harness.differential compares it against the candidate's g_dosound ledger,
+ * making the off-image A0 argument diff-verifiable (improvement #2). The cap is os.h's
+ * OS_DOSOUND_LOG_MAX — the same one the candidate's ledger uses, so both truncate identically. */
+static uint32_t g_dosound_arg[OS_DOSOUND_LOG_MAX];
+static uint32_t g_dosound_n;
+uint32_t        osh_dosound_count(void) { return g_dosound_n; }
+const uint32_t *osh_dosound_args(void)  { return g_dosound_arg; }
+
+/* --- the OFF-IMAGE OS EVENT LEDGER (os.h, "Phase 13") ---------------------------------------
+ * The oracle's mirror of src/os_log.c: console, AUX: and printer bytes, IKBD command bytes, the two
+ * cursor visibility calls, and the process ENDING, in the order the run made them. Two parallel
+ * arrays for the Python side's sake, exactly as the PSG ledger's are. Reset per run in osh_run,
+ * beside the Dosound ledger. */
+static uint16_t g_event_kind[OS_EVENT_LOG_MAX];
+static uint32_t g_event_val[OS_EVENT_LOG_MAX];
+static uint32_t g_event_n;
+
+/* Entries past the cap are dropped exactly as the candidate's ledger drops them, so a run longer
+ * than the cap still compares like for like; the harness refuses a comparison AT the cap. */
+static void event_log(uint16_t kind, uint32_t value) {
+    if (g_event_n >= OS_EVENT_LOG_MAX) return;
+    g_event_kind[g_event_n] = kind;
+    g_event_val[g_event_n] = value;
+    g_event_n++;
+}
+
+uint32_t        osh_event_count(void)  { return g_event_n; }
+const uint16_t *osh_event_kinds(void)  { return g_event_kind; }
+const uint32_t *osh_event_values(void) { return g_event_val; }
+
+/* GEMDOS Cconws(str): every byte of the NUL-terminated string is a console byte, so each becomes its
+ * own ledger entry — the same stream a program that called Cconout per character would produce, and
+ * the string's CONTENT is what a reconstruction has to get right. Returns how many were written.
+ * A string with no terminator inside the image is REFUSED rather than cut off at the edge: the model
+ * has no idea where it was meant to end, and a fabricated length is exactly what the governing rule
+ * forbids. Lives with the ledger rather than inside handle_trap so the loop reads as one thing. */
+/* The character argument of a one-byte device write — Cconout, Cauxout, Cprnout — which is the low
+ * eight bits of the first word on the caller's stack. One spelling for the three of them: they are
+ * the same convention, and three copies is three places for one of them to read the wrong slot. */
+static uint32_t device_char_arg(uint32_t caller) {
+    return m68k_read_memory_16(caller + 2) & 0xff;
+}
+
+static uint32_t cconws(uint32_t str, int *modeled) {
+    uint32_t n = 0;
+    /* MEASURE FIRST, then log. A refused call must leave no trace on either side's ledger — the
+     * rule gem_dispatch follows when it drops an event a faulted call had already reported — and a
+     * string with no terminator inside the image is refused only once the walk has run off the end,
+     * by which time a logging walk would have pushed every byte it passed. */
+    while (os_in_image_fixed(str + n, 1) && g_mem[str + n])
+        n++;
+    if (!os_in_image_fixed(str + n, 1)) { *modeled = 0; return 0; }
+    for (uint32_t i = 0; i < n; i++)
+        event_log(OS_EVENT_CONOUT, g_mem[str + i]);
+    return n;
+}
+
+void m68k_write_memory_8(unsigned int a, unsigned int v) {
+    uint32_t lo = a & BUS_ADDR_MASK;               /* mask to the 68000's 24-bit bus */
+    /* The whole chip block, mirroring every four bytes: bit 1 picks the select latch from the data
+     * port and bit 0 is irrelevant for a BYTE access (Hatari's STF measurement; $ff8801/$ff8803 are
+     * the odd shadows and $ff8804/$ff8806 the next mirror). movep.l at $ff8800 writes its four bytes
+     * to $ff8800/$ff8802/$ff8804/$ff8806, which is how KULT's PCM ISR drives two registers per long
+     * — so each byte must decode, not only the canonical pair. */
+    if (lo >= OS_PSG_PORT_SELECT && lo < PSG_BLOCK_END) {
+        if ((lo & 2u) == 0) {
+            g_psg_direct++;
+            /* Not masked to four bits: a select with a non-zero upper nibble is refused, on both
+             * sides, rather than quietly turned into a register this model does have (g_psg_unmodeled
+             * above says why). The latch is left as it was, so a read that follows is refused too —
+             * two causes for one mistake, which is the right count. */
+            if ((unsigned)v > OS_PSG_REG_SEL) { g_psg_unmodeled++; return; }
+            g_psg_latch = (uint8_t)v;
+            g_psg_latch_known = 1;
+            return;
+        }
+        g_psg_direct++;                            /* see the mixed-path guard in osh_run */
+        /* Both surfaces, from the one write: the file is what a read-back answers from (so an RMW
+         * sees its own store), the ledger is the ORDER the chip was accessed in. */
+        g_psg_file[g_psg_latch] = (uint8_t)v;
+        g_psg_known |= (uint16_t)(1u << g_psg_latch);
+        psg_log(OS_PSG_EVENT_WRITE, g_psg_latch, (uint8_t)v);
+        return;
+    }
+    if (a < g_size) { g_mem[a] = (uint8_t)v; logw(a); return; }
+    psg_note_unmodeled(a, 1);   /* an access past the chip's block */
+    hw_note_write(a, 1);        /* dropped like any hardware write, but it makes a seed stale */
+    hw_log_write(a, OS_HW_WRITE_WIDTH_8, v);       /* ...and it is comparable (Phase 10) */
+}
+void m68k_write_memory_16(unsigned int a, unsigned int v) {
+    if (a + 1 < g_size) { g_mem[a] = (uint8_t)(v >> 8); g_mem[a + 1] = (uint8_t)v; logw(a); logw(a + 1); return; }
+    psg_note_unmodeled(a, 2);                      /* only the byte PSG protocol is modeled */
+    hw_note_write(a, 2);
+    hw_log_write(a, OS_HW_WRITE_WIDTH_16, v);
+}
+void m68k_write_memory_32(unsigned int a, unsigned int v) {
+    if (a + 3 >= g_size) {
+        psg_note_unmodeled(a, 4);
+        hw_note_write(a, 4);
+        hw_log_write(a, OS_HW_WRITE_WIDTH_32, v);
+        return;
+    }
+    g_mem[a] = (uint8_t)(v >> 24); g_mem[a + 1] = (uint8_t)(v >> 16);
+    g_mem[a + 2] = (uint8_t)(v >> 8); g_mem[a + 3] = (uint8_t)v;
+    logw(a); logw(a + 1); logw(a + 2); logw(a + 3);
+}
+
+/* --- TOS trap dispatch (GEMDOS #1 / BIOS #13 / XBIOS #14, GEM #2) ------------------
+ * Real code enters the OS via `trap #N`. We point each trap vector at a magic PC the run
+ * loop detects; on a hit we read the 68000 exception frame (SR word + return PC long) plus
+ * the function number/args from the caller's stack, apply a deterministic effect (os.h),
+ * set D0, pop the frame, and resume at the caller. Vectors are installed transiently and
+ * restored after the run, so the final image matches a reconstruction that never traps. */
+#define TRAP_VEC_GEMDOS 0x84    /* trap #1  */
+#define TRAP_VEC_GEM    0x88    /* trap #2  (AES/VDI — modeled via os_gem_trap) */
+#define TRAP_VEC_BIOS   0xb4    /* trap #13 */
+#define TRAP_VEC_XBIOS  0xb8    /* trap #14 */
+#define MAGIC_GEMDOS 0x120      /* unused vector-page slots, even, never real code (>= 0x10000) */
+#define MAGIC_GEM    0x124
+#define MAGIC_BIOS   0x128
+#define MAGIC_XBIOS  0x12c
+
+/* The status register every run starts from: supervisor, interrupt mask 7, condition codes clear.
+ *
+ * IT IS FORCED, NOT INHERITED FROM THE RESET. A 68000 reset does not clear the condition codes, and
+ * Musashi is faithful about it: m68k_pulse_reset() touches T, the interrupt mask and S, and leaves
+ * FLAG_X/N/Z/V/C exactly as the PREVIOUS run left them. Without the force a run inherits the last
+ * one's CCR, and any routine that reads a condition code ON ENTRY — `abcd`/`sbcd` fold in X, `addx`
+ * and `roxl` likewise — answers differently depending on what ran before it in the same process.
+ *
+ * WHY THIS VALUE: the requirement is DETERMINISM — two identical runs must give identical answers
+ * whatever ran before them — and $2700 is the kit's convention for meeting it: the S bit and IPL the
+ * reset itself selects, with the CCR cleared. It is NOT a claim about the SR any game's own boot
+ * code leaves behind; nothing here reads one. A caller cannot ask for another entry condition either
+ * (emu.run has no entry-CCR parameter), so the entry CCR is guaranteed clear, and an original that
+ * the GAME reaches with X set is unreachable from a case.
+ *
+ * Pinned behaviourally on both sides, the same split as the M68K_EMULATE_TRACE #error above:
+ * kit-side by tools/recreate_kit/test/test_entry_state.py, whose probe runs one `abcd` three times
+ * in one process; game-side by projects/wonderboy/recreate/test/test_hud.py::
+ * test_the_oracle_enters_every_run_with_the_condition_codes_clear, over the packed-BCD accumulators
+ * that surfaced the defect. */
+#define ENTRY_SR 0x2700
+
+/* The CPU state EVERY run begins from. Both entry points go through this one place so that the reset
+ * and the ENTRY_SR force cannot drift apart — osh_run_bench once reset without forcing, and so
+ * inherited the condition codes of whatever had run before it. */
+/* Put the modeled YM2149 back to this run's declared entry state, and clear its per-run tallies.
+ *
+ * It lives with the CPU reset, and is reached by osh_run_bench as well as osh_run, because "the
+ * chip's contents at entry" is exactly as much a per-run input as the entry SR: a bench issued
+ * after a seeded differential must not read that case's registers, and its own PSG traffic must not
+ * be attributed to the run before it.
+ *
+ * Off the audio-capture mode the file and the latch are rebuilt from the case's seed — a run must
+ * start from the contents its own case declares and nothing else, which is the same determinism
+ * defect ENTRY_SR closed for the condition codes, and under `pytest -n auto` "whatever ran before"
+ * is not stable. Under the mode the capture spans runs BY CONTRACT (an extractor calls osh_run once
+ * per VBL tick and a tick reads back what an earlier tick wrote to a register it selected, exactly
+ * as the chip's own latch and registers survive a VBL), so the file and latch are left alone there;
+ * osh_audio_reset() is what clears them. The ledger and the refusal tallies are per-run in BOTH
+ * modes — an extractor reads one tick's register stream at a time. */
+static void psg_enter_run(void) {
+    if (!g_audio_capture) {
+        for (int i = 0; i < OS_PSG_NREGS; i++) g_psg_file[i] = g_psg_seed[i];
+        g_psg_known = g_psg_seed_known;
+        g_psg_latch = 0;
+        g_psg_latch_known = 0;
+    }
+    g_psgn = 0;                       /* the ledger is this run's accesses only... */
+    g_psg_dropped = 0;                /* ...and so is its overflow tally */
+    g_psg_unseeded = 0;               /* the three refusal tallies are per-run in either mode */
+    g_psg_no_select = 0;
+    g_psg_unmodeled = 0;
+    g_psg_direct = 0;                 /* ...as are the two the mixed-path guard is built from */
+    g_psg_giaccess_calls = 0;
+}
+
+/* Put the modeled HARDWARE BYTES back to this run's declared entry state, and clear the per-run
+ * ledger and tallies. Sibling of psg_enter_run, reached from the same place and for the same reason:
+ * what `btst #7,$fffa01` answers is as much a per-run input as the chip's register contents, so a
+ * run must start from the bytes its OWN case declared and never from the previous run's.
+ *
+ * THE AUDIO-CAPTURE FOLD. Under the mode the installed seed is the 50 Hz colour-ST profile instead
+ * of the case's — one code path, so "what the mode serves" is by construction "what a case that
+ * declared those bytes serves", and the mode cannot drift away from the model it relaxes. It is
+ * installed per RUN rather than at arming, which is what stops it leaking: disarm the mode and the
+ * very next run reinstalls the case's seed, with no reset call required. (emu.run refuses an
+ * explicit hw_seed under the mode for the same reason it refuses a psg_seed: the mode's profile
+ * would silently win.) Unlike the PSG file this one does NOT span runs — a machine's monitor and
+ * sync mode are constants of the capture, not state a tick accumulates. */
+static void hw_enter_run(void) {
+    const uint8_t *seed = g_audio_capture ? g_hw_capture_profile : g_hw_seed;
+    uint32_t known = g_audio_capture ? HW_CAPTURE_PROFILE_KNOWN : g_hw_seed_known;
+    /* The install is os.h's, shared verbatim with src/hw.c's g_hw_reset: the model's own answers
+     * fill in UNDER the case's, never over them. */
+    g_hw_known = os_hw_install_seed(g_hw_file, seed, known);
+    g_hw_unseeded = 0;
+    g_hw_written = 0;
+    g_hw_stale = 0;
+    g_hw_reread = 0;
+    g_hw_seen = 0;
+    g_hw_wide = 0;
+    g_hw_log_n = 0;
+    g_hw_dropped = 0;
+    g_hw_write_n = 0;
+    g_hw_write_dropped = 0;
+}
+
+static void enter_from_reset(void) {
+    m68k_init();
+    m68k_set_cpu_type(M68K_CPU_TYPE_68000);
+    m68k_pulse_reset();
+    m68k_set_reg(M68K_REG_SR, ENTRY_SR);
+    psg_enter_run();
+    hw_enter_run();
+    sched_enter_run();
+}
+
+/* The Malloc arena's base and the bump pointer walking up from it. The BASE is per project and is
+ * installed by osh_set_heap_base() below; the mechanism is in ../README.md, "The Malloc arena is
+ * the one region a project places". This is the oracle's OWN copy — liboracle.so and the candidate
+ * .so are two objects in one process, and recreate_kit.harness installs one value into each. */
+static uint32_t g_heap_base = OS_HEAP_BASE_DEFAULT;
+/* ...and the first address it may not reach, installed by osh_set_heap_limit() from the same
+ * project.toml the base comes from. Read by Malloc(-1), whose answer is the window's remaining
+ * SIZE; how far a run actually grew the arena is still refused in Python
+ * (emu._vet_heap_within_bounds), which is where the message that names the key lives. */
+static uint32_t g_heap_limit = OS_HEAP_LIMIT_DEFAULT;
+#ifdef OS_FS_TABLE_RUNTIME
+/* ...and the staged-file window's base, the map's OTHER per-project region — os.h's OS_FS_TABLE is
+ * a read of this. Not `static`, because os.h declares it `extern` for the inline os_fopen/os_fread
+ * this file calls; the candidate's own copy is src/os_fs.c's, installed from the same key. */
+uint32_t g_os_fs_table = OS_FS_TABLE_DEFAULT;
+#endif
+/* The DTA address (GEMDOS Fsetdta / Fsfirst). os.h declares it `extern` for the inline helpers this
+ * file calls; the candidate's own copy is src/os_fs.c's. */
+uint32_t g_os_dta;
+static uint32_t g_heap;         /* Malloc bump pointer */
+static uint32_t g_malloc_n;     /* GEMDOS Malloc calls serviced this run (see osh_malloc_count) */
+static uint32_t g_unmodeled;    /* count of traps whose real effect we do NOT model (fabricated D0) */
+/* Traps serviced this run that REACH the harness-poked model state (see osh_poked_input_calls). The
+ * six the project.toml waiver `tos_poked_input_unused` names: Bconstat, Bconin, Crawio, Random,
+ * Giaccess, Kbdvbase. Reaching it, not reading it: a Giaccess WRITE stores into the register file
+ * and Bconin clears the pending flag, and under the overlap those are writes over the game's own
+ * code — worse than a read, not better. Sibling of g_malloc_n: it is the per-run witness that lets
+ * emu.run() re-test a layout waiver's claim about the GAME instead of trusting it once at import. */
+static uint32_t g_poked_input_calls;
+static uint32_t g_min_a7;       /* lowest A7 (deepest stack pointer) reached this run */
+static uint32_t g_ninsns;       /* instructions executed in the last osh_run (perf profiling) */
+static uint64_t g_ncycles;      /* 68000 clock cycles executed in the last osh_run (perf profiling) */
+/* The PC osh_run's loop stops at, so GEMDOS Pterm can END the run instead of returning from the
+ * trap: the only way out of handle_trap is to set a PC, and that is the one a terminating process
+ * wants. osh_run installs it per run; osh_run_bench installs no trap vectors at all, so nothing on
+ * that path can reach this. */
+static uint32_t g_run_sentinel;
+/* Did THIS run end because the program called GEMDOS Pterm? `osh_run` reports "reached" either way —
+ * a terminated run's final memory is as trustworthy as a returned one's — but the two are not the
+ * same ending, and a caller that asked for a `stop_pc` did not get the point it asked for. Exported
+ * so emu.run can tell them apart rather than compare at whichever one happened. */
+static int g_terminated;
+
+/* Service the trap the CPU jumped to (vec = 1/2/13/14). Reads the exception frame at A7,
+ * services the OS call, and returns control to the caller with D0 set. Calls we faithfully
+ * model set `modeled`; anything else (an unmodeled GEM opcode, a non-console BIOS device, an
+ * unstaged file, an unknown fn) is counted in g_unmodeled so the run can be rejected rather
+ * than trusted against a fabricated result. */
+static void handle_trap(int vec) {
+    uint32_t sp     = m68k_get_reg(0, M68K_REG_A7);
+    uint32_t sr     = m68k_read_memory_16(sp);       /* pushed status register */
+    uint32_t retpc  = m68k_read_memory_32(sp + 2);   /* return address (past the trap) */
+    uint32_t caller = sp + 6;                         /* caller's stack: fn word, then args */
+    uint16_t fn     = (uint16_t)m68k_read_memory_16(caller);
+    uint32_t arg1   = caller + 2;
+    uint32_t d0 = 0;                                  /* default: success / no image effect */
+    int modeled = 1;
+
+    if (vec == 14 && fn == 0x26) {                    /* XBIOS Supexec: run the routine nested */
+        uint32_t routine = m68k_read_memory_32(arg1); /* pea'd routine address */
+        m68k_write_memory_32(caller - 4, retpc);      /* routine's rts returns to the caller */
+        m68k_set_reg(M68K_REG_SR, sr);                /* restore SR first (may reselect SSP) */
+        m68k_set_reg(M68K_REG_A7, caller - 4);
+        m68k_set_reg(M68K_REG_PC, routine);           /* D0 (Supexec's result) is set by the routine */
+        return;
+    }
+
+    /* GEMDOS Pterm (0x4c): the process ENDS here. The other early return, and for the same reason as
+     * Supexec's — the PC this leaves behind is not the trap's return address.
+     *
+     * The run finishes exactly as one reaching the function's `rts` does, at the sentinel, because
+     * there is nothing after this to execute: `osh_run`'s loop stops at that PC and reports the run
+     * as REACHED. No register is set: on the real machine Pterm never comes back, so whatever D0
+     * held at the trap is the program's own leftover, not an answer this model is making.
+     *
+     * The exit code is what makes the run comparable at all. It goes into the off-image event
+     * ledger, where the candidate's `os_pterm` puts its own — the image cannot carry "this process
+     * ended, with status 2", and a reconstruction that simply ran off the end of the function
+     * leaves the identical bytes behind. TRAP_MODEL.md, "Phase 13".
+     *
+     * PTERM0 (0x00) IS DELIBERATELY NOT HERE and stays refused, although real GEMDOS answers it as
+     * Pterm(0). A zero selector is what this dispatch reads when there was no GEMDOS call at all:
+     * the trap arms are entered on a PC MATCH against MAGIC_GEMDOS, so a runaway PC walking the
+     * zero-filled vector page arrives at 0x120 on its own and the "call frame" is then read off a
+     * zero stack — fn 0, retpc 0. Modeling it would hand every such run a CLEAN termination in
+     * place of the loud refusal that is the only sign the program went off the rails. Measured:
+     * five of `projects/joust`'s `update_egg_physics` cases reach exactly that, and each is a
+     * deliberate runaway whose evidence is that it never ends. TRAP_MODEL.md, "Phase 13". */
+    if (vec == 1 && fn == 0x4c) {
+        event_log(OS_EVENT_PTERM, (uint16_t)m68k_read_memory_16(arg1));
+        g_terminated = 1;
+        /* The two stores below are the shared exit's, deliberately re-stated rather than shared: the
+         * third one it makes (D0 = d0) is exactly what this arm must NOT do. Anything later added to
+         * that exit therefore has to be added here too — the same standing cost the Supexec arm
+         * above carries, and the reason both are early returns and not `switch` cases. */
+        m68k_set_reg(M68K_REG_SR, sr);                /* restore SR first (may reselect SSP) */
+        m68k_set_reg(M68K_REG_A7, caller);            /* then pop the 6-byte exception frame */
+        m68k_set_reg(M68K_REG_PC, g_run_sentinel);
+        return;
+    }
+
+    if (vec == 1) {                                   /* GEMDOS */
+        switch (fn) {
+        case 0x48: {                                  /* Malloc: bump-allocate a block */
+            /* Count the CALL, not the bump: a zero-rounding size, and Malloc(-1) below, are fully
+             * serviced yet leave g_heap where it was. See osh_malloc_count. */
+            uint32_t size = m68k_read_memory_32(arg1);
+            g_malloc_n++;
+            if (size == OS_MALLOC_LARGEST_FREE) {      /* "how big is the largest free block?" */
+                d0 = g_heap < g_heap_limit ? g_heap_limit - g_heap : 0;
+                break;
+            }
+            d0 = g_heap; g_heap += (size + 1u) & ~1u;
+            break;
+        }
+        case 0x20:                                    /* Super(stack): supervisor-mode token model */
+            modeled = os_super(m68k_read_memory_32(arg1), &d0);
+            break;
+        case 0x3c: {                                  /* Fcreate(fname, attr) -> handle */
+            int32_t h = os_fcreate(g_mem, m68k_read_memory_32(caller + 2));
+            if (h < 0) modeled = 0; else d0 = (uint32_t)h;
+            break;
+        }
+        case 0x3d: {                                  /* Fopen(fname, mode) -> handle */
+            int32_t h = os_fopen(g_mem, m68k_read_memory_32(caller + 2));
+            if (h < 0) modeled = 0; else d0 = (uint32_t)h;
+            break;
+        }
+        case 0x3f: {                                  /* Fread(handle, count, buf) -> bytes read */
+            int32_t nread = os_fread(g_mem, (uint16_t)m68k_read_memory_16(caller + 2),
+                                     m68k_read_memory_32(caller + 4),
+                                     m68k_read_memory_32(caller + 8));
+            if (nread < 0) modeled = 0; else d0 = (uint32_t)nread;
+            break;
+        }
+        case 0x40: {                                  /* Fwrite(handle, count, buf) -> bytes written */
+            int32_t nwrote = os_fwrite(g_mem, (uint16_t)m68k_read_memory_16(caller + 2),
+                                       m68k_read_memory_32(caller + 4),
+                                       m68k_read_memory_32(caller + 8));
+            if (nwrote < 0) modeled = 0; else d0 = (uint32_t)nwrote;
+            break;
+        }
+        case 0x3e:                                    /* Fclose(handle) */
+            if (os_fclose(g_mem, (uint16_t)m68k_read_memory_16(caller + 2)) < 0) modeled = 0;
+            break;
+        case 0x41:                                    /* Fdelete(fname) -> 0 or EFILNF */
+            /* No `modeled` test: os_fdelete never refuses. A name the table does not hold is a file
+             * that does not exist, which is an ANSWER (os.h says why this one is, and Fopen's
+             * identical "no such name" is not). */
+            d0 = (uint32_t)os_fdelete(g_mem, m68k_read_memory_32(caller + 2));
+            break;
+        case 0x1a:                                    /* Fsetdta(dta) */
+            os_fsetdta(m68k_read_memory_32(caller + 2));
+            break;
+        case 0x4e: {                                  /* Fsfirst(pattern, attr) -> 0 or -1 */
+            int32_t r = os_fsfirst(g_mem, m68k_read_memory_32(caller + 2));
+            if (r < 0) modeled = 0; else d0 = (uint32_t)r;
+            break;
+        }
+        case 0x49: case 0x4a: break;                  /* Mfree / Mshrink -> success */
+        case 0x02:                                    /* Cconout(c): one byte to the console */
+            event_log(OS_EVENT_CONOUT, device_char_arg(caller));
+            break;
+        case 0x04:                                    /* Cauxout(c): one byte to AUX:, no result */
+            event_log(OS_EVENT_AUXOUT, device_char_arg(caller));
+            break;
+        case 0x05:                                    /* Cprnout(c): one byte to the printer */
+            /* ...and the one of the three device writes with a RESULT: non-zero = the character
+             * went out. The model's printer cannot time out, so the 0 arm is unreachable (os.h). */
+            event_log(OS_EVENT_PRNOUT, device_char_arg(caller));
+            d0 = OS_CPRNOUT_SENT;
+            break;
+        case 0x09:                                    /* Cconws(str) -> characters written */
+            d0 = cconws(m68k_read_memory_32(caller + 2), &modeled);
+            break;
+        case 0x0b:                                    /* Cconis -> -1 if a key is waiting */
+            g_poked_input_calls++;
+            d0 = os_cconis(g_mem);
+            break;
+        case 0x07: case 0x08:                         /* Crawcin / Cnecin: blocking console read */
+            g_poked_input_calls++;
+            modeled = os_conin_blocking(g_mem, &d0);
+            break;
+        case 0x42: {                                  /* Fseek(offset, handle, mode) -> position */
+            int32_t pos = os_fseek(g_mem, m68k_read_memory_32(caller + 2),
+                                   (uint16_t)m68k_read_memory_16(caller + 6),
+                                   (uint16_t)m68k_read_memory_16(caller + 8));
+            if (pos < 0) modeled = 0; else d0 = (uint32_t)pos;
+            break;
+        }
+        case 0x06: {                                  /* Crawio(w): raw console I/O, either way */
+            uint16_t w = (uint16_t)m68k_read_memory_16(caller + 2);
+            /* Only the READ direction looks at the poked console state; the write direction is a
+             * character bound for the screen (os.h). Tallying that too would redden a legitimate
+             * run for printing a character — but it IS console output, so it takes the same ledger
+             * entry Cconout takes. os_crawio_read, not os_crawio: the whole call would route its
+             * write through the CANDIDATE's ledger, which this side does not link. */
+            if (w != OS_CRAWIO_READ) {
+                event_log(OS_EVENT_CONOUT, (uint16_t)(w & 0xff));
+                break;                                /* d0 = 0, as os_crawio answers */
+            }
+            g_poked_input_calls++;
+            d0 = os_crawio_read(g_mem);
+            break;
+        }
+        /* Cauxin (0x03) is HERE, deliberately: a blocking read of a serial line no case can stage a
+         * byte for, so every answer would be invented (os.h's os_cauxin says it once, for both
+         * sides). So is Pterm0 (0x00), which real GEMDOS answers and this model will not — the
+         * reason is with the Pterm arm above. Dgetdrv, Pexec and everything unknown land here too. */
+        default: modeled = 0; break;                  /* Cauxin, Pterm0, Dgetdrv, Pexec, unknown */
+        }
+    } else if (vec == 14) {                           /* XBIOS */
+        switch (fn) {
+        case 0x02: case 0x03: d0 = OS_SCREEN_BASE; break;   /* Physbase / Logbase */
+        /* Kbdvbase hands the program a POINTER to poked state rather than reading it, but the claim
+         * the tally serves is the same one: nothing in the game may reach that block. */
+        case 0x22: g_poked_input_calls++; d0 = OS_KBDVBASE; break;   /* -> in-image KBDVBASE struct */
+        case 0x11:                                    /* Random -> the harness-poked 24-bit value */
+            g_poked_input_calls++;
+            d0 = os_random(g_mem);
+            break;
+        case 0x1c:                                    /* Giaccess(data, reg): YM2149 read/write */
+            g_psg_giaccess_calls++;
+            g_poked_input_calls++;
+            d0 = os_giaccess(g_mem, (uint16_t)m68k_read_memory_16(caller + 2),
+                             (uint16_t)m68k_read_memory_16(caller + 4));
+            break;
+        case 0x04:                                    /* Getrez -> low-res */
+        case 0x19:                                    /* Ikbdws: serial write to the IKBD, no image effect */
+            break;
+        /* The video and colour group: no image effect, so each is an ORDERED EVENT and nothing else
+         * (os.h, "the XBIOS VIDEO AND COLOUR GROUP"). The arguments are read off the caller's stack
+         * above the function-number word, exactly as Giaccess's are. */
+        case 0x05:                                    /* Setscreen(log, phys, rez) */
+            event_log(OS_EVENT_SETSCREEN, m68k_read_memory_32(caller + 2));
+            break;
+        case 0x06:                                    /* Setpalette(table) */
+            event_log(OS_EVENT_SETPALETTE, m68k_read_memory_32(caller + 2));
+            break;
+        case 0x07:                                    /* Setcolor(index, colour) */
+            event_log(OS_EVENT_SETCOLOR,
+                      ((uint32_t)m68k_read_memory_16(caller + 2) << OS_SETCOLOR_INDEX_SHIFT)
+                      | (uint32_t)m68k_read_memory_16(caller + 4));
+            break;
+        case 0x20:                                    /* Dosound: writes the YM2149, no image effect */
+            if (g_dosound_n < OS_DOSOUND_LOG_MAX)    /* log A0 (the command-list pointer) into the ledger */
+                g_dosound_arg[g_dosound_n++] = m68k_read_memory_32(arg1);
+            break;
+        case 0x25:                                    /* Vsync: waits for the VBL, no image effect */
+            event_log(OS_EVENT_VSYNC, 0);
+            break;
+        default: modeled = 0; break;                  /* unknown */
+        }
+    } else if (vec == 2) {                            /* GEM: AES/VDI parameter-block calls */
+        uint32_t reg_d0 = m68k_get_reg(0, M68K_REG_D0);   /* subsystem: AES 0xc8 / VDI 0x73 */
+        uint32_t reg_d1 = m68k_get_reg(0, M68K_REG_D1);   /* -> parameter block */
+        os_event_t event;
+        /* gem_dispatch, not os.h's os_gem_trap wrapper: the wrapper routes a refusal through
+         * os_refused() (which the oracle does not link) and the event through the CANDIDATE's
+         * ledger. The oracle keeps both itself, from the same shared model. */
+        modeled = gem_dispatch(g_mem, reg_d0, reg_d1, &event);
+        if (modeled && event.kind != OS_EVENT_NONE) event_log(event.kind, event.value);
+        /* Every serviced VDI call reads or writes the VDI state block, which lives inside the
+         * harness-poked region — so it is tallied exactly as Bconin is (os.h, gem_touches_poked_input). */
+        if (modeled && gem_touches_poked_input(reg_d0)) g_poked_input_calls++;
+    } else if (vec == 13) {                           /* BIOS: console input and Setexc (os.h) */
+        uint16_t dev = (uint16_t)m68k_read_memory_16(caller + 2);
+        switch (fn) {
+        case 0x01: g_poked_input_calls++; modeled = os_bconstat(g_mem, dev, &d0); break;  /* Bconstat */
+        case 0x02: g_poked_input_calls++; modeled = os_bconin(g_mem, dev, &d0); break;    /* Bconin */
+        case 0x03:                                    /* Bconout(dev, byte) */
+            /* Only the IKBD is modeled. A byte to device 4 is a COMMAND to the 6301 — off-image by
+             * definition, so it becomes a ledger entry; every other device would need a model of
+             * what receiving it does, and is refused rather than answered wrongly (TRAP_MODEL.md). */
+            if (dev != OS_BIOS_DEV_IKBD) { modeled = 0; break; }
+            event_log(OS_EVENT_IKBD, (uint16_t)(m68k_read_memory_16(caller + 4) & 0xff));
+            break;
+        case 0x05: {                                  /* Setexc(vecnum, handler) -> old handler */
+            /* The vector table lives in the IMAGE (low memory), so installing a handler is an
+             * ordinary diffed write: no model state and no ledger, and the candidate's own
+             * reconstruction performs the same store. The old handler comes back in D0. A vector
+             * whose slot leaves the image is refused rather than wrapped into row 0. */
+            uint32_t at = (uint32_t)dev * 4u;
+            if (at + 4 > g_size) { modeled = 0; break; }
+            d0 = m68k_read_memory_32(at);
+            m68k_write_memory_32(at, m68k_read_memory_32(caller + 4));
+            break;
+        }
+        default: modeled = 0; break;                  /* Kbshift, unknown */
+        }
+    } else {
+        modeled = 0;
+    }
+    if (!modeled) g_unmodeled++;
+
+    m68k_set_reg(M68K_REG_SR, sr);                    /* restore SR first (may reselect SSP) */
+    m68k_set_reg(M68K_REG_A7, caller);                /* then pop the 6-byte exception frame */
+    m68k_set_reg(M68K_REG_PC, retpc);
+    m68k_set_reg(M68K_REG_D0, d0);
+}
+
+/* What a run REPORTS BACK: D0..D7 at out_regs[0..7], then A0..A6 at out_regs[8..14]. A caller must
+ * size its buffer to OSH_OUT_REGS; nothing past it is written.
+ *
+ * A7 IS DELIBERATELY NOT REPORTED. It is not the function's register but the HARNESS's: osh_run
+ * forces it to `sp` on entry and the run's own rts pops the sentinel frame back off it, so what it
+ * holds at the end describes the frame the harness built, not anything the function computed. The
+ * one fact about it a case can use — how deep the run pushed — is osh_min_a7(), which the harness
+ * already vets its diff exclude bands against. Reporting it as if it were an output would invite a
+ * case to assert the harness's own convention (STACK_TOP + 4) and call it verified.
+ *
+ * The set is the full `movem` register set for a reason: a routine whose outputs live in registers
+ * the oracle does not report cannot be pinned by a differential at all, only by whatever memory it
+ * happens to touch. See TRAP_MODEL.md, "What a run reports back". */
+#define OSH_OUT_DREGS 8                              /* D0..D7 */
+#define OSH_OUT_AREGS 7                              /* A0..A6 — A7 excluded, see above */
+#define OSH_OUT_REGS  (OSH_OUT_DREGS + OSH_OUT_AREGS)
+
+/* Fill that buffer from the CPU as it stands. One spelling, because osh_run and osh_run_bench both
+ * report the same set and a second copy of the loop could report it in a different order. */
+static void report_regs(uint32_t *out_regs) {
+    for (int i = 0; i < OSH_OUT_DREGS; i++)
+        out_regs[i] = m68k_get_reg(0, (m68k_register_t)(M68K_REG_D0 + i));
+    for (int i = 0; i < OSH_OUT_AREGS; i++)
+        out_regs[OSH_OUT_DREGS + i] = m68k_get_reg(0, (m68k_register_t)(M68K_REG_A0 + i));
+}
+
+/* Run `entry` until it returns to the sentinel (its rts) or reaches `stop_pc` — a checkpoint
+ * PC that lets a never-returning function (e.g. _start, whose call to the game loop never
+ * comes back) be diffed at a chosen point instead of at rts. Pass stop_pc = 0 to disable.
+ * dregs/aregs are D0..D7 / A0..A7 inputs (aregs[7] overridden by sp). Returns 1 if it stopped
+ * at the sentinel or the checkpoint, 0 if it hit the instruction cap first (a truncated run
+ * whose memory must NOT be trusted as final). out_regs receives OSH_OUT_REGS values as above.
+ *
+ * A GEMDOS Pterm also stops it at the sentinel — the process ends there and nothing follows it to
+ * execute — so such a run reports REACHED, and which side terminated is carried by the event ledger
+ * rather than by this result (handle_trap; TRAP_MODEL.md, "Phase 13"). */
+int osh_run(uint8_t *mem, uint32_t size, uint32_t entry,
+            const uint32_t *dregs, const uint32_t *aregs,
+            uint32_t sp, uint32_t sentinel, uint32_t stop_pc, uint32_t max_insns,
+            uint32_t *out_regs) {
+    g_mem = mem; g_size = size;
+
+    enter_from_reset();
+    for (int i = 0; i < 8; i++) {
+        m68k_set_reg((m68k_register_t)(M68K_REG_D0 + i), dregs[i]);
+        m68k_set_reg((m68k_register_t)(M68K_REG_A0 + i), aregs[i]);
+    }
+    m68k_set_reg(M68K_REG_A7, sp);
+    m68k_set_reg(M68K_REG_PC, entry);
+    m68k_write_memory_32(sp, sentinel);   /* return address: rts -> sentinel */
+    g_run_sentinel = sentinel;            /* ...and where a GEMDOS Pterm ends the run (handle_trap) */
+    g_terminated = 0;                     /* ...which is per-run, like every other cause emu.run reads */
+
+    /* Install trap vectors transiently (restored below so the final image is trap-free). */
+    uint32_t save_g = m68k_read_memory_32(TRAP_VEC_GEMDOS), save_x = m68k_read_memory_32(TRAP_VEC_XBIOS);
+    uint32_t save_b = m68k_read_memory_32(TRAP_VEC_BIOS),   save_a = m68k_read_memory_32(TRAP_VEC_GEM);
+    m68k_write_memory_32(TRAP_VEC_GEMDOS, MAGIC_GEMDOS);
+    m68k_write_memory_32(TRAP_VEC_XBIOS, MAGIC_XBIOS);
+    m68k_write_memory_32(TRAP_VEC_BIOS, MAGIC_BIOS);
+    m68k_write_memory_32(TRAP_VEC_GEM, MAGIC_GEM);
+    g_heap = g_heap_base;
+    g_malloc_n = 0;
+    g_unmodeled = 0;
+    g_poked_input_calls = 0;
+
+    g_wn = 0;                             /* write-set = the function's writes only */
+    /* The whole PSG model's per-run state is reset by psg_enter_run(), which enter_from_reset()
+     * above already called — so osh_run_bench gets it too. */
+    g_dosound_n = 0;                      /* Dosound ledger = this run's XBIOS Dosound calls only */
+    g_event_n = 0;                        /* ...and the OS event ledger, for the same reason */
+    g_min_a7 = sp;                        /* deepest stack pointer (for exclude-band sanity checks) */
+    /* The external agent's per-run state is reset by sched_enter_run(), which enter_from_reset()
+     * above already called — the same split psg_enter_run() and hw_enter_run() use. */
+    uint32_t n = 0;
+    g_ncycles = 0;                                  /* 68000 cycle tally = this run's game code only */
+    for (; n < max_insns; n++) {
+        uint32_t pc = m68k_get_reg(0, M68K_REG_PC);
+        if (pc == sentinel || (stop_pc && pc == stop_pc)) break;
+        /* After the stop tests, so an entry triggered on the sentinel or the checkpoint never fires
+         * — the run ends at that PC and nothing could read the byte. Before the instruction
+         * executes, which is the point that matches the candidate's poll (see sched_fire).
+         *
+         * `n` NON-ZERO IS THE OTHER HALF OF THAT. Musashi's first m68k_execute() after a reset
+         * spends the reset's own cycles and executes NO instruction, so iteration 0 observes the
+         * entry PC and iteration 1 observes it again and runs it. Every counter here has always
+         * included that observation (g_ninsns is one more than the instructions executed, and
+         * changing it would move every pinned perf number), but an arrival count that did would be
+         * one too many for a wait loop whose compare IS the entry instruction — and it is compared
+         * against the candidate's poll count. Skipping iteration 0 makes both trigger kinds 1-based
+         * and costs nothing: nothing executed there. */
+        /* GATED ON THE SITE COUNT AS WELL AS THE SCHEDULE'S. A run may declare a wait SITE with
+         * an EMPTY schedule — "the byte the wait is on never changes", which is the natural shape
+         * of "the key is never pressed" and of any bounded poll loop — and its arrivals have to be
+         * counted all the same, because the candidate's polls at that site are counted and the
+         * harness compares the two. Keyed on g_sched_n alone this counted 0 against a real poll
+         * count: an unconditional red about nothing, which two Flying Shark batteries worked round
+         * by carrying a dummy entry that could never come due. */
+        if ((g_sched_n || g_sched_site_n) && n) sched_fire(pc, n);
+        if (g_cov_on && pc < COV_SIZE) g_cov[pc >> 3] |= (uint8_t)(1u << (pc & 7));   /* coverage */
+        uint32_t cur_a7 = m68k_get_reg(0, M68K_REG_A7);
+        if (cur_a7 < g_min_a7) g_min_a7 = cur_a7;
+        if      (pc == MAGIC_GEMDOS) handle_trap(1);
+        else if (pc == MAGIC_XBIOS)  handle_trap(14);
+        else if (pc == MAGIC_BIOS)   handle_trap(13);
+        else if (pc == MAGIC_GEM)    handle_trap(2);
+        else                         g_ncycles += (uint32_t)m68k_execute(1);   /* one insn; tally its cycles */
+    }
+    g_ninsns = n;                                   /* instruction count for perf profiling */
+    /* The four PSG rejections (mixed paths, an unservable access, an unseeded read, a read with no
+     * select) are NOT folded into g_unmodeled: emu.run tests every counter and names every cause
+     * that applies, so a run that both mixes the PSG paths and makes an unmodeled OS call reports
+     * both rather than sending the reader after one of them twice. They also have four different
+     * remedies. */
+    report_regs(out_regs);
+
+    uint32_t wn = g_wn;                              /* keep the restore writes out of the write-set */
+    m68k_write_memory_32(TRAP_VEC_GEMDOS, save_g);   /* restore vectors */
+    m68k_write_memory_32(TRAP_VEC_XBIOS, save_x);
+    m68k_write_memory_32(TRAP_VEC_BIOS, save_b);
+    m68k_write_memory_32(TRAP_VEC_GEM, save_a);
+    g_wn = wn;
+    uint32_t final_pc = m68k_get_reg(0, M68K_REG_PC);  /* reached rts or the checkpoint? */
+    return final_pc == sentinel || (stop_pc && final_pc == stop_pc);
+}
+
+/* --- THE CALLBACK DOOR: how a bench-run asm twin calls a HOST C function --------------------
+ *
+ * OFF TARGET ONLY, and it does not exist on the machine. A twin is a transcription of the
+ * original's instructions for one routine, so it calls what the original calls — and some of those
+ * callees are verified C cores that this side cannot link into the blob: they are HOST code (the
+ * candidate `.so`), and two of the seams they sit on (`sched_wait8`, `hw_bset8`) are modelled
+ * host-side as well, so an m68k build of them would model nothing. The target build has neither
+ * problem — it links the twin against the real cores and the stub below jumps straight to one — so
+ * the door is the off-target stand-in for a link, and nothing else.
+ *
+ * A twin never spells a door address in its body. Each callee gets a stub — at its simplest
+ * `jmp (base + id*8).l` off target and `jmp <name>` on it — so the body's `bsr.w door_<name>` is
+ * byte-identical in both builds. Landing in the band STOPS the run before the (non-existent)
+ * instruction there executes and reports OSH_BENCH_DOOR; the harness reads the arguments off the
+ * emulated stack, calls the host function, applies the result through osh_bench_door_return() and
+ * resumes the SAME run. asm_twin.py owns that half and TRAP_MODEL.md ("The callback door") has the
+ * whole contract, the refusal an unregistered id gets, and why the door charges no cycles.
+ *
+ * IT IS A PLAIN C CALL AND NOTHING MORE — including what a C call WRECKS: the result lands in D0
+ * and the rest of the caller-saved file (D1, A0, A1) and every condition-code bit are destroyed, as
+ * they are on the machine. Anything a call site needs beyond that — the X flag in or out, a `tst.l`
+ * so a `beq` below the call has something to branch on, the scratch registers saved across it —
+ * belongs in the STUB, which exists in BOTH builds. A door that did it, or that politely preserved
+ * what a real core does not, would be doing so OFF TARGET ONLY, and the machine that ships would
+ * disagree with the harness with nothing here able to see it.
+ *
+ * The band is asm_twin.py's constant, PASSED IN rather than spelt here — the placement argument
+ * (strictly between the twin's stack top and the image) is about the memory layout that module
+ * owns. A span of 0 disables the door, which is the default and what every pre-door caller gets. */
+#define OSH_BENCH_INSNS_EXHAUSTED 0    /* ran out of instructions without stopping */
+#define OSH_BENCH_SENTINEL        1    /* returned to the sentinel — the run is over */
+#define OSH_BENCH_DOOR            2    /* reached the callback band — service it and resume */
+
+static uint32_t g_door_base, g_door_span;   /* the band; span 0 = no door, the default */
+static uint32_t g_door_pc;                  /* the PC inside it the run stopped at */
+static uint32_t g_bench_sentinel;           /* remembered so a resume watches the same address */
+
+/* Arm the door over [base, base + span), or disarm it with span 0. Also clears the reported door
+ * PC, so a stale one from an earlier run cannot be read back as this run's. */
+void osh_bench_door(uint32_t base, uint32_t span) {
+    g_door_base = base;
+    g_door_span = span;
+    g_door_pc = 0;
+}
+
+uint32_t osh_bench_door_pc(void) { return g_door_pc; }
+/* A7 at the door: the stub was reached by `bsr`, so the twin's return address is AT it and the C
+ * arguments are above it, at +4, +8, ... — the ordinary m68k SysV frame the callee would have. */
+uint32_t osh_bench_door_sp(void) { return m68k_get_reg(0, M68K_REG_A7); }
+
+/* WHAT A REAL C CALL DESTROYS, modelled rather than left alone. The m68k SysV ABI makes D0, D1, A0
+ * and A1 CALLER-saved and says nothing about the condition codes, so on the target build — where
+ * this call site reaches the actual core — all of them come back as rubble. Off target the door
+ * touches almost nothing, so a stub that forgot to save its scratch file, or that branched on a
+ * flag its callee happened to leave, would be green here and broken on the machine. That is the
+ * exact class the door exists inside, so the door destroys them on purpose.
+ *
+ * The value is arbitrary because what it stands for is undefined; it is DISTINCTIVE so a stub that
+ * carried it into an address or a count says so when the image diff lands. D2-D7 and A2-A6 are NOT
+ * touched: those are callee-saved, and a core that did not restore one is a defect in the CORE,
+ * which the candidate's own differential is what catches. */
+#define OSH_DOOR_SCRATCH_POISON 0xDEADD00Du
+#define SR_ALL_CONDITION_CODES 0x1Fu    /* X N Z V C — the flags a call leaves undefined */
+#define SR_EXTEND_FLAG 0x10u            /* ...and the one of the five that ALTERNATES; see below */
+
+uint32_t osh_bench_door_poison(void) { return OSH_DOOR_SCRATCH_POISON; }
+
+/* WHY THE X BIT ALTERNATES INSTEAD OF BEING SET LIKE THE OTHER FOUR — a coverage hole, measured.
+ *
+ * A stub whose call site carries X across the call reads the 68000's X in, hands it to its core as
+ * an `extend` argument, and writes the core's answer back out. With every flag SET, X came back from
+ * every callback as a deterministic 1 — so a stub that DROPPED that write-back handed the next
+ * `abcd` the same 1 the poison would have left anyway, and the whole thing was green. Measured on
+ * Zynaps' wave-C twin: deleting the X write-back from all four of its X-carrying trampolines left
+ * its 146-case suite passing.
+ *
+ * Alternating X per callback removes the coincidence: a dropped write-back now agrees with the core
+ * on at most half the callbacks, and any case making two of them differs. The other four bits stay
+ * set, because nothing reads them across a call and a second alternating bit would only add noise.
+ *
+ * PER RUN AND NOT GLOBAL, so a case is reproducible whatever ran before it: the counter is reset
+ * where the cycle and instruction tallies are. The first callback of a run therefore always leaves
+ * X SET, which is what the door has always done. */
+static uint32_t g_door_calls;           /* callbacks serviced in this run — the X bit's parity */
+
+/* Which X the Nth callback of a run leaves, EXPORTED so a caller can pin the schedule rather than
+ * mirror it. Reset by osh_run_bench, so N counts from 0 within one run. */
+uint32_t osh_bench_door_extend(uint32_t nth) { return (nth & 1u) ? 0u : 1u; }
+
+/* The three statuses osh_run_bench and osh_bench_resume answer with, EXPORTED rather than left for a
+ * caller to mirror. emu.py cannot include this file, so the alternative is the same three numbers
+ * typed twice with nothing holding them equal — and the way that fails is silent: renumber
+ * OSH_BENCH_DOOR and `AsmTwins.call`'s door loop simply never fires, so every twin case compares a
+ * run that stopped at its first callback against a fully-run C core and reports a pixel divergence
+ * rather than a renumbered enum. Asked of the .so, they cannot disagree. */
+uint32_t osh_bench_status_insns_exhausted(void) { return OSH_BENCH_INSNS_EXHAUSTED; }
+uint32_t osh_bench_status_sentinel(void)        { return OSH_BENCH_SENTINEL; }
+uint32_t osh_bench_status_door(void)            { return OSH_BENCH_DOOR; }
+
+/* Apply one serviced callback: the host function's result into D0 — or the poison, when the core
+ * returns nothing and D0 is as undefined as the rest of the scratch file — then the caller-saved
+ * wreckage above, then resume the twin at `pc` with A7 = `sp`. That last part is the stub's `rts`,
+ * ARITHMETIC AND ALL SPELT BY THE CALLER, because the frame it pops is the C ABI and asm_twin.py is
+ * what owns that. */
+void osh_bench_door_return(uint32_t d0, int returns, uint32_t pc, uint32_t sp) {
+    m68k_set_reg(M68K_REG_D0, returns ? d0 : OSH_DOOR_SCRATCH_POISON);
+    m68k_set_reg(M68K_REG_D1, OSH_DOOR_SCRATCH_POISON + 1);
+    m68k_set_reg(M68K_REG_A0, OSH_DOOR_SCRATCH_POISON + 2);
+    m68k_set_reg(M68K_REG_A1, OSH_DOOR_SCRATCH_POISON + 3);
+    uint32_t sr = m68k_get_reg(0, M68K_REG_SR) | SR_ALL_CONDITION_CODES;
+    if (!osh_bench_door_extend(g_door_calls++)) sr &= ~SR_EXTEND_FLAG;
+    m68k_set_reg(M68K_REG_SR, sr);
+    m68k_set_reg(M68K_REG_PC, pc);
+    m68k_set_reg(M68K_REG_A7, sp);
+}
+
+/* The bench run's instruction loop, shared by osh_run_bench and osh_bench_resume so a resumed
+ * segment cannot execute under different rules than the first one. The sentinel is a PARAMETER, not
+ * read from the global, so the compiler can keep it in a register across a call m68k_execute() makes
+ * opaque; g_bench_sentinel exists only to carry it from the run into its resumes. Returns an OSH_BENCH_* status
+ * and ACCUMULATES its instruction count into g_ninsns — a run split by callbacks reports the same
+ * totals as the unsplit one, and the door itself adds nothing to them (the stub's `bsr` and `jmp`
+ * really execute and are charged; the host C body does not exist here and costs nothing). */
+static int bench_loop(uint32_t sentinel, uint32_t max_insns) {
+    uint32_t n = 0;
+    for (; n < max_insns; n++) {
+        uint32_t pc = m68k_get_reg(0, M68K_REG_PC);
+        if (pc == sentinel) break;
+        /* ONE unsigned compare, and a disabled door (span 0) is false for free: this runs per
+         * emulated instruction, in the loop every pinned perf number in this workspace is taken
+         * with, so the door costs a subtract and a compare whether or not a project has one. */
+        if ((uint32_t)(pc - g_door_base) < g_door_span) {
+            g_door_pc = pc;
+            g_ninsns += n;
+            return OSH_BENCH_DOOR;
+        }
+        uint32_t cur_a7 = m68k_get_reg(0, M68K_REG_A7);
+        if (cur_a7 < g_min_a7) g_min_a7 = cur_a7;
+        uint32_t cyc = (uint32_t)m68k_execute(1);
+        g_ncycles += cyc;
+        if (g_prof_on && pc < PROF_SIZE) g_prof[pc >> 1] += cyc;
+    }
+    g_ninsns += n;
+    return (m68k_get_reg(0, M68K_REG_PC) == sentinel) ? OSH_BENCH_SENTINEL
+                                                      : OSH_BENCH_INSNS_EXHAUSTED;
+}
+
+/* The register file the next osh_run_bench ENTERS with, in the OSH_OUT_REGS order (D0..D7, A0..A6;
+ * A7 is `sp`). Set through osh_bench_seed, which a caller with nothing to seed passes NULL to —
+ * that is the default and leaves the entry state exactly as it always was.
+ *
+ * It exists so a caller can pin the m68k SysV ABI's CALLEE-SAVED FILE, D2-D7 and A2-A6: seed each
+ * with a distinctive value, and a routine that forgot one in its `movem` list comes back with the
+ * seed missing from it. Nothing else off target can see that — the image is identical, the return
+ * value is identical, and the cost pin gets CHEAPER — while on the machine the caller's register is
+ * gone (measured on Zynaps's draw_sprite_masked_asm; see asm_twin.AsmTwins.call). */
+static uint32_t g_bench_seed[OSH_OUT_REGS];
+static int      g_bench_seed_on;
+
+void osh_bench_seed(const uint32_t *regs) {
+    g_bench_seed_on = regs != 0;
+    if (regs)
+        for (int i = 0; i < OSH_OUT_REGS; i++) g_bench_seed[i] = regs[i];
+}
+
+/* Benchmark a cross-compiled C function (our reconstruction, built to m68k and loaded into `mem` at
+ * its link addresses) — for comparing the reconstruction's on-target cycle cost against the original
+ * (osh_run). Unlike osh_run this installs NO OS-trap vectors: the target is pure computation over the
+ * image pointer, and those vectors sit inside the reconstruction's own .text (linked at base 0), so
+ * writing them would corrupt code. `arg0` is the single 32-bit C argument, placed at 4(sp) per the
+ * m68k SysV ABI; `sentinel` is the return address (an even PC outside the loaded code). Reports cycles
+ * + instructions via the shared osh_num_* getters, and the whole OSH_OUT_REGS register file through
+ * `out_regs` — a caller must size that buffer to OSH_OUT_REGS, as osh_run's already must. Returns an
+ * OSH_BENCH_* status — 1 (SENTINEL) still means exactly what it always did, so a caller that tests
+ * it as a boolean is unaffected. */
+int osh_run_bench(uint8_t *mem, uint32_t size, uint32_t entry, uint32_t arg0,
+                  uint32_t sp, uint32_t sentinel, uint32_t max_insns, uint32_t *out_regs) {
+    g_mem = mem; g_size = size;
+    enter_from_reset();
+    if (g_bench_seed_on) {
+        for (int i = 0; i < OSH_OUT_DREGS; i++)
+            m68k_set_reg((m68k_register_t)(M68K_REG_D0 + i), g_bench_seed[i]);
+        for (int i = 0; i < OSH_OUT_AREGS; i++)
+            m68k_set_reg((m68k_register_t)(M68K_REG_A0 + i), g_bench_seed[OSH_OUT_DREGS + i]);
+    }
+    m68k_set_reg(M68K_REG_A7, sp);
+    m68k_set_reg(M68K_REG_PC, entry);
+    m68k_write_memory_32(sp, sentinel);       /* return address: rts -> sentinel */
+    m68k_write_memory_32(sp + 4, arg0);       /* first C argument (the image pointer) */
+    g_min_a7 = sp;
+    g_bench_sentinel = sentinel;
+
+    g_ninsns = 0;
+    g_ncycles = 0;
+    g_door_calls = 0;
+    int status = bench_loop(sentinel, max_insns);
+    report_regs(out_regs);
+    return status;
+}
+
+/* Continue the run osh_run_bench started — after a callback was serviced, and only then. The CPU is
+ * NOT reset and no register is touched: Musashi's state IS the twin's state, which is the whole
+ * point of resuming rather than re-entering. Same loop, same statuses, and the totals keep
+ * accumulating, so `max_insns` bounds this segment rather than the run. */
+int osh_bench_resume(uint32_t max_insns, uint32_t *out_regs) {
+    int status = bench_loop(g_bench_sentinel, max_insns);
+    report_regs(out_regs);
+    return status;
+}
+
+/* How many values osh_run writes into its out_regs buffer. A caller allocates that buffer, so a
+ * caller built against a different OSH_OUT_REGS than the .so it loads either reads slots the run
+ * never wrote or is overrun by it — the second corrupts the caller's memory. emu.py sizes its
+ * buffer from its own mirror and checks it against this before the first run. */
+uint32_t        osh_out_regs(void)    { return OSH_OUT_REGS; }
+uint32_t        osh_num_writes(void)  { return g_wn; }
+/* The write ledger's cap. `g_wn == this` means the ledger saturated and osh_write_addrs() is a
+ * truncated set — see MAX_WRITES above for why the number is what it is. Exported so emu.py's
+ * mirror is a checked one rather than a hand-kept one. */
+uint32_t        osh_max_writes(void)  { return MAX_WRITES; }
+const uint32_t *osh_write_addrs(void) { return g_waddr; }
+uint32_t        osh_unmodeled(void)   { return g_unmodeled; }
+/* Did the last osh_run end at a GEMDOS Pterm rather than at its rts or its checkpoint? See
+ * g_terminated; emu.run turns it into a refusal for a run that asked for a `stop_pc`. */
+int             osh_terminated(void)  { return g_terminated; }
+uint32_t        osh_min_a7(void)      { return g_min_a7; }
+/* The Malloc bump pointer left by the last osh_run — diagnostics only (how far the heap grew). */
+uint32_t        osh_heap(void)        { return g_heap; }
+/* Install the Malloc arena's base (project.toml's `heap_base`). emu.py calls it once, at import,
+ * from the bound project's config — before any osh_run, which is what resets g_heap to it. */
+void            osh_set_heap_base(uint32_t base) { g_heap_base = base; }
+/* ...and the arena's ceiling (project.toml's `heap_limit`, clamped to OS_FS_TABLE). emu.py installs
+ * it at import beside the base; it is what Malloc(-1) measures the free window against. */
+void            osh_set_heap_limit(uint32_t limit) { g_heap_limit = limit; }
+#ifdef OS_FS_TABLE_RUNTIME
+/* Install the staged-file table's base (project.toml's `fs_base`), which carries the staging area
+ * with it. emu.py calls it once, at import, exactly as it installs the heap's two ends. */
+void            osh_set_fs_table(uint32_t base) { g_os_fs_table = base; }
+#endif
+/* How many GEMDOS Malloc calls the last osh_run serviced. This, NOT the bump pointer, is what
+ * "did this run allocate?" means: a serviced Malloc whose rounded size is 0 hands back a block at
+ * the arena base without moving g_heap, so a pointer comparison would miss it. emu.run() keys the
+ * heap-over-program guard on this count (see emu._vet_no_malloc_over_program). */
+uint32_t        osh_malloc_count(void) { return g_malloc_n; }
+/* How many traps the last osh_run serviced that reached the harness-poked model state. emu.run() keys
+ * the poked-input-over-program guard on this count (see emu._vet_no_poked_input_read), the same way
+ * it keys the heap guard on osh_malloc_count: both waivers claim something about the GAME, so both
+ * are re-tested per run rather than trusted once. */
+uint32_t        osh_poked_input_calls(void) { return g_poked_input_calls; }
+uint32_t        osh_num_insns(void)   { return g_ninsns; }
+uint64_t        osh_num_cycles(void)  { return g_ncycles; }
+uint32_t        osh_psg_count(void)   { return g_psgn; }
+/* PSG accesses this run that did not fit in the ledger (see g_psg_dropped) — emu.run names them. */
+uint32_t        osh_psg_dropped(void) { return g_psg_dropped; }
+/* Direct PSG accesses the model refused this run — emu.run names them in its diagnostic. */
+uint32_t        osh_psg_unmodeled(void) { return g_psg_unmodeled; }
+const uint8_t  *osh_psg_kinds(void)   { return g_psg_kind; }     /* OS_PSG_EVENT_* per entry */
+const uint8_t  *osh_psg_regs(void)    { return g_psg_reg; }
+const uint8_t  *osh_psg_vals(void)    { return g_psg_val; }
+const uint8_t  *osh_cov_data(void)    { return g_cov; }          /* the visited-PC bitset (for merge) */
+uint32_t        osh_cov_bytes(void)   { return sizeof g_cov; }

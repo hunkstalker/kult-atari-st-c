@@ -1,0 +1,177 @@
+# KULT.PRG (Atari ST, Exxos/ERE 1989) — mapa de nombres para Ghidra.
+# Ghidra address = image offset + 0x10000 (PrgLoader base 0x10000).
+# Formato:  fn <addr> <nombre>   |   var <addr> <nombre>   |   cmt <addr> <texto>
+# Solo nombres con evidencia; el resto queda como FUN_xxxx.
+
+# ==== entrada / crt0 ====
+fn 0x10000 _start                    # Mshrink (trap#1), carga PRES.PI1, DRAP.PI1, seleccion de idioma D/E/F
+fn 0x135e2 crt0_init                 # XBIOS physbase, instala vectores, guarda base de pantalla
+fn 0x3a556 init_hardware             # XBIOS + BIOS + MFP: init de interrupciones/timers
+fn 0x3a604 mfp_setup                 # escribe $FFFA13/$FFFA07/$FFFA19/$FFFA1F y vector $0134
+
+# ==== E/S de ficheros ====
+fn 0x1076a load_resource             # fopen+fread+fclose de DAT_0001a55a -> DAT_0001a55e (len DAT_0001a562)
+fn 0x1077e save_clear_bin            # crea/escribe "A:CLEAR.BIN" (0x291c bytes)
+fn 0x107a2 write_named_file          # fcreate+fwrite+fclose
+
+# ==== pantalla ====
+fn 0x121c6 copy_screen               # copia 8000 longs (32000 B) DAT_0001a462 -> DAT_0001a45e
+fn 0x121de swap_screens              # intercambia los dos buffers de pantalla
+fn 0x13572 load_named_screen         # prepara buffer (len 0x7d22) y llama a load_resource
+fn 0x135da set_palette               # xbios_setpalette
+
+# ==== bucle principal + VM de comandos ====
+fn 0x101be game_loop                 # do{ ... } while: update subsistemas + comando pendiente + repintado
+fn 0x1031c handle_frame_input        # gestiona botones/hints y comandos pendientes por frame
+fn 0x103a8 run_command               # despacha por (the_command & 0xf000); tabla en cmd_jump_table
+fn 0x103ae run_command_keep_sp       # variante de run_command (equivalente a runCommandKeepSp de ScummVM)
+fn 0x1042c draw_text_box             # calcula geometria de caja de texto y la dibuja
+fn 0x10440 draw_text_box_variant     # idem (otra ruta de entrada)
+fn 0x12292 prompt_wait               # espera tecla/click tras mostrar un mensaje
+fn 0x13698 wait_frame                # sincronizacion de frame (VBL) + sondeo de input
+
+var 0x1a50e the_command              # opcode/command actual
+var 0x19eca cmd_jump_table           # tabla de punteros a manejadores de comando (indexada por opcode&0x3ff)
+
+# ==== subsistemas por frame ====
+fn 0x17e3c script_step              # ctx: avanza PTR_DAT_0001a822 y compara codigos de script 0x38/0x0c/0x0a
+fn 0x16556 draw_hint_icons          # ctx: itera 16 entradas (DAT_0001a776) llamando FUN_000124f8
+fn 0x16582 update_icon_list         # ctx: recorre la lista DAT_0001a7ca..DAT_0001a7ce
+
+# ==== texto / fuente ====
+fn 0x10838 print_char                # font = &DAT_0001d202 + c*6; dibuja 6 filas rotando nibbles
+fn 0x10f8e advance_text_entry        # avanza D4 entradas [word len] desde A1 y fija cur_str_end
+fn 0x108a2 print_word                # bucle con flags 0x40/0x80/0xc0 (equivale a printWord de ScummVM)
+
+# ==== recursos embebidos (offset de imagen + 0x10000) ====
+var 0x1d202 font_data                # CARAC.BIN (fuente)
+var 0x1d402 TEMPL_data               # TEMPL.BIN (plantillas de script)
+var 0x1a4e0 templ_ptr                # puntero actual dentro de TEMPL
+var 0x1a4dc cur_str_end              # fin de la cadena en curso
+var 0x1a55a cur_filename             # nombre del fichero a cargar en load_resource
+var 0x1a55e load_buffer              # destino de load_resource
+var 0x1a562 load_length              # longitud para load_resource
+var 0x1a45e screen_ptr_a             # buffer de pantalla A
+var 0x1a462 screen_ptr_b             # buffer de pantalla B
+
+# ==== input / objetos ====
+fn 0x14886 hit_test_objects          # recorre object_list (8 B/entrada) y fija the_command si acierta
+var 0x1a450 cursor_x                 # cursor x (pixeles)
+var 0x1a452 cursor_y                 # cursor y
+var 0x1a456 input_buttons            # bitmask de botones/teclas (bit2 = click/fuego)
+var 0x1a7ca object_list_begin        # inicio de la lista de objetos/spots
+var 0x1a7ce object_list_end          # fin de la lista
+var 0x1a776 command_hints_list       # lista de 16 hints/comandos
+var 0x1a81a selected_object          # entrada de objeto bajo el cursor
+var 0x1a81e selected_icon_ptr        # puntero al icono/hint seleccionado
+
+# ==== blit de sprites (planar) ====
+fn 0x124f8 blit_sprite               # ctx: escribe grupos de 4 bytes con mascara 0xf0f0f0f0 y rotacion (shift/flip)
+
+# ==== sonido (YM2149 + timer MFP) ====
+fn 0x1929a ym_write                  # escribe registro/dato en $FF8800/$FF8802 (reg 7 = mixer)
+fn 0x18fc4 sound_timer_start         # MFP $FFFA13/07/19/1F + vector $134; arranca reproduccion
+fn 0x19084 sound_timer_stop          # limpia los registros MFP del timer de sonido
+var 0x192c2 sound_sample_ptr         # puntero/estado del sample en curso
+var 0x134 sound_timer_vector         # vector de interrupcion del timer B (sonido)
+
+# ==== carga de salas ====
+fn 0x13568 load_fond                 # carga FOND.PI1 (fondo de sala) en screen_ptr_b
+fn 0x106f8 load_resource_list        # ctx: recorre entradas terminadas en '$' y llama load_resource
+fn 0x1682a reset_clear               # ctx: bucle A:CLEAR.BIN + the_command=0x918e
+
+# ==== F4: nucleos C verificados byte a byte (harness diferencial) ====
+# Los nombres del prefijo `g_` viven en projects/kult/recreate/src/.
+fn 0x16300 xbios_setpalette          # XBIOS Setpalette(*(0x1a466))
+fn 0x14138 run_text_entry            # lee entrada de script A6, calcula pantalla y blitea texto
+fn 0x11050 text_blit_fwd             # blit de texto directo (A0/A1/A3/D2/D3/D7)
+fn 0x11102 text_blit_rev             # idem con palabra invertida por FUN_00011196
+fn 0x11196 bit_reverse_word          # permutacion de palabra (resultado en D0/D1)
+fn 0x13f56 run_text_table            # fija 0x1a49e, walk_entry(ARPLA) y recorre FUN_00014138
+fn 0x13f4c text_table_entry          # D0=0, D1=A6[1] -> FUN_00013f56
+fn 0x141ea run_text_entry_1          # FUN_00014138 sobre A6+1
+fn 0x162e2 set_palette_entry         # copia 5 words indexados + Setpalette
+fn 0x162da set_palette_current       # idem con indice de 0x1acf4
+fn 0x162ce set_palette_from_entry    # idem con indice de A6[1]
+fn 0x11014 noop_11014                # `rts` (stub sin efecto)
+fn 0x121c4 copy_screen_a6            # addq.l #1,a6 + copy_screen
+fn 0x106e2 load_resource_list_a      # A5=0x1a3aa -> load_resource_list
+fn 0x106ea load_resource_list_b      # A5=0x1a3e4 -> load_resource_list
+
+# ==== fichas por subsistema (docs/mapa/, 2026-09-15) ====
+# --- bucle / pacing ---
+fn 0x13594 wait_vbl                  # espera a que cambie el contador de VBL $1acd4 (38 llamantes)
+fn 0x16d1e wait_vbl_even             # VBL + contador par (paso de los wipes de texto)
+fn 0x10522 wait_frame_cursor         # wait_frame + dibujo del cursor (cola del bucle)
+
+# --- input / cursor ---
+fn 0x10526 cursor_draw               # guarda 16x16 bajo el cursor y pinta el sprite
+fn 0x1060a cursor_restore            # restaura el area guardada por 0x10526
+fn 0x13686 ikbd_packet_copy          # copia 5 bytes del paquete IKBD a $1a44f (Kbdvbase+0x10)
+
+# --- salas / modo de escena ---
+fn 0x14496 scene_mode_load           # camina 0x1ad38 y publica cabecera/objetos del modo
+fn 0x1443e scene_mode_set            # fija A_MODE_FLAG + marcador 0x1a695 y carga el modo
+fn 0x14588 command_state_reset       # reinicia globals de comando (0xa01c/0xf7/0x9048/...)
+fn 0x1460a scene_mode_apply          # procesa el modo tras input (formulario, objeto, overlays)
+fn 0x146d0 scene_mode_draw           # cuerpo: cursores, transicion, formulario, iconos
+fn 0x1842c prepare_room              # prepara sala: fondos, reveal, FOND.PI1, paleta, CLEAR
+fn 0x16ed8 load_scena                # carga SCENA.BIN (hints + 2 x 32000 B)
+fn 0x16fb4 save_scena                # guarda SCENA.BIN (inverso de 0x16ed8)
+fn 0x16f90 hint_table_relocate       # suma 0x101a8 a los punteros de la tabla de hints
+fn 0x10682 load_eche_bank            # fija el digito ECHE<n>.BIN y recarga su lista
+fn 0x1066e load_eche_bank_wrap       # 0x10682 con d1 = 0x64c8e
+fn 0x10668 load_eche_bank_cmd        # d0 = a6[1]; 0x1066e; A6 += 2
+
+# --- texto / UI ---
+fn 0x10e66 text_box_body             # marco + palabras + borde inferior de la caja de texto
+fn 0x10b6c text_window               # ventana de texto con adorno/flecha (bits 0xe0)
+fn 0x1090e print_words_fit           # imprime desde A5 las palabras que caben en la linea
+fn 0x10946 measure_word              # mide una palabra del banco de texto
+fn 0x10998 measure_words             # cuenta palabras y ancho maximo hasta cur_str_end
+fn 0x109bc wrap_line                 # word-wrap greedy al ancho de A_TEXT_BOX_W
+fn 0x10aee print_line_center         # centra la linea de A5 y la imprime
+fn 0x10b24 print_line                # mide/crece el ancho, imprime y rellena con espacios
+fn 0x10b46 print_spaces              # imprime D6+1 espacios
+fn 0x10fb4 text_index_arg            # position_text tomando el indice de A6[1] si D4 < 4
+fn 0x109fe overlay_a_draw            # dibuja el overlay de texto A (banco 0x41b76)
+fn 0x10a54 overlay_a_frame           # marco del overlay de texto A
+fn 0x10a88 overlay_b_draw            # dibuja el overlay de texto B (banco 0x41586)
+fn 0x10acc overlay_b_frame           # marco del overlay de texto B
+fn 0x142cc textform_build            # prepara la lista de 3 blits del formulario
+fn 0x143e2 textform_draw             # dibuja la lista con VBL por linea
+fn 0x141f4 textform_fwd_entry        # entrada: 0x141fa con D0 = A6[1]
+fn 0x141fa textform_fwd              # revelado hacia delante con sample 0x1d
+fn 0x14246 textform_rev_entry        # entrada: 0x1424c con D0 = A6[1]
+fn 0x1424c textform_rev              # revelado hacia atras con sample 0x1e
+fn 0x13f86 scene_text_box            # caja/overlay autodimensionado de la escena
+
+# --- animacion / frames ---
+fn 0x15a90 anim_bank_select          # elige banco de sprites (0xd8f0 + bits 7/6)
+fn 0x15d7e anim_restore              # restaura la zona bajo el elemento (0x1215e)
+fn 0x15cd8 anim_counter              # ajusta contador de pasos/recorte del elemento
+fn 0x15abe anim_bank_build           # construye el banco desde 0x27fe2/0x28ad2 por bloques
+fn 0x15f6c script_arg                # lee un argumento del script (directo/indirecto/texto)
+fn 0x15fd4 script_alu                # ALU/comparacion de palabras de D6/D0 segun D7
+fn 0x1606e script_expr               # evalua una expresion del script
+fn 0x16088 script_store              # guarda word/byte en la direccion evaluada
+fn 0x160aa script_jump_zero          # salta a plantilla (0x1350c) o avanza 2 si D6 != 0
+fn 0x12e2e reveal_region             # reveal por puntos de un rect (paso $1a577)
+fn 0x12ef6 reveal_dot                # pinta un punto del reveal (mascara D4 rotada por D7)
+fn 0x12f28 reveal_pixel              # reveal pixelado del elemento (dbf 0x64 / skip $1a570)
+
+# --- overlay del juego ---
+fn 0x1215e mask_restore_rows         # restaura D3 filas desde A0-0x8000 con mascara
+fn 0x12ce4 view_mode_cycle           # ciclo de modo/vista $1acca (overlays del retrato)
+fn 0x18d28 draw_selection_frame      # marco del objeto/hint seleccionado (0x1a81e)
+fn 0x16dec object_info_card          # ficha/descripcion de objeto (tabla 0x246e6)
+fn 0x189aa object_info_wait          # ficha interactiva: 0x16dec hasta clic (bit 2)
+fn 0x185e6 track_name_print          # nombre de pista/seccion (banco 0x3c534) + espera
+fn 0x14966 action_bar_hit_test       # hit-test de 0x1a6ae -> the_command + overlay B
+
+
+
+
+
+
+

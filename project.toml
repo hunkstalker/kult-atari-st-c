@@ -1,0 +1,9 @@
+name = "kult"
+prg = "work/disk_a/KULT.PRG"
+names = "work/names.txt"
+lib = "build/libkult.so"
+load_base = 0x10000
+image_size = 0x100000
+# Kult issues no GEMDOS Malloc ($48): its buffers are its own bss/screen area (confirmed
+# by the HAL trap stream). Waive the heap-overlap check; emu.run re-tests the claim per run.
+tos_malloc_unused = true

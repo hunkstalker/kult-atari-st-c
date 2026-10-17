@@ -1,0 +1,22 @@
+# Python / harness
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv
+
+# build del candidato
+build/
+src/*.o
+*.so
+
+# arnes: Musashi clonado + oraculo compilado (se regeneran)
+tools/recreate_kit/oracle/musashi/
+tools/recreate_kit/oracle/build/
+tools/recreate_kit/*.o
+tools/recreate_kit/*.so
+
+# assets del juego (copia del usuario; NUNCA se versionan)
+work/*
+!work/names.txt
+work/disk_a/
+work/disk_b/

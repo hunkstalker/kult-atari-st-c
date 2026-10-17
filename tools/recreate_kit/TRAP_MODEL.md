@@ -1,0 +1,2837 @@
+# TOS trap model — what is modeled, and what is deliberately not
+
+The oracle can't call real TOS, so every `trap` is serviced with fixed semantics
+(`include/os.h` + `oracle/shim.c`). This file records, per trap, **what the model does, why that
+design, and what it does NOT capture** — so a reconstruction built on top of it knows exactly which
+of its behaviour is verified and which is merely un-contradicted.
+
+It is the sibling of [`projects/buggyboy/recreate/HARNESS.md`](../../projects/buggyboy/recreate/HARNESS.md),
+which established the governing rule and applied it to the IKBD.
+
+## The governing rule
+
+> The differential contract requires **both cores to see identical inputs.** The reconstruction is
+> pure C with no interrupts, so IRQ-driven, time-varying state has no analogue on the candidate
+> side and cannot be differentially verified. Therefore: model at the **state** level, not the
+> IRQ level — hardware state becomes harness-poked constants, i.e. ordinary test inputs, identical
+> on both sides.
+
+And its corollary, which outranks everything below:
+
+> **Never fabricate a result to make a call succeed.** An unmodeled call sets `modeled = 0`,
+> `g_unmodeled` counts it, and `emu.run` **raises** rather than diff a fabricated result. A
+> partially-modeled call that returns a plausible-looking wrong value is far worse than an honest
+> raise: it converts a loud failure into a silent one.
+
+### Refusing on ONE side is a false green (closed)
+
+That raise covers the oracle. It did **not** cover the candidate, and the gap was a false-green
+class rather than one function's quirk:
+
+> The candidate calls the same `os.h` helpers, gets the same sentinel — `0` from `os_bconstat` /
+> `os_bconin` / `os_super` / `os_gem_trap`, `-1` from the file calls — and carries on. `os_bconin`
+> with no key pending touches neither its out-param nor the image, and `os_fopen` on an unstaged
+> name touches nothing at all. So a reconstruction could **drop a guard the original has** and stay
+> green: the only input that would expose the difference is exactly the one the oracle refuses to
+> run.
+
+Measured twice in `projects/joust/recreate/src/input.c`. Deleting `poll_console_key`'s `Bconstat`
+gate outright left all 2325 cases green. `save_hiscore`'s `Fopen` is the same shape with no gate to
+delete: it hands the candidate `-1` and lets it walk the `Fcreate` fallback, while the same call
+rejects the oracle's run.
+
+**Closed by giving the candidate its own tally.** `os_refused()` (`include/os.h`) records each
+refusal and hands the sentinel straight back, so a helper cannot tally without also returning;
+`src/os_refusal.c` holds the counter and exports `g_os_refusal_reset` / `g_os_refusal_count`, and
+`kit.mk` links it into every candidate exactly as it does the Dosound ledger.
+`harness.differential()` clears it before **each** candidate run — the `poison=True` re-run included
+— and **raises if it comes back non-zero**, unconditionally, because a non-zero *oracle* tally
+already raised inside `emu.run()` before the diff was reached. The three symbols are **required**
+ABI, not probed-optional like the Dosound ledger: that ledger has an oracle-side witness saying when
+it was needed, and this one cannot (the oracle's count is zero by construction), so a missing symbol
+would reopen the class in silence. `harness` refuses to import instead.
+
+**What that catches, and what it does not.** Deleting the `Bconstat` gate now fails two named cases
+— `test_poll_quit_key_no_key_returns_at_once` and `test_hiscore_key_input_no_key_returns_at_once` —
+because those cases really do drive the candidate into `os_bconin`. The `Fopen` instance is the same
+mechanism, but **no case in the suite reaches it**: every quit case stages `HIGH.SCO`, so
+`save_hiscore`'s `Fopen` succeeds, and the one unstaged case is oracle-only (`emu.run`, no candidate
+at all). It was verified by construction instead — a case with `hiscore_dirty = 0`, `HIGH.SCO`
+unstaged and `save_hiscore`'s early-out deleted produces **zero byte diffs** and is caught by the
+tally alone. So the tally closes the class wherever a case reaches the call; it does not invent
+cases, and the `Fcreate` fallback stays unreachable for the reason in limit 2 below.
+
+Two details:
+
+* **A build that must not tally** defines `OS_NO_REFUSAL_TALLY` and gets a no-op `os_refused()`.
+  `shim.c` does — it keeps the oracle's own `g_unmodeled` and does not link `src/os_refusal.c` — with
+  the `#define` next to the `#include` rather than in `kit.mk`, since a build flag can be forgotten
+  where an adjacent line cannot. An **on-target** build whose cores call a refusing helper needs the
+  same define: `os_refused` is the one non-`static inline` symbol `os.h` references, and no Atari
+  build links the kit's `src/`. None needs it today (BuggyBoy's `game_build.sh` excludes `src/os.c`,
+  its only caller, and the `.PRG` still links), but Joust's `src/input.c` *is* an ordinary core that
+  calls `os_fopen`, so a Joust on-target build will. The switch is named for what it selects rather
+  than for the oracle so that the remedy is one `-D` and not a redesign.
+* **`Crawio` is not a refusal.** `os_crawio` and `os_bconin` share `os_console_take_key()`, which
+  only reports whether a key was there; `os_bconin` alone turns "none" into a refusal. An idle
+  console is a legitimate *result* for a non-blocking read and must not reach the tally.
+
+What it proves is narrow: that a guard is **reached**, not that it is the right guard. Transcribe
+guards from the original and reason about them; the tally only stops one from vanishing unnoticed.
+
+## The CPU configuration — a decision, not an inherited default
+
+Everything below is about traps. One thing about the **CPU underneath them** is a modelling
+decision too, and it lived nowhere until it was written here:
+
+> **`M68K_EMULATE_TRACE` is OFF.** The oracle's 68000 does not monitor the T bit and never takes a
+> trace exception.
+
+It is set by `-DM68K_EMULATE_TRACE=0` in `kit.mk`'s `OCFLAGS` — which `$(ORACLE)` lists as a
+prerequisite, so changing it actually relinks — and refused at compile time by an `#error` in
+`oracle/shim.c`, which sees the macro's *effective* value after `m68k.h` has pulled in `m68kconf.h`.
+Two halves, because they pin different things: the `#error` catches the value being ON however it
+got there (`make OCFLAGS=…`, a dropped continuation, an upstream header whose `#ifndef` guard went
+away), and the behavioural case named below catches Musashi not honouring it. That placement is the
+point.
+`oracle/musashi/` is **gitignored and cloned from upstream HEAD** by the `$(MUSASHI)/m68kcpu.c`
+rule, so `m68kconf.h` is not under version control: leaving the setting to that header's own
+`#define ... M68K_OPT_OFF` meant the CPU the entire workspace's ground truth runs on was untracked,
+unpinned, and asserted by no test — a fresh clone at a different upstream commit would have changed
+it silently. The header's `#ifndef` guard is what lets the `-D` win. (Verified when it landed: the
+rebuilt `liboracle.so` is **byte-identical** to the one the header's default produced, so the flag
+changed the provenance of the setting and nothing else.)
+
+**What it costs.** Self-modifying code that single-steps itself cannot run under the oracle. The
+gap is latent rather than live: sweeping all five shipped `.PRG`s (BuggyBoy, START, Joust, GXUT20,
+SWB) for the trace vector `$24` as an operand finds **one** instruction that writes it, Wonder Boy's
+`move.l a0,$24.l` at runtime `$ee0a` — the Copylock's own — and that blob is stubbed out rather than
+executed (`projects/wonderboy/recreate/PORTABILITY.md` §6.1). Every other occurrence of the value is
+table data or a `$24` struct displacement. The sweep's limit is the one every operand scan in this
+workspace has: a vector installed through a register (`lea $24.w,a0` + `move.l`) would not appear in
+it.
+
+**Why it is load-bearing rather than merely convenient.** That stub's witness — "did the protection
+execute?" — is a memory *difference* over the blob's own bytes. A trace decryptor decrypts and
+**re-encrypts** one longword at a time and restores the vectors it saved, so a blob that ran to
+COMPLETION would leave almost nothing behind to see. The witness is sound because the blob cannot
+complete, and it cannot complete because of this flag. Turning it on is therefore not a local
+change: pin it against
+`projects/wonderboy/recreate/test/test_copylock.py::test_the_oracles_cpu_takes_no_trace_exception`,
+which asserts the setting BEHAVIOURALLY (a probe arms the T bit and requires the trace vector never
+to be taken) rather than by reading the flag back. That case lives in a project rather than in the
+kit's own suite because the kit's suite deliberately builds no oracle.
+
+**STILL OPEN — this pins ONE of 25 CPU options.** `m68kconf.h` has 25 `#ifndef`-guarded settings
+(`M68K_EMULATE_ADDRESS_ERROR`, `M68K_EMULATE_PREFETCH`, `M68K_EMULATE_INT_ACK`, `M68K_SEPARATE_READS`
+and the rest), and every one of them is as untracked as the trace flag was, because the clone is
+`--depth 1` off upstream HEAD with **no commit pin** — which is the real root. The general fix
+Musashi itself offers is `-DMUSASHI_CNF='"<header>"'` (`m68k.h`), letting the kit supply one TRACKED
+config header stating every decision, reviewable in a diff and a natural `$(ORACLE)` prerequisite.
+Not built: nothing has needed a second option pinned, and the trace flag was pinned because a live
+mechanism depends on it. Until it is, a fresh clone at a later upstream commit can move the oracle's
+ground truth under every project at once with nothing red.
+
+### The entry state every run begins from
+
+A second decision about the same CPU, and the same kind: it is stated here because it is not an
+inherited default either.
+
+> **`osh_run` and `osh_run_bench` force `SR = $2700` after the reset** — supervisor, IPL 7, condition
+> codes clear. **The entry CCR is guaranteed clear**, and a caller cannot set it: `emu.run` has no
+> entry-CCR parameter, so no other entry condition is expressible.
+
+**Why it is forced rather than left to the reset.** `m68k_pulse_reset()` is faithful to a 68000
+reset, which does *not* clear the condition codes: it touches T, the interrupt mask and S, and leaves
+`FLAG_X`/`N`/`Z`/`V`/`C` exactly as the previous run left them. Both entry points therefore used to
+inherit the CCR of whatever had run before them **in the same process**, and any original that reads
+a condition code on entry answered differently depending on run order — `abcd`/`sbcd` fold in X,
+`addx` and `roxl` likewise. It surfaced as four Wonder Boy packed-BCD cases that reddened under
+`pytest -n auto` and passed on their own, each off by one unit in the lowest digit. Determinism is
+the requirement — two identical runs must give identical answers — and `$2700` is the kit's
+convention for meeting it, not a claim about any game's own boot SR.
+
+**What it costs.** An original the *game* enters with X set cannot be reproduced from a case. Wonder
+Boy has one (`$e058`'s `subq.w #1` sets X, and `$e064` calls a BCD accumulator two instructions
+later), registered as honestly unpinned in `projects/wonderboy/recreate/STATUS.md`. Modelling it
+means giving `emu.run` an entry-CCR parameter; nothing has needed one yet.
+
+**Pinned on both sides**, the same split as the trace flag above:
+
+* kit-side by [`test/test_entry_state.py`](test/test_entry_state.py), whose `entry_state_probe.c`
+  drives `osh_run` in C — one `abcd` three times in one process, with a middle run that wraps and
+  leaves X set — because this directory binds no project and so cannot reach the oracle from Python.
+  It compiles `shim.c` itself rather than linking the shared `liboracle.so`, so a reverted force
+  cannot hide behind a stale artifact;
+* game-side by
+  `projects/wonderboy/recreate/test/test_hud.py::test_the_oracle_enters_every_run_with_the_condition_codes_clear`,
+  over the reconstructions that surfaced it.
+
+Reverting the force reddens both.
+
+### What a run reports back
+
+A third decision about the same CPU, and the one that decides what a differential can see at all:
+
+> **`osh_run` reports `D0..D7` then `A0..A6`** — the full `movem` register set — at `out_regs[0..14]`
+> (`OSH_OUT_REGS` in `oracle/shim.c`, mirrored by `emu.REPORTED_REGS`, which is what `emu.run`'s
+> result dict is keyed by). **A7 is deliberately excluded**, and nothing past the set is written.
+
+**Why the full set.** The register report is the *observability window*: a routine whose outputs live
+in registers the oracle does not report cannot be pinned by a case at all — only by whatever memory
+it happens to touch on the way. Narrow it and the harness silently changes what "verified" means for
+register-passing code, which is most 68000 leaf code. The window used to be `D0/D1/A0/A1` — the four
+a Ghidra-style calling convention returns in — and that was inherited from the first function ported,
+not chosen. It cost real coverage: Wonder Boy stopped short of **three** reconstructions for
+observability rather than difficulty, each recorded and re-run when this landed
+(`projects/wonderboy/recreate/STATUS.md`, batches 3 and 10) — a five-instruction routine whose entire
+load-bearing output is `a6/d2/d3/d7`, a plotter's outgoing `d7`, and a mutation that survived only
+because the window hid the field it corrupts.
+
+**Why A7 is not in it.** A7 is not the function's register but the *harness's*: `osh_run` forces it to
+`sp` on entry and the run's own `rts` pops the sentinel frame back off it, so its final value states
+the harness's convention (`STACK_TOP + 4`) rather than anything the function computed. A case
+asserting it would be asserting the kit's own arithmetic and calling the function verified.
+`osh_min_a7()` — the deepest A7 the run reached, which `harness.differential` already vets its diff
+exclude bands against — is the one fact about the stack pointer a case can use.
+
+**What it still costs.** Three limits remain, and they are the same shape as the entry CCR's:
+
+* **the report is at `rts` (or the `stop_pc` checkpoint) only** — no intermediate register state is
+  visible, so a value a routine computes and then overwrites is unobservable;
+* **no condition codes** — a routine whose output is a flag can only be pinned through something that
+  reads the flag (Wonder Boy's scroll cases do it via the caller's rewritten return address);
+* **no FP/control registers** — irrelevant on a 68000 target, stated so the omission is a decision.
+
+**Pinned on both sides**, the same split as the two decisions above:
+
+* kit-side by [`test/test_reported_regs.py`](test/test_reported_regs.py), whose
+  `reported_regs_probe.c` drives `osh_run` in C: one `movem.l (table).l,d0-d7/a0-a6` puts a distinct
+  mark in every reported register, a second run leaves them all at their entry values, and a canary
+  one slot past the set catches a run that writes more than it declares. It compiles `shim.c` itself,
+  so a narrowed report cannot hide behind a stale `liboracle.so`. The same file pins `emu.py`'s
+  mirror against `shim.c` textually (CLAUDE.md §5: the C fills the buffer, the Python allocates it,
+  and neither can import the other);
+* game-side by every case that asserts a register past `d1`/`a1` — Wonder Boy's map probes
+  (`test/test_map.py`) are the first.
+
+**A stale `liboracle.so` is caught rather than tolerated.** The `.so` is shared by every project and
+rebuilt only by `kit.mk`'s `$(ORACLE)` rule, so building against an old one is a normal state to be
+in; here it would mean the Python side allocating fifteen slots the C side never fills (silent zeros
+where a case expects an output) or, in the other direction, the C overrunning the caller's buffer.
+`osh_out_regs()` exports the count and `emu.py` checks it against its own mirror at import, naming
+the rebuild.
+
+## The harness-poked model state
+
+Four regions of the image are inputs the harness pokes, not program memory. Both cores read the
+same bytes, so every one of them is an ordinary, differentially-verifiable test input.
+
+| Address | Constant | Meaning |
+| --- | --- | --- |
+| `0x500` | `OS_KBDVBASE` | the KBDVBASE struct XBIOS `Kbdvbase` returns |
+| `0x600` | `OS_CON_PENDING` | u32, nonzero = a character is waiting at the console |
+| `0x604` | `OS_CON_CHAR` | u32, what `Bconin`/`Crawio` return (`scancode << 16 \| ascii`) |
+| `0x608` | `OS_RANDOM_VALUE` | u32, what XBIOS `Random` returns (masked to 24 bits) |
+| `0x610` | `OS_PSG_REGS` | 16 bytes, the YM2149 register file XBIOS `Giaccess` reads/writes |
+
+They sit in the free low region — clear of the 68000 vector page and above TOS's documented
+system-variable area. `recreate_kit/os_map.py` mirrors the addresses (its own module, because
+`harness.py` and `oracle/emu.py` both guard the block and neither can import the other),
+`test/test_os_memory_map.py` pins the two sets equal, and `harness.console_key()` /
+`harness.console_keys()` / `harness.psg_regs()` build the pokes so the fields that must move together
+cannot be set half-way.
+
+### They are no longer below every program
+
+They used to be: every project loaded at `0x10000`, and `harness._vet_os_memory_map()` enforced
+`load_base >= OS_POKE_BLOCK_END` (`0x660` today; it was `0x620` before Phase 12's VDI state block and
+Phase 13's console key queue widened it — see the README's "widening the block" note, which is a
+change to every declaring project's waiver text). `projects/wonderboy` cannot obey it — its program relocates itself to the
+absolute address `0x400`, and everything below that is the 68000 vector page — so it loads at
+`0x3f8` and **the block sits inside its code**. A `project.toml` may now declare
+`tos_poked_input_unused = true`, the claim that the game reads none of this state, and get that
+layout. The claim is checked rather than assumed, from both directions the hazard has, and **both
+guards key on the overlap, never on the flag**:
+
+* **`harness.make_image()`** refuses a poke whose byte range lands in the block, unless the project
+  has DECLARED that span to be its own program's data (below). It sits at the
+  layer pokes are *applied*, so a hand-written `{OS_RANDOM_VALUE: …}` dict — the only way to stage
+  an XBIOS `Random`, since the kit ships no builder for it — is seen exactly like a `console_key()`
+  one.
+* **`project.toml`'s `poked_input_program_data`** is the one way past that, and only under the
+  overlap: a list of `[address, length]` spans holding the GAME's own variables at an address the
+  model also names. A poke WHOLLY inside a declared span is served; one that straddles the boundary
+  is not. It permits the seeding and nothing else — the hazard is a TRAP serving one of those bytes
+  back as model state, which the per-run guard below still refuses, declaration or no declaration.
+  Wonder Boy declares `[[0x604, 4]]`, which is `OS_CON_CHAR` in full: `$604` is its cheat-enable word
+  and `$606` its key-sequence cursor, and without the declaration four arms of `game_key_actions` and
+  `player_meter_empty_check`'s cheat arm have no differential at all. The arithmetic is pinned by
+  `test/test_os_map.py` and the project's own guards by
+  `projects/wonderboy/recreate/test/test_poked_input_guard.py`.
+* **`emu.run()`** refuses any run in which a trap *reached* the block (`_vet_no_poked_input_read`,
+  keyed on the shim's `osh_poked_input_calls` tally of `Bconstat` / `Bconin` / `Crawio` / `Random` /
+  `Giaccess` / `Kbdvbase`). Reached, not read: a `Giaccess` write stores into the register file and
+  `Bconin` clears the pending flag, and under the overlap those are writes over the game's own code.
+  `Crawio` is tallied for its **read** direction only (`OS_CRAWIO_READ`); printing a character
+  touches nothing and must not redden a run.
+
+Two limits of the tally, stated because neither is obvious. It is **oracle-side only**, unlike the
+refused-`os_*` tally: a candidate that calls `os_bconstat` where the original does not is caught by
+the image diff instead (`os_bconin` clears the pending flag, so the bytes differ) — but a candidate
+whose extra call is genuinely image-neutral is not. And it says a poked-input trap was *served*, not
+that the block it reached lies in the program; the guard's overlap question is asked about the poked
+block alone, which is why the `Kbdvbase` arm below is only covered when that block also overlaps.
+
+`harness.console_key()` / `harness.psg_regs()` refuse too, but as a friendlier early error naming
+what was staged; `make_image` is what makes the refusal unbypassable. The second guard is the one
+that matters most, and it is the sibling of the Malloc waiver's `_vet_no_malloc_over_program`: the
+dangerous reader is the **game**, not the test. A `Bconin` in code that only exists after a depack
+reads the program's own instruction bytes, which are nonzero, so the model reports a keystroke
+pending, hands back four bytes of code as the key, and **zeroes four bytes of code** at
+`OS_CON_PENDING` — identically on both sides, since both run the same `os.h`. The diff is clean and
+the case proves nothing.
+
+### The Malloc arena is one of the two parts of the map a project places
+
+GEMDOS `Malloc` (0x48) bump-allocates from an in-image arena, and `Mshrink`/`Mfree` return 0. Where
+that arena starts and how far it may grow are configured by `heap_base` and `heap_limit` in a
+project's `project.toml`, and the whole mechanism, both entry points and all the refusals, is written
+once in [`README.md`](README.md), "The Malloc arena is the one region a project places". The map's
+OTHER placed region is the staged-file window (`fs_base`, Phase 4 below); the two interlock, because
+the arena's ceiling **is** the staged-file table's address, so moving the window down moves the
+ceiling with it.
+
+What belongs here is the **trap** half. `OS_HEAP_BASE` reads in C as it always did but is now a
+variable read rather than a constant expression, and two refusals key on what the traps did rather
+than on the configuration:
+
+* **`emu._vet_no_malloc_over_program()`** rejects a run that served a `Malloc` while the arena lies
+  inside the loaded program — the `tos_malloc_unused` waiver's run-time half. It counts **serviced
+  traps** (`osh_malloc_count`), not movement of the bump pointer: `Malloc(-1)`, GEMDOS's "how big is
+  the largest free block?" query, is fully served and rounds to a zero-size bump, so a pointer test
+  would wave exactly that case through.
+* **`emu._vet_heap_within_bounds()`** rejects a run whose bump pointer finished **past the
+  ceiling**. This one has to look at the pointer, because it is about growth and not about a call
+  happening. Nothing watched it before: only the arena's base was ever vetted, so a base that was
+  legal at import said nothing about the seventh allocation, and a block handed out over the
+  staged-file table (or over a project's own scratch map) was a plain image write served identically
+  to both sides — two corrupted runs comparing equal.
+
+The `tos_malloc_unused` waiver is unchanged and is a claim about the GAME (that it allocates at
+all), not about the arena's address; a game that *does* allocate moves the arena rather than waiving
+it.
+
+### Two regions this leaves unvetted
+
+`OS_KBDVBASE` (`0x500`, whose KBDVBASE struct `install_handlers` patches) and `OS_SCREEN_BASE`
+(`0x8000`, what `Physbase`/`Logbase` return) have never had a check of their own. They were covered
+*incidentally* by the `load_base >= 0x10000` every project happened to use, and the waiver removes
+exactly that incidental coverage: at Wonder Boy's `0x3f8`, `0x3f8 <= 0x500` and
+`0x8000 < 0x218d0`, so **both regions are now inside a live program** and no layout check looks at
+either. One of the two has a partial answer on the other side: `OS_KBDVBASE`'s only reader is XBIOS
+`Kbdvbase`, which *is* one of the six traps the tally above counts — so a program that reaches it
+reddens the run **whenever the poked block also overlaps** (Wonder Boy, the only waived project, is
+such a layout). A program covering `0x500` but not `0x600` would still not be seen, since the guard
+keyed on that tally asks about the poked block, not about `0x500`.
+
+`Physbase`/`Logbase` (XBIOS `0x02`/`0x03`) are tallied by nothing, so a program that takes the
+modeled screen base and draws into it scribbles its own code on both sides in silence. Closing it
+means what the poked block got: its own overlap predicate and its own tally, keyed on
+`OS_SCREEN_BASE` rather than on the poked block. It is deliberately **not** folded into the tally
+above — that guard's predicate is the wrong question for `0x8000`, and answering it with the poked
+block's overlap would be over-strict for one layout and blind for another.
+`tools/recreate_kit/test/test_os_memory_map.py::test_every_low_model_address_is_guarded_or_declared_unvetted`
+holds the list of two, so a third region cannot join it quietly.
+
+---
+
+## Phase 1 — BIOS `Bconstat` (0x01) / `Bconin` (0x02)
+
+Before this the whole `trap #13` arm was `modeled = 0`; the BIOS branch is new.
+
+**Modeled.** `Bconstat(dev)` returns `-1L` when a character is waiting and `0` when not — the
+longword convention Joust reads with `cmp.l #$ffffffff,d0` (`poll_quit_key`, `hiscore_key_input`)
+and with `tst.b d0; blt` (`title_screen`). `Bconin(dev)` returns `OS_CON_CHAR` and **consumes** the
+keystroke, clearing `OS_CON_PENDING` the way the real console does — so one poke is one keypress
+and a polling loop sees the letter exactly once rather than holding it down forever.
+
+**Design choice.** Keystrokes arrive on the IKBD interrupt, which the oracle never runs, so per
+HARNESS.md they become poked state rather than a simulated device. Consuming (rather than
+latching) the key was chosen because Joust's real consumers — the name-entry loop, the quit poll —
+are *loops*: a latched key would make every iteration see the same letter, which is a behaviour no
+real run has.
+
+**Not captured.**
+- **Only the console (`OS_BIOS_DEV_CON` = 2) is modeled.** `Bconstat`/`Bconin` on any other BIOS
+  device raise; there is no keystroke state for them and inventing one would be a fabrication.
+- **`Bconin` with nothing pending raises.** On real hardware it *blocks* until a key arrives, and
+  there is nothing here to wait for. A test must always stage the key it expects to be read.
+- **No keystroke *sequence*.** A run delivers at most one key. A loop that reads several distinct
+  keys (Joust's name entry) has to be verified one poked key per run, exactly as HARNESS.md's
+  Phase 2 did for the joystick.
+- **Every other BIOS selector still raises** — `Kbshift`, `Rwabs`, and a `Bconout` to any device but
+  the IKBD, …
+
+**Later additions to the `trap #13` arm** (each with its own pin in `test/test_os_model.py`):
+`Bconout(dev, byte)` to the IKBD (`OS_BIOS_DEV_IKBD`, device 4) appends an `OS_EVENT_IKBD` ledger
+entry — a command bound for the 6301, off-image by definition; every other device raises, because
+what receiving a byte does on it is not modeled. `Setexc(vecnum, handler)` stores the handler long
+into the **image's own vector table** (low memory) and returns the previous handler in D0: no model
+state and no ledger, because the store is an ordinary diffed write the candidate's reconstruction
+performs itself, which is what KULT's `init_hardware` uses to install its music handlers.
+
+**The application-private traps that ride on it — `trap #3`/`trap #4` (KULT's music).** On the
+68000 `TRAP #n` takes vector `n + 32`, so `trap #3` and `trap #4` are vectors `0x23`/`0x24`
+(addresses `0x8C`/`0x90`) — **exactly** the vectors `0x3a5c2` fills with `0x3aa38`/`0x3aab6` via
+`Setexc`. Nothing here is modeled as a TOS call, and nothing needs to be: the handler is app code
+inside the image and the vector is an ordinary diffed write, so a run that executes `0x3a5c2` first
+(or pokes the vector) goes through the trap exactly as the hardware would. Verified on the oracle:
+after `0x3a5c2`, vec `0x8C = 0x3aa38`, `0x90 = 0x3aab6`, `0x134 = 0x3a872` (the last one written
+**directly** by `mfp_setup` `0x3a604`, not via `Setexc`); `0x3a85e` (tone helper, `trap #3`) reaches
+`rts`, and `0x3a872` (the player, `trap #4` ×6) reaches its `rte` at `0x3a934` once
+`psg_seed={7: …}` covers the mixer read-back (Phase 6). Note the shape: `0x3a872` is an ISR ending
+in `rte`, not `rts`, so a case must set `stop_pc`; and it is not in KULT's 406-function index
+(Ghidra only sees it as the data pointer stored in vector `0x134`), so it is not an F4 target.
+
+## Phase 2 — GEMDOS `Super` (0x20)
+
+**Modeled — a TOKEN model, not a privilege model.** `Super(0)` returns the fixed cookie
+`OS_SUPER_TOKEN`; `Super(OS_SUPER_TOKEN)` accepts it back and returns 0; `Super(1)` (SUP_INQUIRE)
+returns `-1` (supervisor). **Any other restore value raises.**
+
+**Design choice, from reading all six of Joust's call sites** (`0x1018a`, `0x1021a`, `0x11d38`,
+`0x152ea`, `0x15480`, `0x154a4`):
+
+- three sites (`init_system` twice, `poll_quit_key` once) do `clr.l -(a7); move.w #$20,-(a7);
+  trap #1; addq #6,a7` — the returned stack pointer is **discarded**; the call exists only to stay
+  in supervisor mode while touching `$484` (conterm) and `$43e` (flock);
+- the floppy routine at `0x152dc` does `move sr,d0; btst #13,d0` to test the S bit **itself**, and
+  only if it is in user mode does it call `Super(0)`, save the result verbatim to `0x1560e`, and
+  later pass that same longword back to `Super(…)` at `0x15480`/`0x154a4`.
+
+So no site ever *inspects* the value; it is either dropped or round-tripped. That is exactly what a
+token satisfies, and it avoids the alternative — flipping the 68000 S bit and swapping A7 between
+USP and SSP — which would perturb the stack and interact with the harness's stack-guard band for
+no observable gain. Refusing an unrecognised restore value keeps the token from silently absorbing
+a site that does something else.
+
+**Not captured.**
+- **No privilege checking whatsoever.** Musashi starts every `osh_run` in supervisor mode and the
+  model never leaves it, so code that genuinely requires supervisor to touch a protected address
+  is never tested for it — it simply always succeeds.
+- **Consequently, `move sr` reads S = 1 for the whole run.** Joust's floppy routine therefore takes
+  its "already supervisor" branch and its three `Super` sites are **unreachable under the oracle**.
+  A user-mode path can only be exercised by a model that really flips the S bit.
+- The cookie is not a real stack pointer. A site that did arithmetic on `Super(0)`'s result would
+  be mismodeled — which is why anything other than the cookie is rejected rather than served.
+
+## Phase 3 — XBIOS `Giaccess` (0x1c) and the YM2149 register file
+
+This is the substantive one: before it there was a write *ledger* but no readable register state,
+so a `Giaccess` read had nothing correct to return.
+
+**Modeled.** A 16-byte register file at `OS_PSG_REGS`, in the image. `Giaccess(data, reg)` writes
+`data` to register `reg & 0x0f` when bit 7 of `reg` is set, and otherwise reads that register,
+zero-extended into D0. Because the file is plain image state, a `Giaccess` write is an ordinary
+image write the differential already covers, and `os_giaccess()` is shared verbatim by the shim and
+by any reconstruction — the same construction that makes `os_fopen` agree on both sides.
+
+**Initial state: all registers 0.** A fresh image is zero there, so a run is deterministic without
+the model asserting anything about the chip's power-on contents. A test whose control flow depends
+on a register states it with `harness.psg_regs({...})`. This matters: Joust's `snd_poll_done`
+(`0x10a8a`) reads the **mixer** (register 7) and releases `snd_priority` to idle only when all six
+tone+noise enables are set, so the value read steers control flow. Both branches are pinned by
+`projects/joust/recreate/test/test_os_traps.py::test_snd_poll_done_follows_the_staged_mixer`,
+which runs Joust's own function under the oracle with the mixer staged.
+
+**The PSG ledger is unchanged.** `emu.psg_writes()` still reports exactly the direct `$ff8802` byte
+writes it always did, in the same order, with the same `(reg, val)` tuples — BuggyBoy's
+`test_sound.py` and the remaster suite are untouched. `Giaccess` does **not** append to it; its
+writes are visible in the image instead.
+
+**Not captured — and guarded: the direct hardware path.** The register file is fed by `Giaccess`
+**only**. A driver that touches `$ff8800`/`$ff8802` directly is captured by the off-image ledger
+instead, and those writes deliberately do not reach the file: making them do so would put PSG bytes
+in the image on the oracle side only, since BuggyBoy's candidate emits its register stream into
+out-param arrays rather than into memory — the whole `test_refresh_*` battery would fail on a
+difference that has nothing to do with the reconstruction. So `osh_run` **rejects any run that uses
+both paths** (`osh_psg_mixed_paths()`), because such a run could be served a read from a register
+file it knows is stale. `emu.run` names that cause specifically, since it is otherwise a puzzling
+"unmodeled OS call" on a run whose every trap *was* modeled.
+
+**This guard is live, not hypothetical.** BuggyBoy is direct-only (no `Giaccess` anywhere), but
+**Joust reaches both**: its sound driver calls `Giaccess` ten times, while its raw-floppy routine
+selects and rewrites PSG port A directly at image `0x1553c` — the standard ST drive-select, six
+instructions:
+
+```
+0x1553c  move.b #$0e,$ff8800     0x1554c  and.b  #$f8,d1
+0x15544  move.b $ff8800,d1       0x15550  or.b   d0,d1
+0x1554a  move.b d1,d2            0x15552  move.b d1,$ff8802
+```
+
+(reached by `bsr` from `0x15342` and `0x154fc`; the enclosing subroutine starts six bytes earlier
+at `0x15536` with `move sr,-(a7); ori.w #$0700,sr`. `0x15540` is the *address operand* of the first
+instruction, not an instruction — note the `move.b d1,d2`, which saves the pre-mask port value.)
+Any single `osh_run` spanning both layers is therefore refused. The two
+touch disjoint registers (14 vs 0–10), so a finer guard keyed on the register number would let such
+a run through; the coarse one was chosen because being over-strict fails loudly while being
+under-strict fails silently, which is the wrong way round for this contract.
+
+**The direct path serves only byte writes; everything else about it raises.** *(Superseded in part
+by Phase 6 below, which gives `$ff8800` a real read model — the second bullet stands unchanged, and
+the first is why the read had to be seeded rather than simply served.)* `g_psg_unmodeled` counts,
+and `osh_run` rejects, two kinds of direct access — the same "refuse rather than fabricate" answer
+the trap dispatch gives an unmodeled selector:
+
+- **any read of either port.** Reading `$ff8800` reads back the selected register on real hardware,
+  and the ledger records writes only, so there is nothing correct to return. It used to be served
+  as 0, which is exactly the forbidden case: Joust's drive-select
+  (`move.b $ff8800,d1; move.b d1,d2; and.b #$f8,d1; or.b d0,d1; move.b d1,$ff8802`) would have port
+  A's preserved upper bits forced to zero, and — since a run using *only* the direct path never
+  trips the mixed-path guard — a reconstruction of that routine could be marked verified against the
+  fabricated read. BuggyBoy never reads the ports (`lea` + `move.b`/`clr.b` writes only, and
+  Musashi's `clr` does not emit the 68000's dummy read), so raising costs nothing.
+  **Phase 6 narrows this to the DATA port `$ff8802`**: `$ff8800` is answered from a register file the
+  case seeds, and a register nothing declared is still refused — the ledger's emptiness was never the
+  real obstacle, the chip's *prior contents* were.
+- **any other access to the chip's address block.** The ST decodes the YM2149 incompletely, so it
+  answers across `$ff8800..$ff88ff` (`PSG_BLOCK_END`); of that, only the byte
+  select-latch-then-data sequence on the canonical pair is modeled — not the odd-address decoding
+  a `move.w #$0e00,$ff8800` relies on, and not the mirrors. This is what keeps the mixed-path guard
+  honest: before, only the *byte* callbacks compared the address against the two ports, **by
+  equality**, so a wider access, an odd address, or a mirror reached neither the ledger nor the
+  tally and could be combined with `Giaccess` without tripping the guard. Neither binary does any
+  of it today — Joust's three direct accesses are byte-sized and port-aligned — so the guard's
+  soundness was an unenforced property of the two input binaries. Now every callback width tallies
+  any overlap with the block, so a third game cannot silently disarm it.
+
+**Consequence — Joust's raw-floppy routine (`0x152dc`) was unverifiable under this oracle.** Not just
+its `Super` sites (Phase 2): the *whole* routine. Because a direct port read was rejected **on its
+own**, the `move.b $ff8800,d1` at `0x15544` sank any run that reached it, with or without a
+`Giaccess` alongside — so no `emu.run` covering `0x152dc` could ever be green.
+**Phase 6 is the "real PSG read model" that sentence was waiting for**: a case that declares port A's
+contents (`psg_seed={14: …}`) can now run the drive-select, and the read is served from the declared
+value rather than from a fabricated `0`. Two of its other blockers are unaffected — the routine's
+`Super` sites stay unreachable while the model never leaves supervisor mode, and a run that also
+reached `Giaccess` would still trip the mixed-path guard — so this lifts the PSG wall, not the whole
+routine. `projects/joust/recreate/STATUS.md`'s row says exactly that now.
+
+**One opt-in exception, for a job that is not the differential: `emu.audio_capture(True)`.** An
+asset extractor drives a game's music replayer tick by tick and reads its register stream out of
+`psg_writes()`; that needs the `$ff8800` read-back, so the refusal above made it impossible. With
+the mode on, `shim.c` answers a byte read of `$ff8800` from the YM2149 **register file** — which is
+what the chip does, and was, before Phase 6, the model the paragraph above says the oracle lacks.
+Since Phase 6 that file is the *shared* one and the mode is a **relaxation** of it rather than a
+second copy: an undeclared register reads `0` here instead of refusing, an unselected latch likewise,
+and the file and latch span runs instead of being re-seeded per run. It also serves the two bits a
+replayer's tempo selector reads, `$fffa01` bit 7 (monitor
+detect) and `$ff820a` bit 1 (shifter sync), as the **50 Hz colour ST**: both read 0 off-image, 0/0 is
+the *monochrome* profile, and a capture that took it would drop 72/256 of every tick and render every
+song slow, silently.
+
+*Exactly what is served* is those two bits and nothing more — plus GPIP bits 5 and 4, the FDC and
+ACIA interrupt lines, which are **active low** and so are set because idle is 1: serving bit 7 alone
+would report both devices as interrupting, a state no quiescent machine is in. Every other bit of
+that byte is a fabricated 0. Because the answer is two named bits rather than a machine model, only a
+**byte** read of either address is served; a 16- or 32-bit read taking one in would have to fabricate
+the neighbouring MFP/shifter registers, so it is recorded rather than served and sinks the run.
+
+> **Superseded in two ways by Phase 7, and read that section for the current rule.** Since Phase 7
+> these two addresses are a *seeded model of their own*, and this mode no longer answers them with a
+> switch of its own — it **installs a seed** over that model, per run (`hw_enter_run`). Two claims
+> this paragraph used to make are therefore no longer true:
+>
+> * the wide-read refusal is **not** "armed only under capture". The wide-read mask
+>   (`osh_hw_wide()`) is recorded on **every** run, and `harness.differential` refuses on it in every
+>   differential. What is still capture-only is where `emu.run` *raises* on it — an extractor has no
+>   diff to catch it and no second chance;
+> * these bytes are **not** fabricated-only-under-capture. Off the mode a case declares them with
+>   `hw_seed=`, and a differential whose oracle reads one undeclared is refused.
+>
+> **The hazard this note exists to prevent**, spelled out because it is the plausible next edit:
+> re-gating `shim.c`'s `hw_note_wide_read()` on `g_audio_capture` to make it agree with the sentence
+> above. That would restore the paragraph and silently reopen the hole — off the mode, a
+> `move.w $ff820a,d1` in a differential would be an unrecorded, unrefused fabrication of the register
+> beside it. Correct the *prose* against Phase 7, never the code against this prose.
+
+This does **not** narrow the guard, because it does not apply to a differential — and that is
+enforced, not merely stated: `harness.differential()` vets `emu.audio_capture_on()` and refuses
+outright. Each served answer is still fabricated with respect to a differential — the model's
+invention, not the game's data, so a reconstruction verified against it would be verified against
+`shim.c` — which is why the mode is opt-in, off by default, and changes nothing at all while off.
+Joust's `0x152dc` stays blocked: the capture mode is not a licence to run it under a differential.
+Everything else about the direct path is unchanged in either state, including both refusals above for
+a mirror, an odd alias and a non-byte access. A byte read of the **data** port `$ff8802` is served
+the open-bus byte `OS_PSG_DATA_READ` (`0xff`) — the chip is inactive on that access — without a
+ledger event and without a refusal (the edge table has the whole argument).
+
+**The capture spans runs.** The register file *and* the select latch persist across `osh_run` calls
+while the mode is on — an extractor calls `osh_run` once per VBL tick, and tick N may read back what
+tick N-1 wrote to a register tick N-1 selected, exactly as the chip's own latch and registers survive
+a VBL. Neither is reset by a run. Arming is a pure **toggle** and clearing is a separate
+`osh_audio_reset()` / `emu.audio_reset()` (the `cov_enable`/`cov_reset` shape): a fused
+enable-and-clear could not be issued defensively mid-capture without destroying it. Off the mode both
+are per-run: the latch, or run N's `(reg,val)` pairs would be attributed to run N-1's last selected
+register and a `-n auto` suite would be order-dependent; the file, because a differential run must
+start from the contents its own case declares (Phase 6).
+
+Pinned by `projects/wonderboy/recreate/test/test_audio_capture.py`, whose replayer holds both a
+read-back and the tempo selector, and — for the relaxations and the arm-from-off clear, which are
+properties of the shared model rather than of a game — by the kit's own `test/test_psg_model.py`.
+**A run made under the mode must opt into it**: `emu.run` refuses one that was not scoped by
+`emu.audio_capturing()`, since the mode is oracle-global and a run can otherwise be served the mode's
+fabricated answers without ever asking for them (a block that raised on its way out, an extractor in
+the same process). A served read-back still counts toward `g_psg_direct`, so it **arms the mixed-path guard**
+exactly as a direct write does — the register file is fed by the direct path only, so a `Giaccess`
+alongside it is as stale as before. That half is pinned in `projects/joust/recreate/test/
+test_os_traps.py`, Joust being the only project that reaches both paths at all.
+
+**The PSG ledger reports its own truncation.** `psg_writes()` is the capture's primary data feed, so
+an access past `os.h`'s `OS_PSG_LOG_MAX` cap is counted (`osh_psg_dropped`) and named by `emu.run()`
+as a cause of its own: a silently truncated register stream would read as a complete capture with a
+section of the song missing. Reads occupy ledger entries too since Phase 6, so the cap now counts
+accesses rather than writes — the tally is what makes that change loud instead of silent.
+
+**GEMDOS `Crawio` (0x06) reads the same console state** as `Bconstat`/`Bconin` (`os_crawio`), rather
+than being a second, disconnected model: one staged key is visible to every console call and is
+consumed once, as on real hardware. Unlike `Bconin` it never refuses — "no key"
+(`OS_CRAWIO_RESULT`) is a legitimate answer for a non-blocking read, and it is what an image with
+nothing staged gives. Its argument picks the **direction** and is honoured: `OS_CRAWIO_READ`
+(`0xff`) reads, and any other value is a character to *write* to the console — no image effect and,
+crucially, no keystroke consumed, since servicing every `Crawio` as a read would let a program that
+merely prints a character swallow the key a later `Bconin` is waiting for. BuggyBoy's eight sites
+all pass `0xff`; Joust issues no `Crawio` at all — a byte scan of `JOUST.PRG` finds no `trap #1`
+with selector `0x06` anywhere — so only the read path is exercised today.
+BuggyBoy's candidate (`src/input.c` `check_abort`, `src/os.c` `console_scancode`) still hardcodes
+`OS_CRAWIO_RESULT` instead of calling `os_crawio`. That agrees byte for byte while no test stages a
+key — which is every BuggyBoy test, none of which pokes `OS_CON_PENDING` — and if one ever does,
+the two sides differ in D0, so the gap fails loudly rather than silently.
+
+Also not captured: **nothing plays sound**. `Dosound` only logs its list pointer, and there is no
+VBL sound engine, so the mixer never changes on its own — it holds whatever the program or the
+harness last put there. A "wait until the sound finishes" loop therefore terminates only if the
+mixer is staged to say so. And `Giaccess`'s return value for a *write* is modeled as 0; TOS does
+not define it, so no caller may rely on it.
+
+Finally, the `Giaccess` register file records only each register's **final value**, not the ordered
+stream of writes — unlike the direct path's ledger. A `Giaccess`-driven driver is therefore verified
+more weakly than a direct-write one: two orderings that end in the same 16 bytes are
+indistinguishable. Phase 6 built "one write feeding both a register file and an ordered ledger" for
+the **direct** path; doing the same for `Giaccess` would mean appending to a ledger from
+`os_giaccess()`, which both sides share — so the two ledgers would agree by construction and prove
+nothing unless the oracle's were fed from the trap instead. Not taken. BuggyBoy's `g_REFRESH`
+out-params could likewise be replaced by `psg.h` now that it exists, but that reshapes a verified
+game's candidate ABI for no new coverage (its stream is already compared, frame by frame, by
+`projects/buggyboy/recreate/test/test_sound.py`), so it is noted here rather than taken.
+
+## Phase 4 — GEMDOS `Fcreate` (0x3c) / `Fwrite` (0x40)
+
+**Modeled.** The staged-file table grows a `capacity` field (`OS_FS_OFF_CAPACITY`, entry stride
+32 → **36 bytes**). `harness.stage_files()` accepts `(name, data, capacity)` — and the plain
+`(name, data)` a read-only file needs, capacity then defaulting to the data's own length —
+reserves that many staging bytes, and lays each file out past the previous one's *reservation*, so a
+file grown by `Fwrite` cannot land on the next file's bytes. `Fcreate(name, attr)` truncates an
+already-staged file to zero length and opens it; `Fwrite(handle, count, buf)` copies into staging
+at the cursor, extends the length, and returns the byte count. All of it lands **in the image**, so
+both cores see the bytes and the diff covers them.
+
+**Where the window IS, is the project's choice.** The table's address — and with it the staging
+area, a fixed `OS_FS_STAGING_OFFSET` above it — is the map's second per-project region, set by
+`fs_base` in a `project.toml` and installed into both shared objects at import exactly as the Malloc
+arena's base is. The whole mechanism is written once in [`README.md`](README.md), "The staged-file
+window is the second region a project places"; what belongs here is why a project needs it. At the
+default place the raw bytes start at `0xc0000`, which leaves `STACK_GUARD_LO - 0xc0000` = **258,048
+bytes** for every file one case stages at once — and a boot slice that opens more than that cannot
+be replayed at all: Flying Shark's `init_load_assets` opens eight files totalling 288,551. The
+files' own reservations are what fills the window, so this is a limit on a CASE and not on the
+model: `stage_files` refuses the overflow loudly rather than laying one file over another.
+
+`OS_FS_TABLE` and `OS_FS_STAGING` therefore read in C as they always did but are **variable reads**
+off target rather than constant expressions, under `-DOS_FS_TABLE_RUNTIME`, which only the two
+off-target builds pass. An on-target build compiles the constant it always did — real RAM, one
+program, nothing to place.
+
+**Design choice — the harness declares the filesystem.** Nothing here ever invents a staging
+address. `Fcreate` of a name the harness never staged returns -1 (→ raise) instead of handing out a
+block it has no space for, and `Fwrite` past the reservation returns -1 (→ raise) instead of
+overrunning the next file's bytes or fabricating a short-write/disk-full result the harness has no
+basis for. `Fcreate` also cannot walk past the table: it only ever matches an occupied slot inside
+`OS_FS_SLOTS`, and `stage_files` refuses to declare more files than there are slots.
+
+**Both ends of every copy are bounded** against `OS_IMAGE_SIZE`, not just `count` against the
+capacity. `buf` arrives from the emulated program's stack exactly as `count` does, so `Fwrite(6, 4,
+0xfffffff0)` would otherwise `memcpy` outside the image buffer — and `Fread`'s side is the worse
+one, since it *writes* through `buf`. Every `m68k_*_memory_*` callback bounds-checks its access this
+way; `os_fread`/`os_fwrite` are the only two places that touch the image without going through one.
+They refuse rather than truncate: a short count the harness has no basis for is a fabricated result.
+`OS_IMAGE_SIZE` is kit-wide because a reconstruction calling `os_fread` is handed the image pointer
+alone, never a length; `harness._vet_os_memory_map()` pins it equal to the bound project's
+`image_size`, so a project that grows its image fails loudly instead of copying past the buffer.
+
+**Not captured.** No directories, no `Fattrib`, no attribute or mode handling (`Fopen`'s mode and
+`Fcreate`'s attr word are ignored), and one error code only — `os_fdelete`'s `EFILNF`, which Phase 13
+argues is a modeled ANSWER rather than a fabricated one; everything else here has exactly two
+outcomes, "served" and "refused". Writes do not persist beyond the run: staging is image state, so
+it is gone with the image copy. (`Fseek` and `Fdelete` were on this list until Phase 13 grew them.)
+
+The table layout is mirrored **field by field** in `harness.py` (`OS_FS_OFF_*`) rather than
+concatenated in order, and `test/test_os_memory_map.py` pins every offset against `os.h` — a field
+reordered on one side would otherwise drift in silence, which is how the capacity field came to be
+missing from the Python entry in the first place.
+
+## Phase 5 — XBIOS `Random` (0x11)
+
+**Modeled.** `Random()` returns `OS_RANDOM_VALUE` masked to 24 bits.
+
+**Design choice — Random is a test INPUT, not a generator.** Real `Random` is derived from the
+system clock: time-varying, machine-dependent, and by construction not reproducible by a pure-C
+candidate. Under the governing rule that makes it exactly the same kind of thing as `input_state`
+in HARNESS.md — a value the harness supplies identically to both sides. Seeding an LCG instead
+would have been a *second* cross-side ABI to mirror for one call site (Joust's is at `0x106b8`, in
+`init_game`, and it uses only `d0 & 0xfe`), which CLAUDE.md §2 does not justify.
+
+**Not captured.** Every call in one run returns the **same** value. A program that loops until
+`Random` differs would spin — but that failure is loud, not silent: the run exceeds `max_insns` and
+`emu.run` raises "did not reach rts". This is the one place where the honest answer might instead
+have been "leave it raising"; it is modeled because the failure mode of getting it wrong is a
+raise, never a wrong image.
+
+## Phase 6 — the SEEDED PSG READ MODEL (the direct `$ff8800`/`$ff8802` path)
+
+Phase 3 left the direct path write-only: the ledger recorded the *order* of the writes and nothing
+recorded their *effect*, so a `move.b $ff8800,dn` had no correct answer and raised. This gives it
+one. It is the capability three projects' remaining sound and floppy work stands behind.
+
+### Why a write-ledger replay is the wrong model — the finding this is built on
+
+The obvious implementation is "hand back the last value written to the selected register", folding
+the ledger into a file that starts at zero. **That recreates the exact false-green class it was
+meant to fix**, and the evidence is in every binary this workspace has:
+
+The **routine** column is the function's entry; the **read** column is the `move.b $ff8800,dn` inside
+it. They are different addresses, and an earlier revision of this table quoted the read site under
+the function's name for three of the four rows — enough to send a reader to the wrong instruction.
+
+| routine | the read | what it preserves | what a fabricated `0` does |
+| --- | --- | --- | --- |
+| Wonder Boy `snd_psg_silence` `$17f30` | `$17f3e` — `move.b $ff8800,d1; ori.b #$3f,d1` | mixer bits 6–7, the port A/B **I/O direction** lines | writes `$3f`: port A flips to input and the floppy drive-select lines float |
+| Wonder Boy `snd_music_tick` `$17c74` | `$17f08`, merged at `$17f12` — `eor.b d0,d3; and.b d2,d3; eor.b d0,d3` | every mixer bit outside this module's `d2` mask | collapses to `shadow & d2`, clearing bits 6–7 as above |
+| Wonder Boy `psg_set_drive_select` `$624c` | `$6254`, merged at `$625a` — `andi.b #$f8,d1; or.b d0,d1` | port A bits 3–7 (side select and the rest) | forces them to zero |
+| Joust drive-select `0x15536` | `0x15544` — `move.b d1,d2; and.b #$f8,d1; or.b d0,d1` | the same port A bits | the same |
+
+Every one of them preserves bits **the game never writes**, so on the first read a replayed ledger
+has no value for them and answers `0` — a value TOS never leaves there. A reconstruction merging the
+same fabricated `0` agrees with the oracle byte for byte and is verified against `shim.c`. Worse, the
+class hides: `projects/wonderboy/recreate/PORTABILITY.md` §3 records that **T1 is empty** — every
+PSG *writer* in that game also *reads* — so not one byte of its sound is verifiable through the
+ledger alone, and §4's Correction 2 records a `snd_music_tick` case that came back green only because
+control flow never reached the read.
+
+> **So the chip's contents on entry are an INPUT of the run, not a consequence of it** — the same
+> kind of thing as a poked keystroke or `OS_RANDOM_VALUE`, and subject to the same governing rule:
+> the harness supplies it identically to both sides, or the model refuses to run.
+
+### Modeled
+
+**A 16-byte register file, off-image, fed by the direct path only**, plus a `known` bitmask saying
+which of its registers have contents at all, plus a `latch-known` flag saying whether anything has
+selected a register yet. Five rules:
+
+* **a byte write to `$ff8800`** latches the register number, and marks the latch known. A value
+  above `$0f` is **refused** rather than masked down — see the edge table;
+* **a byte write to `$ff8802`** stores into the latched register **and** appends a `WRITE` event to
+  the ordered ledger. One write, both surfaces: the ledger is what catches a missing, extra or
+  reordered access, the file is what a read-back answers from. The register becomes *known*;
+* **a byte read of `$ff8800`** returns the latched register's contents **if it is known** — declared
+  by the case's seed, or written earlier in the same run — and appends a `READ` event to the same
+  ledger. Otherwise the run is **refused**: `osh_psg_unseeded()` returns a bitmask of the registers
+  read while unknown and `emu.run` raises, naming them and the `psg_seed=` that would declare them;
+* **a byte read of `$ff8800` with nothing selected** is refused in its own tally
+  (`osh_psg_no_select()`). A read answers the *latched* register, and the `0` the latch would
+  otherwise start from is `shim.c`'s convention rather than the chip's state — on a real ST it holds
+  whatever the last driver to touch the chip left there. **The latch is deliberately NOT seedable.**
+  A seed declares what a register *contains*, which the routine cannot compute; the select is an
+  *instruction*, which the run either executes or does not, and every PSG driver in every input
+  binary selects immediately before it reads (`$17f36` before `$17f3e`, `$624c` before `$6254`,
+  `0x1553c` before `0x15544`). A seedable latch would let a case declare that an instruction ran.
+  The remedy is to enter at or before the routine's own select — so the refusal names that, not a
+  `psg_seed=`. If an input binary ever *does* read a latch it inherited, that is a new claim about
+  entry state and it should arrive with the evidence, not with a keyword argument already in place.
+* **a byte read of `$ff8802`** is the one modeled read that consults **none** of this state: the
+  chip's read path is the select port, and on a read of the data port it is inactive and drives
+  nothing, so a real STF answers the pulled-up byte `OS_PSG_DATA_READ` (`0xff`). It is served
+  without a ledger event (the chip's registers were not read) and without a refusal. It is **not** a
+  second read-back path: a reconstruction that merges the data port's byte must merge `0xff`, and
+  one that calls its register read-back there logs a `READ` event the oracle never made.
+
+**Reads are part of the compared stream**, and that is not bookkeeping. A reconstruction that reads
+the WRONG register still writes the right one: given a decoy register holding the byte the real one
+held, its write stream *and* the register file it leaves are a correct run's, byte for byte. Only the
+read entry separates them. `emu.psg_writes()` is the **write-only projection** of the same stream and
+keeps its contract unchanged — it is the audio extractor's data feed and every existing consumer's.
+
+**The seed is the case's, and it is per-run.** `emu.run(..., psg_seed={7: 0xc0})` /
+`harness.differential(..., psg_seed=…)` install it before **every** run — an empty one included, so a
+seed cannot leak from the previous case — and the file is rebuilt from it at the top of each
+`osh_run`. A register another case wrote is therefore not readable here, for the reason `ENTRY_SR`
+forces the condition codes: two identical runs must give identical answers whatever ran between them,
+and under `pytest -n auto` "whatever ran between them" is not stable.
+
+**The final state is part of the observable surface.** `emu.run` reports `psg_events` (the ordered
+stream, reads included), `psg` (its write-only projection), `psg_file` and `psg_known`;
+`harness.differential` compares the stream and the file against the candidate's after every run. They
+live outside the memory image, so nothing else could catch a divergence in them — which is the whole
+reason they are exported rather than left as diagnostics.
+
+Their relation is worth stating plainly, because it decides what each one is *for*. The **ledger** is
+the net under the reconstruction: it catches an access missing, extra, wrong, out of order, or aimed
+at the wrong register — the last of those being why it carries reads, and being invisible to every
+other surface there is. The **file** adds no coverage of the game code on top of that: under equal
+seeds an equal ledger implies an equal file, since both sides store on exactly the writes they log.
+It is compared as a cross-check of the two model *implementations* against each other — a
+register-width mask added on one side, capture state leaking into a differential — which is the one
+thing the ledger comparison cannot see.
+
+### The candidate side
+
+`include/psg.h` + `src/psg.c` — linked into every candidate by `kit.mk`, exactly like the Dosound
+ledger and the refusal tally:
+
+```c
+void    psg_port_write(unsigned reg, uint8_t value);   /* select, then data */
+uint8_t psg_port_read(unsigned reg);                   /* select, then read back $ff8800 */
+```
+
+Named for the **ports** rather than for the chip because Joust's `src/sound.c` already has
+`psg_read`/`psg_write` meaning *the `Giaccess` path*; the two are precisely what the mixed-path guard
+keeps apart, and a header declaring a clashing name would be a compile error waiting for the first
+file that includes both. A read of an undeclared register on this side — or a call naming a register
+number the chip does not have — tallies through the existing **`os_refused()`**, not a new counter,
+so `harness.differential`'s unconditional `_vet_no_os_refusal` already throws the case away. That
+closes the model's refusals on **both** sides, which is the property "Refusing on ONE side is a false
+green" (above) exists to state: the oracle's run is rejected, and a candidate that sails past on an
+invented value is rejected too.
+
+The candidate has no select of its own — it selects and accesses in one call — so the *latch*
+refusal has no mirror here, and needs none: a reconstruction cannot express a read of a register it
+did not name.
+
+### The YM2149 edge semantics: what is modeled, what is refused, what is not modeled
+
+| the access | answer | why |
+| --- | --- | --- |
+| byte write `$ff8800` (select), value `0x00..0x0f` | latch it; mark the latch known | the ST decodes four bits into a register number |
+| byte write `$ff8800` (select), value **above `0x0f`** | **REFUSED** (`osh_psg_unmodeled`), latch untouched | this used to mask the value down to four bits, on the claim that "the upper bits are ignored — Hatari's model". That claim does not survive checking: the YM2149 requires the select byte's upper nibble to be **zero**, and the ST's incomplete decoding is about the *address*, not the *value*. Masking is also asymmetric — the oracle would silently select register 14 for `move.b #$1e,$ff8800` while the candidate's `psg_port_write(0x1e, …)` refuses the same call — so both sides refuse. No input binary writes one; the day one does it needs a model, not a mask |
+| byte write `$ff8802` (data) | store + log a `WRITE` event | |
+| byte read `$ff8800`, register **known** | its contents; log a `READ` event | what the chip does: the select port reads the selected register back |
+| byte read `$ff8800`, register **unknown** | **REFUSED** (`osh_psg_unseeded`) | the value is an input; inventing it is the false green above |
+| byte read `$ff8800`, **nothing selected yet** | **REFUSED** (`osh_psg_no_select`) | there is no latched register to answer from, and the latch's initial `0` is `shim.c`'s convention rather than the chip's state. Not seedable — see "Modeled" above |
+| byte write anywhere in `$ff8800..$ff88ff` | **select** when `(addr & 2) == 0`, **data** (store + `WRITE`) when `(addr & 2) == 2`, exactly as the canonical pair | the ST decodes only bit 1 on a byte access (Hatari, measured on STF), so the block mirrors every four bytes: `$ff8801`/`$ff8803` are the odd shadows and `$ff8804`/`$ff8806` the next mirror. A `movep.l d0,0(a0)` with A0 = `$ff8800` writes its four bytes to `$ff8800/$ff8802/$ff8804/$ff8806` — two PSG registers per long — which is exactly how KULT's PCM ISR (`0x1910e`) drives the chip; a reconstruction calling `psg_port_write` once per register matches the oracle's two `WRITE` events |
+| byte read within `$ff8800..$ff88ff` | the open-bus byte `OS_PSG_DATA_READ` (`0xff`), **no** ledger event, except at the read-back spellings (`(addr & 3) == 0`, e.g. `$ff8800`), which answer the latched register as above | the chip's read path is the select port; on every other access it is inactive and drives nothing, and a real STF answers the pulled-up byte. Hatari: "only reads to `$ff8800` will return data, reads to `$ff8801/02/03` always return 0xff (tested on STF)". KULT's `ym_write` (`0x1929a`) reads `$ff8802` |
+| any 16/32-bit access to the block, either direction | **REFUSED** | only the BYTE protocol is modeled; a wide access decodes address pairs the byte callbacks never see |
+| register **widths** (R1/R3/R5/R13 are 4-bit, R6/R8/R9/R10 5-bit) | **NOT modeled** — a read-back returns the whole byte that was written | the real chip returns 0 in the unimplemented bits. Storing the byte unmasked is the choice that cannot silently corrupt a reconstruction: for every value a game actually writes the two agree, and a case that wants the chip's answer can seed it. A register-width table would be a second model to get wrong, and no input binary exercises the difference |
+| register **widths** (R1/R3/R5/R13 are 4-bit, R6/R8/R9/R10 5-bit) | **NOT modeled** — a read-back returns the whole byte that was written | the real chip returns 0 in the unimplemented bits. Storing the byte unmasked is the choice that cannot silently corrupt a reconstruction: for every value a game actually writes the two agree, and a case that wants the chip's answer can seed it. A register-width table would be a second model to get wrong, and no input binary exercises the difference |
+| ports A/B (R14/R15) read-back | the last value written | on the ST both ports are **outputs** (port A = floppy drive/side select, port B = printer data), and an output port reads back its own latch. That is what both drive-select routines depend on. A port configured as an INPUT would read pin state, which this models not at all — and nothing sets R7's direction bits to make one |
+| the select latch itself | not compared between the sides | the candidate's API selects and accesses in one call, so a select with no access is not expressible there. A driver whose *only* effect were leaving a register selected would be unmodeled |
+| a data write with **nothing selected** | stored into register 0 (the latch's placeholder), logged as such | unlike a *read*, this has an unambiguous comparable answer on both sides: the candidate names its register explicitly, so a reconstruction that meant a different one diverges in the ledger. It is a fabrication about the real chip and is recorded here as one — no game does it, and refusing it would buy a guard with no witness |
+
+### One chip, three files — how they relate
+
+* **`OS_PSG_REGS` (`0x610`, in the image)** — the `Giaccess` path's file, Phase 3. Unchanged and
+  **not merged** with this one. It is in the image on purpose: `os_giaccess()` is shared verbatim by
+  the shim and by a reconstruction, so its writes are ordinary diffed memory and cost no ABI at all.
+  Merging the two would take that state off-image and turn a free property into a mirrored one.
+* **the direct file (this phase, off-image)** — fed by `$ff8802` writes only.
+* Because neither sees the other's stores, **the mixed-path guard stays exactly as it was**: a run
+  that uses both is refused. This phase gives the direct file readable contents, which is a different
+  question from the two files agreeing. Merging them is what would retire the guard, at the cost
+  above; that trade is recorded here and not taken.
+* **the audio-capture file** — was a third copy; it is now **the same array**, and the mode is a
+  documented *relaxation* of this model (an unknown register reads `0`, an unselected latch likewise,
+  and the file and latch span runs).
+  Every pin the mode had holds unchanged (`projects/wonderboy/recreate/test/test_audio_capture.py`,
+  13 cases, and Joust's arming case): the read-back, the cross-run persistence,
+  `audio_reset()` as the only clear *mid-capture*, re-arming an armed capture as a no-op, a served
+  read still arming the mixed-path guard, and `osh_psg_dropped`'s truncation report. Two consequences
+  of sharing the array had to be closed rather than documented:
+
+  * a run made while the mode is OFF leaves its own registers **and its own select latch** behind, so
+    **arming from off now clears both** — otherwise a capture armed bare would start on whatever the
+    last differential left, and under `pytest -n auto` on which case that was is not reproducible.
+    The latch half was measured, not theorised: select register 10 in a run, arm, write the data port
+    bare, and the byte landed in 10 — a capture writing a register it had never named.
+    `emu.audio_capturing()` resets anyway; this makes structural what was a convention, and leaves
+    the idempotent-re-arm pin untouched (that one re-arms an *already-armed* capture);
+  * the mode being oracle-global means a run can be served its fabricated answers without asking, so
+    **`emu.run` refuses a run made under the mode that did not opt in** — `emu.audio_capturing()` is
+    what declares the intent, and every existing capture already goes through it. Without that, a
+    block that raised on its way out, or an extractor sharing the process, silently turns later runs
+    into capture runs; `harness.differential`'s `_vet_audio_capture_off` covers only the cases that
+    go through the harness, and most PSG cases call `emu.run` directly.
+
+### Why the model is always on and only the SEED is opt-in
+
+The seed follows `stop_pc`/`poison`: a per-run keyword on `emu.run` and `harness.differential`. The
+*model* is not switchable, and deliberately:
+
+* with no seed it behaves exactly as Phase 3 did — every read of a register nothing wrote is refused
+  — so there is no second behaviour for the same instruction stream, and nothing to forget to arm;
+* the one thing it adds unconditionally is a read-back of a register **this run wrote**, which no
+  case can be wrong about: the chip returns the last value written, and both sides compute it from
+  the same write;
+* a flag would have to be threaded through every case that merely *might* reach the PSG, and the
+  cost of forgetting it is a refused run either way — so the flag would buy nothing and could only be
+  set wrongly.
+* A `project.toml` waiver was considered and is not needed: nothing about the model is a claim about
+  the game, so there is no claim to enforce per run.
+
+### What is pinned, and what is not
+
+**The model** is pinned kit-side by [`test/test_psg_model.py`](test/test_psg_model.py) and its
+`psg_model_probe.c`, which drives **both** implementations in one process: a seeded read served; an
+undeclared read refused **on both sides**; a read with nothing selected refused in its own tally, and
+a seed shown not to help it; a select above `$0f` refused on both sides; a read-modify-write reading
+back its own write; the ordered ledger byte-identical over a recorded write-only sequence — and its
+write projection asserted separately per case, which is the regression pin every `psg_writes()`
+consumer rests on; the file **not** surviving a run; the capture mode's relaxations plus the
+arm-from-off clear of **both** the register file and the select latch. And the negative control the
+house style demands — three mutant candidates, each caught while touching no image byte at all:
+
+* one that **skips the write**, caught by both off-image surfaces;
+* one that **ignores the read-back**, likewise. This is what a fabricated `0` would have hidden:
+  `0 | $3f` and `read | $3f` agree, so it would have been green;
+* one that **reads the wrong register** — the transposed RMW. Its register file, its known mask and
+  its whole *write* stream are a correct run's, exactly; the ledger's read entry is the only thing
+  that separates them, which is the case that put reads in the compared stream.
+
+**The plumbing** — `harness.differential`'s own PSG code, which the kit could not previously reach at
+all — is pinned by [`test/test_psg_differential.py`](test/test_psg_differential.py). It builds a
+miniature project in a temp directory (a `.PRG` holding the same RMW in 68000 code, and a candidate
+`.so` from `test/kit_candidate.c` plus `src/`) and runs real `differential()` calls through it: the
+green case, then `_vet_psg_state` and `_seed_candidate_psg` each stubbed out via `monkeypatch` and
+shown to be load-bearing (with the comparison gone, the skips-the-write mutant passes the entire
+differential clean), the missing-ABI arm refusing **by name**, and both arms of the two-doors guard.
+
+**Mutation sweep.** The four load-bearing model lines (serve an unknown register; skip the per-run
+re-seed; drop the candidate's known check; stop storing writes into the file) redden 4/4.
+
+**Not pinned.** The ledger's **cap** arm — a run of `OS_PSG_LOG_MAX` accesses — has no case: reaching
+it needs 4,096 register accesses in one run, and nothing that exists does that. Ports A/B read back as
+outputs because nothing configures them as inputs, so the input-pin behaviour the table calls "not
+modeled at all" is unreachable rather than untested. The register-**width** masks are likewise
+unexercised: no input binary writes a value the real chip would truncate.
+
+**One trap for the next game, stated because nothing enforces it.** `_vet_psg_state` runs on every
+`differential()` call and compares the candidate's `psg.h` ledger — so a candidate that emits its
+register stream through a *project-specific* ABI has an empty one. BuggyBoy is exactly that
+(`g_REFRESH`'s out-params), and it stays green only because its PSG-reaching cases drive `emu.run`
+plus the out-params by hand rather than going through `differential()`. Converting them would fail
+with a stream mismatch that is about the ABI, not the reconstruction. The fix, when someone does it,
+is to move that candidate onto `psg_port_write()` — not to add a waiver. The same warning is
+recorded where a BuggyBoy session will meet it, in
+[`projects/buggyboy/recreate/README.md`](../../projects/buggyboy/recreate/README.md)'s "Harness gaps"
+section.
+
+## Phase 7 — the SEEDED HARDWARE READ MODEL (a named set of I/O bytes)
+
+Phase 6 established the distinction this phase extends: **a seed is a declared case input, not a
+fabrication.** There it was the YM2149's register contents. Here it is a small named set of hardware
+BYTES outside the chip — `$fffa01` (the MFP GPIP), `$ff820a` (the shifter's sync mode), the two
+video-address-counter bytes `$ff8207`/`$ff8209` and `$fffc00` (the IKBD ACIA's status register) —
+served from a file the case declares, recorded in an ordered ledger both sides keep, and refused
+when nothing declared them.
+
+The first two **steer a branch**, which is the shape the phase was built for. The counter pair is the
+same false green with a **wider blast radius**: those bytes are summed into an arithmetic result
+(Wonder Boy's `$51ac` hashes them into a 1..4 draw), so a fabricated `0` does not merely pick the
+wrong side of a branch — it collapses the whole draw to a constant, and both cores then agree on it.
+
+### The defect it is built on, which shipped
+
+Every other off-image read answers `0`, identically on both sides, so the differential agrees with
+itself on whatever that `0` implies. For a value that is merely *stored*, that is incompleteness. For
+a value that **steers a branch**, it is a green run whose behaviour is wrong on the machine — and
+this workspace has shipped one. `projects/wonderboy/recreate/PORTABILITY.md` records the pattern
+verbatim, in the game's own code at `$17c74`:
+
+```
+$17c7e  btst.b #7,$fffa01     ; MFP GPIP bit 7 = monochrome-monitor detect
+$17c86  bne.s  $17c90
+$17c88  move.b #$48,2274(a3)  ; -> tempo := $48   (the MONO branch)
+$17c90  btst.b #1,$ff820a     ; the 50/60 Hz sync register — BuggyBoy's exact register
+$17c98  bne.s  $17ca0
+$17c9a  move.b #$2b,2274(a3)  ; -> tempo := $2b
+```
+
+Both bytes read `0`, so bit 7 clear says *monochrome* and bit 1 clear says *60 Hz*: the mono branch
+is taken unconditionally, and both sides store `$48`. **This is the `$ffff820a` defect that was
+invisible to BuggyBoy's entire differential and only surfaced on real hardware** (see the memory note
+"BuggyBoy real-hardware TOS gotcha": a hardware READ the oracle answers `0` for is invisible to the
+whole differential, by construction). It is present in Wonder Boy before a line is ported.
+
+> **So the byte a branch reads is an INPUT of the run, not a consequence of it** — the same governing
+> rule as Phase 6's register contents and as a poked keystroke: the harness supplies it identically
+> to both sides, or the model refuses to run.
+
+### Modeled
+
+**A file of bytes, one per modeled address**, plus a `known` mask saying which of them the case
+declared. `include/os.h` owns the set — `OS_HW_MFP_GPIP`, `OS_HW_SHIFTER_SYNC`,
+`OS_HW_SHIFTER_VCOUNT_MID`, `OS_HW_SHIFTER_VCOUNT_LOW`, their slot numbers, `os_hw_slot()` and
+`os_hw_volatile_slots()` — because both sides decode it: `shim.c` from a bus address, `src/hw.c`
+from the constant a reconstruction spells.
+
+Each slot carries a **VOLATILE flag**, and it is the criterion the counter pair is admitted under
+rather than a note about it. A STATIC byte (the monitor detect, the sync mode) is one the machine
+answers the same way every time, so a run may read it as often as it likes: one declaration
+describes every read of it, and how many there were is no part of what the case claimed. (Nothing
+ported re-reads one today — the tempo head reads each of its two bytes once. What does re-read
+`$fffa01` is an FDC poll, and that is the shape the non-goal below excludes for its own reason.)
+A VOLATILE one (the two counter bytes) is a value the
+machine changes on its own, and a per-run constant describes it for exactly ONE read: the second read
+would be served the first read's byte, which the counter cannot have held twice. `os.h` derives the
+mask from the same one table as the addresses, so **a slot added there is STATIC unless it says
+otherwise** — the conservative direction, since a slot wrongly called volatile refuses runs that are
+fine while one wrongly called static serves a fabrication. Five rules:
+
+* **a byte read of a modeled address, declared** → the declared byte, plus a `READ` entry in the
+  ordered ledger. `harness.differential` compares that stream against the candidate's;
+* **a byte read of a modeled address, UNDECLARED** → served `0` — exactly what it was served before
+  this phase existed — recorded in `osh_hw_unseeded()`, and **still ledgered**, since a read that
+  happened is a fact both sides must report the same way. The *refusal* is a differential's, not
+  `emu.run`'s; the next section is entirely about that;
+* **a SECOND byte read of a VOLATILE address in one run** → served the same declared byte as the
+  first, and recorded in `osh_hw_reread()`, tallied on the read that *repeats* so the mask names the
+  slot a case must do something about. Refused in a differential, and **not fixable by declaring
+  more**: one number cannot be two. The remedy is the case's shape — end it before the second read,
+  or split it into two runs each declaring what the counter held then. A STATIC address is exempt,
+  and that exemption is a statement about the machine rather than a softening: repeated reads of one
+  really are described by a single declaration, so refusing them would refuse correct runs;
+* **a 16/32-bit read taking a modeled address in** → recorded (`osh_hw_wide()`), never served. A
+  wider read also takes in the neighbouring MFP/shifter registers, which the model would have to
+  fabricate as `0` — the same false green one address over. The overlap test is a span test
+  (`os_hw_slots_touched()`, in `os.h` beside the table so the whole decode has one home), so a long
+  read straddling *into* the byte from below is caught too. It is a slot MASK, like the two above
+  and for their reason: the refusal has to name the address, not the whole set;
+* **a WRITE to a modeled address** → **dropped**, exactly as every other hardware write off the PSG
+  ports is dropped. Phase 7 models what these addresses *answer*, not what storing to them does, so
+  there is nothing for a reconstruction to mirror and `hw.h` has no `hw_write8()`. What *is* recorded
+  is that the write happened, because a later READ of the same address is then served the byte the
+  case declared the machine held **on entry** while an instruction of this very run has replaced it.
+  That combination — `osh_hw_stale()` — is refused, with its own message, because no declaration can
+  fix it. This is a live case, not a hypothetical: Wonder Boy writes `move.b #2,$ff820a` at `$f91c`
+  and reads bit 1 of the same address at `$17c90`, so any whole-frame run covers both.
+
+**The seed is the case's, and it is per-run.** `emu.run(..., hw_seed={0xfffa01: 0xb0})` /
+`harness.differential(..., hw_seed=…)` install it before **every** run — an empty one included, so a
+seed cannot leak from the previous case — and the file is rebuilt from it at the top of each
+`osh_run` *and* each `osh_run_bench` (both go through `enter_from_reset`). Declaring an address
+outside the modeled set is a `ValueError` rather than a silent no-op: a case that seeds `$ff8609`
+would otherwise install nothing, read a fabricated `0`, and pass while testing the read it meant to
+declare not at all.
+
+### The divergence from Phase 6: the refusal fires in `differential()`, not in `emu.run`
+
+Phase 6's model is **always on**: an undeclared PSG read sinks the run inside `emu.run`, for every
+caller. Phase 7's does not. An undeclared hardware read is *served and recorded*, and only
+`harness.differential` refuses. **This is deliberate, and it is the one asymmetry between the two
+phases.** Two reasons:
+
+* **a bare `emu.run` is not a verification.** It is how this workspace drives a game's relocator, its
+  Copylock and its bootstrap (`projects/wonderboy/recreate/test/test_copylock.py`,
+  `test_bootstrap.py`) — code whose hardware reads are nobody's enumerated list, and which no
+  reconstruction is being compared against. An always-on refusal would sink those runs to close a
+  false green they cannot have: nothing is being verified, so nothing can be falsely verified.
+  Zero regression for them was a requirement of this phase, not a hope;
+* **a false green needs something being verified.** That is exactly what a differential is: the
+  candidate and the oracle agreeing on a branch that a fabricated `0` chose for both of them. The
+  refusal is placed precisely where that can happen, and nowhere else.
+
+The split has a second consequence worth stating: the **wide-read** mask is recorded on every run
+but raised on in two different places — under audio capture by `emu.run` (an extractor has no diff to
+catch it and no second chance), and in a differential by `_vet_hw_reads_are_declared`. Off both, it
+stays the ordinary off-image `0` a bare run has always been given.
+
+One thing the split does **not** cover, and deliberately: the read ledger's own **truncation**.
+`osh_hw_dropped()` is a cause in `emu.run` for *every* caller, exactly like the PSG ledger's, because
+that is not a question of a fabricated byte — it is `hw_events()` reporting a truncated stream as a
+complete one, and a bare-run reader has no diff to notice. It is reachable: a poll loop on `$fffa01`
+does 4,096 reads in a few thousand instructions.
+
+**The four refusals are tested narrowest first** — stale, then wide, then the volatile re-read, then
+undeclared. One read can set two masks at once (a read of an address the run wrote *and* never
+declared sets both; a second read of an undeclared volatile byte sets both), and
+reporting that one as "declare it" sends the reader to add a `hw_seed` and hit the un-seedable
+refusal on the next run. That ordering is a case, not a comment.
+
+### The audio-capture mode is now a SEED over this model
+
+The mode used to answer these two addresses from a `switch` of its own in `m68k_read_memory_8`. It no
+longer has one: `hw_enter_run()` installs the **capture profile** — a 50 Hz colour ST, GPIP bit 7 set
+with the two active-low interrupt lines idle, sync bit 1 set — through the same code path that
+installs a case's seed. So "what the mode serves" is by construction "what a case declaring those
+bytes serves", and the two cannot drift.
+
+Three properties follow, and each is a case in `test/test_hw_model.py`:
+
+* the profile is installed **per run**, not at arming — so disarming the mode is enough: the very
+  next run is back on the case's own declaration, with no reset call, and the profile cannot leak
+  into a differential;
+* while armed, the profile **wins** over a case's declaration — which is why `emu.run` refuses a
+  `hw_seed` passed under the mode outright rather than installing one that would be silently ignored;
+* `harness.differential`'s veto on the mode (`_vet_audio_capture_off`) is **unchanged and still
+  load-bearing**: under the mode a green would mean the reconstruction agrees with `shim.c`'s
+  declared machine, not with the game's.
+
+The fold is inert with respect to the extraction it exists for: re-running
+`projects/wonderboy/tools/extract_audio.py` after it produces all 87 files (17 songs + 26 SFX, `.ym`
+and `.wav`, plus the manifest) **byte-identical** to the committed `out/audio`.
+
+### The candidate side
+
+`include/hw.h` + `src/hw.c` — linked into every candidate by `kit.mk`, exactly like `psg.h` and the
+refusal tally:
+
+```c
+uint8_t hw_read8(uint32_t addr);   /* addr is an os.h OS_HW_* constant */
+```
+
+A read of a declared address is served and ledgered. An **undeclared** one, or an address outside the
+modeled set, tallies through the existing **`os_refused()`** — not a new counter — so
+`harness.differential`'s unconditional `_vet_no_os_refusal` already throws the case away. That closes
+the refusal on **both** sides, which is the property "Refusing on ONE side is a false green" exists
+to state.
+
+One asymmetry inside the candidate, deliberate: an *undeclared modeled* address is logged (the oracle
+logs its own, so a stream missing it would diverge for the wrong reason), while an address **outside
+the set** is not (the oracle records nothing for it either).
+
+There is no masking to the 24-bit bus on this side. The oracle masks because it decodes a real 68000
+access; a reconstruction spells the address itself, and `0xfffffa01` reaching `hw_read8` is a mistake
+worth a refusal rather than a silent equivalence.
+
+### The edge semantics: what is modeled, what is refused, what is not modeled
+
+Rows are keyed by **the modeled set** rather than by one address, because the set grows: it is
+`$fffa01`, `$ff820a`, `$ff8207` and `$ff8209` today, and `os.h`'s `OS_HW_*` table is the list.
+
+| the access | answer | why |
+| --- | --- | --- |
+| byte read of a **modeled** address, **declared** | the declared byte; log a `READ` entry | the byte is the case's input, exactly as a PSG register's contents are |
+| byte read of a **modeled** address, **undeclared** | `0`, recorded in `osh_hw_unseeded()`, still logged | served so a bare `emu.run` is unchanged; recorded so `harness.differential` can refuse. See the divergence above |
+| **second** byte read of a **VOLATILE** address in one run (`$ff8207`/`$ff8209`) | the declared byte again, recorded in `osh_hw_reread()` | a seed is a per-run CONSTANT and the counter is not: the second answer would be one the address cannot have held twice. Refused in a differential; **not seedable** — split the case |
+| second byte read of a **STATIC** address (`$fffa01`/`$ff820a`) | the declared byte again, and nothing recorded | the machine's own answer really is the same every time, so one declaration describes both reads and the run is correct |
+| byte read after **this run wrote** the address | `0`/the declared byte, recorded in `osh_hw_stale()` | the model drops hardware writes, so the seed describes a machine the program has already changed. Refused in a differential; **not seedable** |
+| 16/32-bit read taking one in | **REFUSED** in a differential (`osh_hw_wide()`, naming the address); under capture `emu.run` sinks the run | the neighbouring MFP/shifter registers would have to be fabricated as `0` |
+| **write** to a **modeled** address | dropped, noted | a hardware write has always been invisible; making it visible would mean every already-ported reconstruction that writes the address had to mirror it, for a value nothing reads back |
+| any **other** hardware address, read or write | unchanged: `0` / dropped, silently | the model is a NAMED SET. Serving an address nobody declared would be the fabrication over again under a new name |
+| the rest of the GPIP byte (parallel busy, ring indicator, the STE DMA line) | **whatever the case declares** | the model serves a byte, not a machine. A case declaring `$b0` is declaring those bits `0`; the two bits games branch on are the reason the address is in the set at all |
+
+### The explicit NON-GOAL: the FDC/DMA registers (`$ff8604`+)
+
+They are **not** in the modeled set and Phase 7 does not put them there. The reason is structural
+rather than a matter of effort, and stating it exactly matters now that the modeled set contains a
+counter: **the criterion is not "the value never changes on the machine" — it is that a per-run
+constant can describe any byte read AT MOST ONCE per run.** A byte that changes between accesses is
+perfectly describable if the run only looks at it once, which is why the shifter's video counter is
+admissible: `$51ac` reads `$ff8207` once and `$ff8209` once, and one read of one address is exactly
+what one declared byte is. The criterion is also *enforced* rather than argued — the two counter
+bytes are flagged VOLATILE, and a second read of one in the same run is a refusal.
+
+An FDC poll fails that criterion by its nature, not by bad luck. `fdc_wait_irq` (`$62da`) polls
+`$fffa01` bit 5 *until it changes*; `fdc_wait_irq_bounded` polls the DMA address counter at
+`$ff8609`/`$860b`/`$860d` *until it advances*. **Reading many times per run is the whole of what a
+poll loop is**, so there is no case shape that reduces one to a single read: declaring a status
+register either terminates the loop immediately (which is what a `0` already does) or hangs it
+forever. Modeling those needs a *transaction* model — what the drive is doing between accesses —
+which is a different thing from this one, and it should arrive with the evidence for what the
+sequence really is.
+
+Note the consequence for `$fffa01`, since it is in the set: a case *may* declare it with bit 5 set,
+and an FDC wait loop given that will spin until `max_insns`. That failure is loud (`emu.run` raises
+"did not reach rts"), not silent, so the address earns its place for the bit-7 branch it was added
+for.
+
+### The honest limit
+
+**What this pins is "given byte X, both cores agree", not "a real ST serves X".** The declaration is
+the case's claim about the machine, and the model's whole contribution is to make that claim
+*explicit and shared* instead of implicit and fabricated. A case that declares `$fffa01 = 0xb0` has
+stated "a 50 Hz colour ST"; whether the machine the game shipped on was one is a documented claim
+about hardware, not a differential result.
+
+That is the same standing arrangement BuggyBoy's remaster runs under — its colour engine and its
+50/60 Hz music branch are pinned by the differential *given* the machine's answers, and the answers
+themselves are documented facts re-checked on real hardware. Phase 7 does not close that gap; it
+moves the fabrication out of `shim.c` and into a place a reader can see, argue with, and correct.
+Before it, the wrong branch was taken silently on both sides. After it, a case that does not say
+which machine it means is **refused**, and one that says the wrong thing is wrong *in writing*.
+
+### What is pinned, and what is not
+
+**The model** is pinned kit-side by [`test/test_hw_model.py`](test/test_hw_model.py) and its
+`hw_model_probe.c`, which drives **both** implementations in one process (84 cases, as pytest
+collects them): a declared read
+served and ledgered; a declaration not consumed by one run and not surviving one either; an
+undeclared read served `0` **and recorded** on both sides; declaring one address not declaring the
+other; two reads compared **in order**; the three wide-read shapes recorded by SLOT and unledgered;
+the write-then-read case recorded separately from a missing declaration, and a write nothing reads
+back left alone; the bench starting from the case's declaration with its own empty ledger; the
+capture fold measured against `osh_hw_capture_profile()` rather than against restated constants, plus
+its override and its non-survival. Every wide-read case uses an address a 68000 can really execute a
+word/long read at — the kit builds Musashi with `M68K_EMULATE_ADDRESS_ERROR` off, so a case planted
+at an odd address would stop measuring the refusal the day that moved. And the negative controls,
+each caught while touching no image byte:
+
+* a candidate that **reads the wrong modeled address**, declared to the same byte — its value, its
+  declared file and its (empty) image effect are a correct run's exactly;
+* a candidate that **never reads and hardcodes the answer**, which is what a port written against a
+  fabricated `0` looks like once the byte is declared;
+* a candidate that **serves an address outside the set**, which must refuse *and* stay out of the
+  ledger.
+
+**The plumbing** is pinned by [`test/test_hw_differential.py`](test/test_hw_differential.py) (19
+cases), through the shared miniature project in `test/kit_smoke_project.py` — whose `.PRG` holds the
+tempo selector's two reads as real 68000 code: the green case; the undeclared refusal naming both
+addresses and the `hw_seed=` to add; **the same run through `emu.run` served rather than refused**,
+which is the divergence stated as a case so a "fix" cannot regress the probe suites; `_vet_hw_state`
+and `_seed_candidate_hw` each stubbed out via `monkeypatch` and shown load-bearing (with the
+comparison gone, the wrong-order mutant passes the entire differential clean); the declared-byte
+comparison shown to catch what the read stream cannot — a candidate handed a *different declaration*
+from the oracle's (through the REAL `_seed_candidate_hw`, captured before the patch, so the control
+cannot drift from the plumbing), whose streams still match entry for entry; the missing-ABI arm
+refusing **by name**; the stale and wide refusals, each naming its address, and stale winning over
+undeclared when one read is both; **the VOLATILE re-read refused and its STATIC control served** —
+a `.PRG` routine that reads `$ff8209` twice against a faithful candidate that reads it twice too, so
+that with the harness's volatile branch removed every surface agrees and the differential comes back
+green (measured: the case then reds with DID NOT RAISE), beside the same shape on `$fffa01`, which
+must stay green or the tempo selector itself becomes unrunnable; a declaration the run never reads
+left alone; a case touching the
+model not at all left green; the smoke `.PRG`'s address literals pinned equal to `emu.HW_ADDRS`; and
+both guards around the capture fold.
+
+Two properties of the *diagnostics* are cases rather than conventions, because a remedy string is
+this phase's whole surface for the reader. The stale refusal renders the case's seed as a reader
+would type it (`{0xfffa01: 0xb0}`, not Python's decimal `{16775681: 176}`) and prescribes rather than
+contradicts when there is no seed at all; and a CANDIDATE-side refusal names the hardware address,
+since `os_refused()` is one tally shared by every refusing helper and the bare count sends the reader
+hunting for a missing `Bconstat` gate.
+
+**The suite's own seed is deliberately not the capture profile's bytes.** Seeded with `$b0`/`$02`,
+every green case would stay green if the mode's declaration leaked into a disarmed run; seeded with
+`0`, if the seed were never installed at all. The only two cases that involve the profile read it
+from `emu.hw_capture_profile()` — the same rule `hw_model_probe.c` states for its own
+`DECLARED_BYTE`.
+
+**Mutation sweep — 18/18 caught**, each with the oracle force-relinked (the `.so` removed, never
+merely touched): serve-without-logging; log-without-serving; the seed not reinstalled per run; the
+capture profile diverging from the fold, and its known-mask widened to every slot; the undeclared,
+stale, wide and write masks each dropped; the span test off by one; the refusals reordered so
+"declare it" wins over the un-seedable one; the declared-byte comparison deleted; the candidate-side
+refusal losing the address it names; a key dropped from a table row; the candidate serving an
+undeclared byte, not resetting its ledger, logging an unmodeled address, and dropping a refused read
+from its ledger.
+
+**The volatile flag's own mutant makes it 19**, measured when the flag landed: `harness`'s volatile
+branch disabled — a Python-side mutant, so no relink is involved — after which
+`test_a_second_read_of_a_volatile_address_is_refused_and_not_seedable` reds with DID NOT RAISE
+rather than with a stream mismatch. That distinction is the finding: the run was otherwise green in
+every surface a differential has, which is exactly the false green the flag closes. The other 18
+were not re-run for it.
+
+That last one is why the narrative tests here are a short list. Seven of them re-asserted a table row
+in prose and were deleted, their arguments moved into the row's own comment; the sweep is what says
+the rows still carry the coverage, and it does. What survives pins a relation BETWEEN cases (the two
+sides agreeing; a mutant separated from a correct run; what a capture was served, against the profile
+it installs) or a fact about the SOURCE rather than about a run (the slot numbers against `os.h`, the
+capture profile's known-mask against the bytes it has) — plus one that closes the table's own blind
+spot, since a case may claim a SUBSET of the keys the probe prints and a key claimed by nothing would
+otherwise be measured by nothing.
+
+**Not pinned.** The ledger's **cap** arm has no case, for `OS_PSG_LOG_MAX`'s reason: it needs 4,096
+modeled reads in one run, and nothing that exists does that (an FDC poll loop could, which is why the
+cap is sized like the PSG's rather than like Dosound's).
+
+Two entries that used to stand here are now closed, and are recorded as closed rather than deleted,
+since "no consumer" was the honest state this phase shipped in. **The model has consumers**: Wonder
+Boy's `$17c74` tempo selector declares `$fffa01`/`$ff820a`, and its `rng_next` declares `$ff8209` —
+the branch shape and the arithmetic shape, one project. And **`tools/hw_portability.py` prices the
+modeled set as `T2 SEEDED_READ`**, not as the `T4 HW_READ` it priced them at when only the audio
+capture answered them; the census pins `HW_SEEDED_ADDRS` and `OS_HW_NSLOTS` against `os.h`, so a
+fifth modeled byte cannot be added while the classifier goes on under-counting it.
+
+### The ONE slot the model declares for itself: `$fffc00`, the IKBD ACIA status
+
+Every other modeled address answers a fact about the machine the case is describing — which monitor,
+which sync rate, where the beam is — and a default for one of those is the fabricated-`0` class this
+whole phase exists to close. The ACIA's status byte is not that. It is a **transient that always
+resolves the same way**: the 6850's transmitter goes empty microseconds after the last byte leaves
+it, so "TDRE set" is the state a quiescent ACIA is in on entry to any send, and serving `0` instead
+is the one answer the machine never settles at — it hangs the send loop for ever.
+
+`shim.c` therefore answered this address `0x02` from a hard-coded `return` **from before this phase
+existed**, so that BuggyBoy's `read_joystick` could run to its `rts` at all. What Phase 10 changed is
+where that byte comes from: `os_hw_model_defaults()` in `os.h`, installed by the SAME code path a
+case's `hw_seed` takes, on BOTH sides. Three consequences, and each is the point:
+
+* the read is now **LEDGERED**, so "the reconstruction polled the status register" is a compared
+  fact rather than an assumption — deleting the poll is a red;
+* a case may **override** it (`hw_seed={0xfffc00: …}`), because the default fills in UNDER a
+  declaration and never over one; and
+* the two implementations read the byte from one table, so they cannot drift.
+
+**STATIC, not VOLATILE, and the distinction is worth spelling out** because a status register looks
+like the FDC poll this phase excludes. The excluded shape is a byte whose two successive reads must
+DIFFER for the run to proceed — a busy flag that has to go from set to clear. TDRE is not that: a
+send loop exits on the FIRST read that finds it set, so a per-run constant with the bit set describes
+every read the loop makes (there is exactly one), and both sides leave the loop at the same poll.
+Declared the other way — the bit clear — a constant hangs both sides equally, which is a case that
+never terminates rather than a case that lies; `emu.run` spends its instruction cap and throws it
+away. What the constant cannot describe is how many polls the machine would really have taken; the
+loop body is empty and stores nothing, so that count has no image effect.
+
+### The ACIA's DATA port `$fffc02`: a VOLATILE slot, and what that does and does not buy
+
+A send loop only ever WRITES the data port, which Phase 10 compares. An ACIA **interrupt handler**
+READS it — Zynaps's `ikbd_acia_isr` @ `0x14456` is the worked example — and until that read had a
+slot it was an ordinary off-image `0`: unledgered, undeclared, and identical on both sides, so a
+handler branching on the byte took the same wrong arm twice and the differential agreed with itself.
+That is this phase's founding defect at the one address the phase had left out, so the address is a
+slot now.
+
+**It is VOLATILE, and the reason is the protocol rather than a counter ticking.** Every read POPS the
+6850's receive register: the byte the keyboard controller put there is consumed, and the next read
+answers whatever arrived after it. So one per-run constant describes exactly ONE read of it —
+
+* **a handler that reads the port once per entry is fully served.** One case declares one byte, and a
+  packet or a keystroke is driven as one case per byte, each entered from the state the previous
+  entry left. That is the shape Zynaps's ISR has, and it needs nothing more than this;
+* **a run that reads it twice is REFUSED** by the volatile re-read rule — the same rule the video
+  counter's second read meets, though for a different reason: there the machine advances the byte on
+  its own, here the read itself consumes it. Either way one number cannot be two, and the remedy is
+  the case's shape rather than a bigger declaration.
+
+**It carries no MODEL DEFAULT, unlike the status byte next door.** A quiescent 6850 always settles at
+TDRE-set, so a default there is a fact about the machine; what the data port holds is whatever the
+controller last sent, and there is no value that stands in for "whatever". An undeclared read is the
+ordinary Phase 7 refusal.
+
+**IT IS EXEMPT FROM THE STALENESS RULE, and it is the only slot that is.** A store to any other
+modeled address means the case's seed no longer describes what a read yields, and the combination is
+refused. `$fffc02` is two registers behind one bus address — a write lands in the transmit register,
+a read pops the receive register — so a send cannot invalidate a declaration about a receive.
+`os.h`'s `os_hw_split_slots()` is that exemption and states the criterion; without it the first case
+to compose an IKBD send with ACIA servicing in one run would be refused on a diagnosis that does not
+hold. `test_sending_on_the_acia_does_not_make_a_later_receive_stale` is the case, and
+`test_a_write_then_a_read_of_one_modeled_byte_is_refused` is its control.
+
+**What this is still NOT is a sequence model.** A handler that drains a whole packet inside ONE entry
+— reading the port until the controller stops asserting — needs a declared LIST of bytes, one per
+read, and nothing here has one. See "Still unmodeled".
+
+## Phase 8 — the SCHEDULED WRITE MODEL (what an external agent stores mid-run)
+
+The first seven phases are all about a value a run **reads**. This one is about a value something
+**writes while the run is in flight**, and it exists because a whole class of routine is otherwise
+not runnable at all rather than merely unfaithful.
+
+### The routine that cannot be run
+
+```
+$64e  cmpi.b #$99,$879.l
+$656  bne.s  $64e
+$658  clr.b  $879.l          <- the payload, which nothing can reach
+```
+
+Wonder Boy's pause wait (`$638`) busy-waits on `key_last_scancode`, a byte **no instruction in its
+own body writes**: the IKBD ACIA interrupt stores the release code. Nothing changes memory while an
+`emu.run` is in flight and the candidate is single-threaded C, so the loop is infinite on **both**
+sides. Neither a wider register window nor a `stop_pc` helps — a checkpoint stops the run at the
+compare, and the payload below it is what the case is about. The routine sat REGISTERED-AND-REJECTED
+in `projects/wonderboy/names.txt` for thirty batches with exactly this trigger written into its
+plate: *a kit capability to schedule a memory poke at an instruction count or a PC.*
+
+### Modeled
+
+A run may declare up to `OS_SCHED_MAX` stores. Each names a trigger and a store, in one flattened
+`OS_SCHED_FIELDS`-wide array `os.h` owns and **both sides read**:
+
+```python
+emu.run(image, entry, schedule=[{"pc": 0x64e, "nth": 3, "addr": 0x879, "width": 1, "value": 0x99}])
+```
+
+* `pc` + `nth` — fire just before the `nth` execution of the instruction at that address (`nth`
+  defaults to 1). This is the trigger a differential uses.
+* `insn` — fire just before the run's Nth instruction, 1-based. **Oracle only** (see below).
+* `addr`/`width`/`value` — a 1-, 2- or 4-byte big-endian store, made by `os.h`'s `os_sched_store` on
+  both sides so a straddle of the image's top cannot be handled one way by one and another by the
+  other.
+
+Each entry fires **at most once**. The schedule is re-installed before every run, an empty one
+included, so a list cannot leak into the next case — the same rule the PSG and hardware seeds follow.
+
+**The agent's store is not in the write-set.** It goes straight into the image rather than through
+the write-recording callback, because the write-set is what the FUNCTION stored: the attribution
+(poison) pass inverts exactly those bytes and re-runs, and a byte an interrupt supplied is an INPUT
+to the run, not an output of it.
+
+**An entry that never came due sinks the run.** `emu.run` reports it as a named cause — with the
+arrival count, so "the trigger PC is not the instruction the wait re-executes" and "the loop never
+reached that arrival" are separable — rather than letting it surface as a bare instruction-cap
+overrun.
+
+### The candidate side, and the count that makes it honest
+
+`src/sched.c` is the mirror, linked into every candidate by `kit.mk`. A reconstruction's wait loop
+reads its byte through **one** call:
+
+```c
+while (sched_poll8(image, WB_KEY_LAST_SCANCODE) != WB_KEY_PAUSE_RELEASE)
+    ;   /* the ACIA handler stores the release; off target the schedule is what stores it */
+```
+
+The candidate has no program counter, so it counts **polls** where the oracle counts **arrivals**,
+and the two are the same event by construction: the original re-executes its compare once per
+iteration, and a faithful port polls once per iteration. That is why `insn` triggers are refused in
+a differential — there is nothing on this side to match an instruction index against.
+
+**The poll count is the whole cross-check, and without it the model would be a false-green machine.**
+The store is applied from the *same list* on both sides, so a port that spun a different number of
+times — or did not spin at all, or polled a byte the original reads outside the loop — still ends
+with byte-identical memory. `harness._vet_schedule_ran_the_same_wait` compares the oracle's arrivals
+against the candidate's polls, and its applied/refused tallies against the oracle's.
+
+**A poll is not a general memory read.** An ordinary field read stays a plain guarded read; poll only
+the byte the wait is ON, and only where the original's compare reads it. Wonder Boy's `$638` tests
+the *press* code at `$642` before spinning on the *release* at `$64e` — same address, and the first
+is not a poll.
+
+**A WIDE WAIT IS A BYTE POLL PLUS A WIDER READ, and needs no capability of its own.** `sched_poll16`
+and `sched_poll32` are each ONE `sched_poll8` (the clock, which counts the arrival and applies the
+due store) and a full-width read of the same address — one poll per arrival, so none of the aliasing
+below. What they add over a hand-rolled poll-and-read loop is the CAP, and that is the whole reason
+they exist: a case whose schedule never comes due then HANGS the suite instead of being refused.
+Both are ITERATORS rather than a `sched_wait16(until)` because the two word waits that motivated the
+first compare differently — one is a signed threshold, the other is against a copy the routine took
+an instruction earlier — so an equality wrapper would fit neither and a predicate enumeration would
+put the caller's arithmetic inside the kit. **A wide compare must never be spelt as several byte
+polls**: that is exactly the aliasing mutant, invisible at any `nth` that is a multiple of the
+polling rate. The three widths share one clock (`src/sched.c`'s `sched_tick_wide`), so the cap and
+the undeclared-site refusal cannot drift between them; **the longword** exists because Flying
+Shark's `render_frame` VBL wait had to be spelt as `sched_poll16` one width down, polling correctly
+and discarding the word it was handed.
+
+### WAIT SITES: which wait a poll belongs to
+
+**A COUNTER PER RUN CANNOT CARRY TWO WAITS, and the failure mode is a false green rather than a
+failure.** The equivalence above — one arrival is one poll — holds for the run as a whole only while
+the run holds ONE wait. With two, the candidate's poll total and the oracle's arrival total can
+BALANCE BY CANCELLATION: the store fires one iteration early on the second wait, the first wait's
+poll makes the sum back up, and `arrivals == polls` holds over a port that ran a different loop.
+A port that DELETED the first wait outright passes that comparison.
+
+That is measured rather than argued. Wonder Boy's `flip_screen` waits twice on the same word, at
+`$6aa` and `$6d0`; batch 42 phase C restored the run-total model beside a port with the first wait
+deleted, ran the composite case, and it came back GREEN — then RED under the model below.
+(`projects/wonderboy/recreate/STATUS.md`, batch 42 phase C.)
+
+**SO A RUN DECLARES ITS WAIT SITES AND BOTH SIDES COUNT PER SITE.** A *site* is the address of the
+instruction at which the ORIGINAL's wait **re-reads the byte it spins on**:
+
+```python
+emu.run(image, entry, schedule=[{"pc": 0x6d0, "nth": 3, "addr": 0x74a, "width": 2, "value": 2}],
+        wait_sites=[0x6aa, 0x6d0])
+```
+
+* the ORACLE bumps site S's arrival count each time it executes the instruction at S;
+* the CANDIDATE names the site at every poll — `sched_poll8(image, addr, site_pc)` — because it has
+  no program counter of its own to be asked;
+* an AT_PC entry fires when **its own site's** count reaches its `nth`, on both shores;
+* `harness._vet_schedule_ran_the_same_wait` compares the two **site by site**.
+
+**WHICH HALF DOES THE WORK, stated because the measurement says something narrower than the design
+suggests: the FIRING rule.** An entry keyed to its own site's count makes the two sides' run TOTALS
+diverge on a port that ran a different loop, so the totals catch it before the per-site comparison is
+reached. The comparison is kept as a **tripwire and is not claimed as covered** — both composites
+written to isolate it (the comparison removed beside a deleted wait, and beside a port that moves a
+poll from one site to another) came back caught by the firing rule instead. Same standing as the
+kept-count assertions below.
+
+`wait_sites` defaults to the trigger PCs the schedule names, which is right for every run with one
+wait in it and needs no thought. **A run that polls at a site no entry stores on must name it** —
+`flip_screen`'s first wait falls through in a single poll when the counter is seeded ready, and that
+poll still has to be counted. A poll at an undeclared site is a REFUSAL (`os_refused`), not a
+service: an uncounted poll is the hole itself.
+
+**THE SITE COUNT IS WHAT ARMS THE COUNTING, NOT THE SCHEDULE'S LENGTH.** A case may declare
+`wait_sites=` with an EMPTY schedule, and that is an ordinary shape: "the key never comes down", or
+any loop that re-reads a byte a bounded number of times and gives up. `sched_fire` used to run under
+`if (g_sched_n && n)`, so such a case counted **zero** arrivals on the oracle while the candidate
+counted real polls — an unconditional red about nothing, worked round in two Flying Shark batteries
+by carrying a dummy entry that could never come due. The gate is `(g_sched_n || g_sched_site_n)`
+now, and `test_a_declared_wait_site_counts_arrivals_with_NO_SCHEDULE_AT_ALL` is what holds it:
+a counted read loop whose oracle arrivals, candidate polls and own iteration count are one number.
+(A *release* wait cannot be that case with more than one iteration in it — with nothing to change the
+byte it leaves on its first read or never leaves — which is why the probe's routine is a `dbra`
+loop.)
+
+**THE SITE IS THE PC AND NEVER THE ADDRESS.** A per-ADDRESS counter was this model's first registered
+remedy and it was wrong for the very case it was registered against: `game_key_actions` has two waits
+on the SAME byte, at `$5e6` and `$60e`, so the poll's address says nothing about which wait made it.
+
+**What is refused, and what is not.** A trigger PC that is not a declared site can never come due —
+nothing counts its arrivals — so `emu.wait_site_pcs` refuses that combination before either core
+runs, as it refuses a site list with a repeated PC (two counters keyed the same way cannot be
+compared). Two trigger PCs in one run are ordinary. `OS_SCHED_SITE_MAX` bounds how many sites a run
+may declare, and the kept count is reported and asserted on both sides, for `OS_SCHED_MAX`'s reason:
+a silently dropped site leaves that wait uncounted.
+
+**AND THE ATTRIBUTION PASS IS VOID OVER A SCHEDULED BYTE.** `differential(..., poison=True)` inverts
+every oracle-written byte and re-runs; the agent's store is applied from the same list on both sides
+and overwrites the canary, so a candidate that never made the function's own store to that address
+matches anyway. The combination is refused (`_vet_poison_is_attributable`) rather than served — seed
+the destination away from what the routine leaves instead, which is what the pass would have bought.
+
+### The off-by-one the probe found, and where it lives
+
+Musashi's first `m68k_execute()` after a reset spends the reset's own cycles and executes **no
+instruction**, so `osh_run`'s loop observes the entry PC twice. Every counter in the shim has always
+included that observation — `osh_num_insns()` is one more than the instructions executed, and moving
+it would move every pinned perf number in three projects — but an arrival count may not, because it
+is compared against a poll count. The loop therefore skips iteration 0 for the schedule alone, which
+also makes both trigger kinds 1-based; nothing executed there.
+`test_nth_1_lands_before_the_very_first_execution_of_the_trigger` is what holds it, and it is aimed
+at the entry PC because that is the only PC the phantom can be.
+
+### The honest limit
+
+**This pins "given that the agent stored X at iteration N, both cores agree", not "the real machine
+stores X at iteration N".** The schedule is the case's claim about the interrupt, exactly as a
+`hw_seed` is its claim about the machine — explicit, shared, and arguable, instead of implicit. What
+it removes is not the assumption but the *hiding* of it: before, the routine could not be run at all,
+and the alternative on offer was to enter the candidate with the byte already released, which is a
+different arm of the original (`$638`'s press guard tests the same byte and would have refused).
+
+**It is not a transaction model.** A byte whose value must follow a *sequence* the run reads many
+times — the FDC status register Phase 7 names as its non-goal — is still out of scope: one entry is
+one store at one moment, and a poll loop that needs three different answers needs three entries and
+a case that knows which iteration each lands on.
+
+### What is pinned, and what is not
+
+**The model** is pinned kit-side by [`test/test_sched_model.py`](test/test_sched_model.py) and its
+`sched_model_probe.c`, which drives **both** implementations in one process (34 cases, as pytest
+collects them), and the declaration's own arithmetic by
+[`test/test_os_map.py`](test/test_os_map.py). The load-bearing one is RED: the same planted spin with **no** schedule does not
+return, which is the state every such routine was in before this phase. Then: the store landing
+before the `nth` arrival and the wait ending; `nth = 1` reporting exactly one arrival (the
+post-reset phantom, above); a trigger PC never executed never coming due; the `insn` trigger firing
+while booking no arrival; two entries together with a big-endian longword; an entry firing once
+across five arrivals (a tally, because the store is idempotent and no byte could say); a store
+outside the image refused on both sides; entries past the cap dropped **and counted**; and a
+schedule not surviving into the next run; an entry that FIRES BUT DOES NOT RELEASE the wait, whose
+arrivals must go on rising to the cap (the claim the first sweep found nothing measuring); and the
+widths `os_sched_store` carries, read out of its own guard and pinned against `emu.SCHED_WIDTHS`. On
+the candidate side, the poll count matching the oracle's arrivals, and two negative controls it
+separates — a body that polls once and then reads
+the image directly (the shape of a port written against a byte that "is already there"), and one
+that polls twice per iteration, whose final image is a correct run's exactly. And, at each of the
+three widths, an undeclared site tallying one poll one way, plus — for the two wide wrappers — the
+full-width comparand and the cap that stops an unreleased wait hanging the suite.
+
+**One hole is measured and stated rather than papered over**: at an `nth` that is a multiple of the
+port's polls-per-iteration, the double-poller's extra poll lands on the iteration the release was due
+anyway and NOTHING separates it from a faithful body — same image, same applied count, same poll
+count. `test_an_nth_that_aliases_the_ports_polling_rate_hides_the_double_poll` is that case, and the
+consequence for a project is that a wait should be driven at more than one `nth`.
+
+**Measured and kept anyway:** the kept-count assertions on both harness sides have no reachable
+trigger, because one shared `os_sched_install` clamps for both and their caps cannot diverge. The
+mutant that breaks the clamp IS caught, by the probe's cap case. They stay as a tripwire for the day
+the two sides stop sharing that helper.
+
+**Not pinned.** The harness-level plumbing has no `kit_smoke_project.py` case of its own yet — the
+refusals in `_vet_schedule_is_runnable` and the comparison in `_vet_schedule_ran_the_same_wait` are
+exercised by the first project to use them (Wonder Boy's pause pair) rather than by a kit-side
+miniature the way Phase 7's `test_hw_differential.py` does. That is a gap of the same shape Phase 7
+closed for itself and it is recorded here as one.
+
+## What a candidate must mirror (cross-side ABI)
+
+Everything the model reads or writes in the image is shared by construction — a reconstruction that
+calls `os_bconstat`/`os_bconin`/`os_crawio`/`os_giaccess`/`os_random`/`os_fopen`/`os_fcreate`/
+`os_fread`/`os_fwrite`/`os_fclose` from `include/os.h` agrees with the oracle byte for byte and has
+nothing to mirror by hand. The table below is what is left: six rows of state the model keeps
+OUTSIDE the image, which a candidate must mirror explicitly, and one — the file-load seam — that is
+not off-image state at all but a symbol the candidate has to supply. (This sentence read "two
+things" while the table had four such rows, which is how long a count in prose survives without a
+case; it read "five rows" while there were six.)
+
+| what | where the oracle keeps it | what the candidate must do |
+| --- | --- | --- |
+| XBIOS `Dosound(A0)` list pointers | `shim.c`'s `g_dosound_arg` ledger | export the `g_dosound*` ledger ABI (README.md); `harness.differential` compares them |
+| direct `$ff8800`/`$ff8802` PSG accesses, **reads included** | `shim.c`'s `g_psg_kind`/`g_psg_reg`/`g_psg_val` ledger | emit the same ordered `(kind, reg, val)` stream — call `psg_port_write()` / `psg_port_read()` from `psg.h` (BuggyBoy predates it and emits through `g_REFRESH` out-params instead) |
+| the YM2149's register contents, which a read-back returns | `shim.c`'s `g_psg_file` + its known mask | `psg_port_read()`/`psg_port_write()` keep the same file; `harness.differential` compares it, and the case seeds both sides with `psg_seed=` (Phase 6) |
+| reads of the modeled hardware bytes `$fffa01`, `$ff820a`, `$ff8207`, `$ff8209` | `shim.c`'s `g_hw_log_slot`/`g_hw_log_val` ledger + `g_hw_file` | emit the same ordered `(slot, val)` stream — call `hw_read8()` from `hw.h` with an `OS_HW_*` constant; the case declares both sides' bytes with `hw_seed=` (Phase 7). A VOLATILE one (`$ff8207`/`$ff8209`) may be read at most ONCE per run: a second read is refused, and the remedy is the case's shape — end it before the second read, or split it into two runs |
+| a memory byte an EXTERNAL AGENT writes while the run is in flight (an interrupt storing a scancode) | `shim.c`'s `g_sched` list, applied by arrival count per declared WAIT SITE | poll the byte through `sched_poll8()`/`sched_poll16()`/`sched_poll32()` from `sched.h`, once per wait iteration, NAMING the site (the original compare's PC); the case declares the store with `schedule=` and the sites with `wait_sites=` (Phase 8), and `harness.differential` compares the candidate's polls against the oracle's arrivals SITE BY SITE |
+| the FILE-LOAD SEAM (Phase 9) | nothing — the substitution is in the image | define `disk_read_file` (`disk.h`). Off target `src/disk.c` supplies it; an ON-TARGET build must define its own, and the project's build should require the symbol so a core calling it cannot silently link the model |
+| every STORE to a memory-mapped I/O register — the shifter's colour row and screen base, the MFP's in-service registers, the ACIA's data port | `shim.c`'s `g_hw_write_addr`/`_width`/`_val` ledger | emit the same ordered `(address, width, value)` stream — call `hw_write8()`/`hw_write16()`/`hw_write32()` from `hw.h` with the 24-bit address, or `hw_bset8()`/`hw_bclr8()`/`hw_and8()` where the original's instruction is a read-modify-write (Phase 10). Compared for EVERY case by default; a case whose candidate models a routine's hardware half as a no-op declares those addresses in `hw_waiver={address: reason}` |
+
+`OS_SUPER_TOKEN` is not off-image state but it is still a shared value: a reconstruction of a
+function that calls `Super` must return the same constant, since the program can store it into the
+image where the diff compares it. Using `os_super()` from `os.h` gets that for free.
+
+## Four limits the input layer found
+
+Recorded here because each one is a property of the *model*, not of Joust: any game's
+reconstruction meets them, and none was written down before.
+
+**1. A poked constant only survives if the routine does not initialise it first.** State-level
+poking (the governing rule) puts the value in the image *before* the run, so a routine that clears
+its own input wipes it on entry and the poke buys nothing. Both of Joust's IKBD readers do exactly
+that — `read_joysticks` (`0x11d9a`) and `hiscore_joystick_input` (`0x14538`) both `clr.l
+ikbd_packet` before sending the "interrogate joysticks" command and spinning on the reply. A staged
+packet is therefore erased by the routine itself and the spin never ends. The only way in is to
+enter the oracle **at the wait loop** with the packet already staged, which is what
+`hiscore_joystick_input` does (verified from `0x1454e` onward) and what `read_joysticks` does too
+(rotated at `0x11db0`; the `control_player` it goes on to call is itself verified). So: check
+whether the routine writes its own poked input before assuming state-level modelling reaches it.
+
+**2. The `Fopen` → `Fcreate` fallback is unreachable by construction.** `os_fcreate` *is* `os_fopen`
+plus a truncation, so for any one name both succeed (staged) or both are refused (not staged) —
+there is no image in which `Fopen` returns an error and `Fcreate` then returns a handle. Every
+program's "open it, else create it" idiom therefore has its create arm reproduced but unverified,
+and both `< 0` tests with it. Pinned by
+`projects/joust/recreate/test/test_input.py::test_fcreate_fallback_is_unreachable_under_the_model`.
+Making it reachable would mean letting `Fcreate` invent staging space for a name the harness never
+declared, which is the fabrication the model exists to refuse.
+
+**3. `Pterm` did not stop the run — and misreported itself. CLOSED 2026-09-06 by modeling it**
+(Phase 13). It was unmodeled, so the shim counted it and then *resumed* the caller with a fabricated
+`D0 = 0`, because the trap dispatch had one exit path: execution ran on past a call that should never
+return, until the instruction cap. Worse, the run could no longer stop at the sentinel even in
+principle — `Pterm`'s own `move.w #retcode,-(a7); move.w #$4c,-(a7)` lands on the sentinel long
+itself (Joust's quit path reaches `trap #1` with A7 back at `STACK_TOP + 4`), leaving `00 4c 00 00`
+where `00 00 00 02` was, the selector in the sentinel's **high word**. And `emu.run` tests `reached`
+*before* it tests the unmodeled causes, so what came back was `did not reach rts within 200000
+instructions` rather than the honest `unmodeled OS behaviour`.
+
+`handle_trap` now ends such a run **at the sentinel itself**, by setting the PC rather than by
+letting the caller's clobbered stack decide, so none of the above applies: the run reports REACHED
+and the exit code is in the event ledger. **The checkpoint `stop_pc` idiom this limit recommended is
+still sound** and is what every existing case uses — a run stopped one instruction short of the trap
+diffs the same bytes — but it is no longer the only way to run such a path.
+
+**What did NOT survive is the PROOF those checkpoints are paired with.** A checkpoint diff on its own
+would pass on a routine that fell through to `rts`, so each is paired with a
+`pytest.raises(match="did not reach rts")` (`projects/joust`'s `_never_returns`, and Wonder Boy's
+copy of it) — and over a path ending in `Pterm` the oracle now reaches the sentinel, so that proof
+passes by TERMINATING rather than by never returning, which is not what it claims. `emu.run` reports
+`out_regs["terminated"]` for exactly this: such a pair should assert the ending it got, and a
+checkpoint the run terminates BEFORE is refused outright.
+
+**The limit that replaces it is narrower and lives in Phase 13:** the DEFAULT arm's selector, 0, is
+what a runaway PC reads when there was no GEMDOS call at all, so `Pterm0` stays refused.
+
+**4. Model writes bypass the write-set, so `poison` never checks them.** The `os_*` helpers reach
+`g_mem` directly rather than through `m68k_write_memory_*`, so nothing calls `logw` for them:
+`os_bconin` clearing `OS_CON_PENDING`, `os_fwrite` filling a staged file and `os_gem_trap` filling
+`intout` are all **absent from `info["writes"]`**, which holds the 68000's own stores only. The
+image diff still covers those bytes — they are ordinary image state on both sides, which is the
+whole point of sharing `os.h` — but two things follow. A test that wants to assert on model state
+must read the oracle's final image, not its write set (`test_input.py::_oracle_final`). And
+`harness.differential(poison=True)` poisons exactly the oracle's write set, so a byte only the
+*model* wrote is never canaried: a candidate that omits it can still pass the attribution check by
+landing on a value the input image already held.
+
+## Phase 9 — the FILE-LOAD SEAM (`disk_read_file`), for a game that loads from floppy
+
+**Added by Wonder Boy's batch 44 phase B, and kit-wide rather than that game's.** It is not a trap:
+it is a named CUT in a reconstruction, sitting on top of the file traps Phase 4's neighbours already
+model, and it exists so that a boot chain ending in a raw disk controller can be ported at all.
+
+**The problem.** A game that loads from floppy reaches its files through a WD1772/DMA state machine
+and whatever on-disk filesystem the publisher used. Every effect of that code is hardware, so the
+memory differential can see none of it — and a kit that modelled the controller would be modelling a
+chip in order to verify code nobody wants to read. Wonder Boy's is 1,644 bytes over 26 routines.
+
+**The cut.** Find the LOWEST routine of the chain whose inputs are FILE-SHAPED — a name and a
+destination — rather than sector-shaped, declare everything it reaches an excluded boundary with its
+edges enumerated, and call `disk_read_file` across the cut:
+
+```c
+int32_t disk_read_file(uint8_t *mem, uint32_t name_ptr, uint32_t dest);  /* include/disk.h */
+```
+
+`DISK_READ_OK` (0) or `DISK_READ_FAILED` (-1) — the SEAM'S CONTRACT and deliberately not a byte
+count, because the routine being substituted for reports success and failure and a caller that
+tested a length would be testing something the original never handed it. There is no length
+argument either: both sides ask for more than any file holds and are served what there is, which is
+what GEMDOS `Fread` does on the machine and what `os_fread` does here.
+
+**Modeled**: `src/disk.c`, over `os_fopen`/`os_fread`/`os_fclose`. Off target only, exactly like
+`src/hw.c` — an on-target build issues the real traps and the project's backend defines the symbol.
+It is a REAL symbol and deliberately not a `static inline` in `os.h`: an inline would compile into
+the `.PRG` with nothing for a linker scan to catch, which is the false-green class the on-target
+seam checks exist to refuse.
+
+**No ledger, and that is a decision.** `src/hw.c` and `src/psg.c` export ordered streams because
+what they model is OFF-IMAGE. This is the opposite: the staged-file table, every cursor, every open
+flag and every byte served live INSIDE the image, so a candidate that opened the wrong file, read
+the wrong count or forgot to close is separable from a correct one by the ordinary byte diff. A
+ledger here would compare the model against itself.
+
+**What makes the substitution checkable rather than merely declared.** A case pokes the SAME
+substitution into the oracle, hand-assembled as GEMDOS traps over the original's own seam routine.
+Both sides then go through this model and the byte diff holds the C statement and the 68000 one
+equal. Wonder Boy's `test_boot.py` (`SEAM_STUB`) is the worked example, and it decodes its own stub
+rather than trusting the comment beside it.
+
+**Not captured**, and it is the one gap worth naming: **the model cannot say "the disk said no".**
+`os_fopen`/`os_fread` have exactly two answers, served and refused, and a refusal sets `g_unmodeled`
+so `emu.run` raises before any comparison. That is right — it is what stops a loader reading an
+unstaged file from being falsely verified — but it means a caller's ERROR arm has no differential
+available to it and must be driven candidate-only. The remedy, unbuilt: a staged name declared
+PRESENT BUT UNREADABLE, which is the third answer the two-valued model lacks.
+
+## Phase 10 — the HARDWARE WRITE LEDGER (every store to a memory-mapped I/O register)
+
+Phase 7 closed half of the off-image surface: what a hardware register ANSWERS. This closes the other
+half — what a program STORES to one.
+
+**The defect.** A store above the image is DROPPED by `shim.c`'s memory callbacks, and a
+reconstruction cannot make it at all (computing `image + 0xff8240` would index past the buffer). So
+a candidate that makes **none** of a routine's hardware stores is byte-for-byte identical to one that
+makes every one of them, and the differential calls both verified. That is Phase 6's argument for the
+YM2149's two ports applied to the rest of the I/O map, and it is not hypothetical: before this phase,
+Zynaps carried it in six interrupt handlers, `screen_flip_buffers`, `set_palette_title` and its boot
+slices; Wonder Boy's `set_palette` has carried it since batch 12 (its own name map says so, at
+`cmt 0xe562`); BuggyBoy's `flip_screen` and `poke_color_reg` are two more.
+
+### Modeled
+
+**An ordered ledger of `(address, width, value)` on both sides.** `shim.c` records every dropped
+store; `src/hw.c` records every `hw_write8()`/`hw_write16()`/`hw_write32()` a reconstruction makes.
+`harness.differential` compares them **exactly** — a missing, extra, reordered, mis-addressed,
+wrong-width or wrong-value store fails the case — and does so for **every case, by default**.
+
+The **width** is compared because it is part of the instruction: `clr.w $ff8240` and `clr.l $ff8240`
+reach different registers on the machine and neither reaches the image, so nothing else could tell
+them apart. The **order** is compared because the ledger is a stream and not a set: Zynaps's screen
+publish stores the same two bytes to two registers, and swapping them is a real defect with an
+identical address set.
+
+### What "a hardware register" means here, and what is deliberately outside it
+
+The ledger covers the three blocks the ST **decodes**, and not the whole address space above the
+image (`os.h`'s `OS_HW_IO_INTERNAL_LO/_HI`, `OS_HW_IO_MFP_LO/_HI`, `OS_HW_IO_ACIA_LO/_HI`):
+
+| block | what is in it |
+| --- | --- |
+| `$ff8000..$ff8fff` | memory configuration, the shifter's video base and its sixteen colour words, the resolution byte, the DMA/FDC pair, the YM2149's mirrored block, the STE's DMA sound and blitter |
+| `$fffa00..$fffaff` | the MFP 68901 — its enable/pending/in-service/mask registers, the four timers, the GPIP Phase 7 already names |
+| `$fffc00..$fffcff` | the two 6850 ACIAs, keyboard/IKBD and MIDI |
+
+**A store above the image but OUTSIDE those blocks is a RUNAWAY POINTER, not a device**, and is
+dropped unledgered exactly as it always was — below the first block, and in the gaps between them
+(`$ff9000..$fff9ff`, `$fffb00..$fffbff`) as much as below. Both examples are measured rather than imagined: Joust's
+`update_pterodactyl` driven with a y of `0x8000` computes a screen address around `$570000` and
+stores a sprite there, and BuggyBoy's `poke_color_reg` with a wild register selector reaches
+`$ff95ea`. Ledgering those would make a reconstruction answer for arithmetic the byte diff cannot see
+either, on inputs the game never produces — and the surface that *does* hold a runaway store is
+`guarded_image.py`'s, not this one. **The residual, stated rather than hidden:** a runaway that lands
+INSIDE one of the three blocks is indistinguishable here from a deliberate register store, and is
+ledgered. That is the right way round — a store into the decoded I/O space is a store the machine
+acts on, whatever the reconstruction meant by it.
+
+**Anything the candidate hands `hw_write*` that is not one of those blocks is a REFUSAL**, not an
+entry, and there are three shapes of it (`hw.h` lists them beside the door): an address the IMAGE
+covers — a reconstruction reaching image memory through this door has stored where the byte diff
+should have seen it, and the oracle logs no entry for it either; a runaway, which the oracle also
+drops unledgered, so an entry here would diverge the streams for a reason that is not about a
+device; and **the UNTRANSLATED form**, `$ffff8240` for `$ff8240`. That last one is Phase 7's rule
+restated: the ORACLE folds an access the way the 68000's bus does before it decodes, because that is
+what the bus does to an instruction's operand, while a RECONSTRUCTION spells the address itself.
+Masking on the candidate side would let the two sides ledger two spellings of one register — a red
+that reads as a wrong-register bug — and would defeat an address-keyed `hw_waiver`, which could then
+match one side only.
+
+**The two canonical PSG ports are Phase 6's, not this phase's.** `m68k_write_memory_8` returns on
+`$ff8800`/`$ff8802` before it reaches this ledger, so a register write lands in exactly one stream.
+
+### How it interacts with Phase 7's "wrote then read back" refusal
+
+**They are orthogonal and both still apply.** A store to a modeled READ address does not change what
+a later read is served — the seed describes the byte the chip held ON ENTRY, and after the run's own
+store it describes nothing — so `g_hw_stale` fires and `harness.differential` refuses the case,
+exactly as before. The store is *also* in the write ledger now. Being comparable does not make it
+honest to read the seed back: the two facts answer different questions, and a phase that folded them
+would have to invent what the register reads after a write, which is the fabrication this whole
+model is against.
+
+### What it pins, and the one residual
+
+For a **plain store** it pins the whole of it. For a **read-modify-write of an address the READ model
+does not name** — `bset #6,$fffa09`, `bclr #0,$fffa0f`, `andi.b #$fc,$ff8260` — the oracle's read
+answers a fabricated `0`, so both sides compute their value from that same `0`: the ledger holds the
+address, the width and the fact that the store happened, while the BIT or the MASK the instruction
+applied may not be. (`bset`'s bit IS held, because `0 | (1 << bit)` is a different byte per bit;
+`bclr`'s and `andi.b`'s are not, because `0 & ~bit` and `0 & mask` are `0` whatever the operand.)
+That is still a large gain (deleting the store is now a red) and an honest residual. A routine that
+needs the mask held wants its address in the READ model too — or a project-local sink for that one
+byte, which is what Zynaps's `init_shifter_mode_mask_written` is and all it now is.
+
+### The read-modify-write shape: `hw_bset8` / `hw_bclr8` / `hw_and8`
+
+**A read-modify-write spelt as a plain store was an ON-TARGET DEFECT and not merely an unpinned
+byte**, and it is what these three names close. Off target `hw_write8($fffa09, 0x40)` is the RIGHT
+store, because that is the byte the oracle's own `bset` computed from its fabricated `0`. On the
+machine the same expression writes `0x40` over everything TOS had set in the MFP's interrupt-enable
+B; `hw_write8($fffa0f, 0)` acknowledges every in-service channel rather than Timer B's; and
+`hw_write8($ff8260, 0)` clears six bits the `andi.b` preserves. Green off target, wrong on the
+machine, and **no off-target surface can tell the two apart** — the kit's own
+`test_the_operations_are_indistinguishable_off_target_from_the_defect_they_retire` measures exactly
+that, as a green case.
+
+So the reconstruction spells the OPERATION and each shore supplies its own read half:
+
+| the instruction | the call | off target (`src/hw.c`) | on target (the build's own definition) |
+|---|---|---|---|
+| `bset #b,addr` | `hw_bset8(addr, b)` | ledgers `0 \| (1 << b)` | `*(volatile uint8_t *)addr \|= 1u << b` |
+| `bclr #b,addr` | `hw_bclr8(addr, b)` | ledgers `0 & ~(1 << b)` | `*(volatile uint8_t *)addr &= ~(1u << b)` |
+| `andi.b #m,addr` | `hw_and8(addr, m)` | ledgers `0 & m` | `*(volatile uint8_t *)addr &= m` |
+
+The off-target column is byte for byte what `shim.c` already logged for those instructions, so
+introducing the operations changed **no ledger comparison** and every existing case stayed green.
+The address rules are `hw_write8`'s, through the same check — an image address, an undecoded one and
+the untranslated `$ffff8260` form are all refusals — and the width is BYTE for all three, because
+that is the width of every instruction they stand for.
+
+**`hw_and8` is its own operation and not two `hw_bclr8` calls**: one instruction makes one store, and
+the ledger compares the ordered stream, so a pair diverges it for a reason that is not about the
+register (`test_splitting_a_mask_into_two_bit_clears_reds`). **A target build that does not define
+all three does not link** — which is the intended shape, since the cores can no longer express the
+defect. `hw.h` states the contract at the door; Zynaps's `include/init.h`, `include/irq.h` and
+`include/frame.h` carry the six call sites and `recreate/atari/README.md` the backend's half.
+
+### Why it is ON by default, and what the opt-out costs
+
+The failure this closes is **a candidate that does nothing**, and the cases that need the comparison
+are exactly the ones nobody would think to opt IN. An opt-in ledger would be enforced only where
+somebody remembered it, which is the same shape as a guard that is only present where it was not
+needed. So it is compared for every case, and the only way off it is per case and per ADDRESS:
+
+```python
+differential(..., hw_waiver={0xff8240: "set_palette's reconstruction writes no hardware (src/…)"} )
+```
+
+Both hardware streams — the Phase 7 read stream and this write stream — drop their entries at those
+addresses, on BOTH sides, before they are compared; every other address in the run still is. **The
+reason is required** (a blank one raises) and **so is an integer address** (a string key would match
+nothing and waive nothing, while the case reds naming the very address the author believes is
+excused). Each distinct waiver is recorded once in `harness.HW_WAIVERS` as `(entry, address,
+reason)`, so a run can be asked which addresses it stopped looking at.
+
+**IT RETIRES ITSELF.** A waiver states that the reconstruction makes no access at that address; the
+day somebody gives it a body, that is false, and without a check the waiver would go on dropping
+BOTH sides' entries — a green suite over stores nobody compares, with a `STATUS.md` row claiming
+they are pinned. So a candidate that ACCESSES a waived address fails the case, naming it. (Keyed on
+the candidate's accesses and not the oracle's: a waived address the oracle never touches is merely
+unused, because a project waiver lists every address its stubs cover and a given case reaches a
+subset.) Waiving is a standing note that a reconstruction has a hardware half nobody has written
+yet — not a way of declaring the half unnecessary.
+
+**WHAT IT DOES NOT COVER, deliberately: Phase 7's four REFUSALS.** An undeclared read, a stale
+read-back, a wide read and a second read of a VOLATILE address still fire at a waived address, and
+must — each of them says the ORACLE was served a byte the model invented, which corrupts that run
+whatever the candidate did, so excusing it would verify a reconstruction against a fabrication. A
+case that meets one declares a `hw_seed` or changes its shape; there is no waiver for it.
+
+Three projects needed one when the phase landed, all for the same reason and all listed in their own
+`test/harness.py`: BuggyBoy (`$fffc00`/`$fffc02`, `read_joystick` is a no-op in `src/os.c`; `$ff8200`,
+`flip_screen`'s hardware half), and Wonder Boy (`$ff8240..$ff825e` and `$ff8201`/`$ff8203`, from
+`set_palette`/`clear_palette`/`flip_screen`). Joust and Zynaps needed none — Zynaps because this
+phase is what its wave-3 batch used to close the hole.
+
+## The callback door — how an asm twin calls a verified C core
+
+Everything above this point models the MACHINE for a reconstruction. This models nothing: it is the
+off-target stand-in for a **link**, and it exists only because one side of the differential is host
+code.
+
+An asm twin (`asm_twin.py`, and the kit README's "Asm twins") is a transcription of the original's
+own instructions for one routine. So it calls what the original calls — and a twin big enough to be
+worth writing calls the project's verified C cores. Off target those cores are **host** code, in the
+candidate `.so` the harness dlopens; the blob is m68k, linked alone at base 0, and a `bsr` to one of
+them does not link:
+
+```
+m68k-elf-ld: undefined reference to `collision_chain_walk'
+```
+
+Cross-compiling the cores into the blob does not fix it either, and that is the load-bearing half of
+the argument: two of the seams those cores sit on are modelled **host-side** — `sched_wait8` is the
+candidate's clock (Phase 8) and `hw_bset8` is a ledger entry (Phase 10) — so an m68k build of them
+would model nothing, spin forever on a byte no interrupt writes, and store to an address the blob's
+own memory does not decode.
+
+**On the target build there is no problem to solve.** The twin links against the real cores and its
+stub jumps straight to one. So the door is off-target-only, and being off-target-only is exactly what
+makes it dangerous: anything the door does that the target build does not do is a difference that
+ships, with no surface here able to see it.
+
+### The band, and the stub
+
+A fixed range inside the emulated memory image, in the dead gap between the twin's stack top and the
+image (`asm_twin.py` owns the constants):
+
+| | |
+|---|---|
+| `DOOR_BASE` | `0x000F0000` |
+| `DOOR_STRIDE` | `8` |
+| `DOOR_SLOTS` | `64` — the band is `[0xF0000, 0xF0200)` |
+
+Slot `id` is at `DOOR_BASE + id * DOOR_STRIDE`. `AsmTwins.__init__` **asserts** the band lies
+strictly above `stack_top` and strictly below `image_at`, naming both numbers: a bigger blob or a
+lower image would make a door address alias real memory — a twin would write where a callback is
+meant to be caught, or a callback would fire on an ordinary access — and neither leaves a trace
+anything else here could read.
+
+**A twin never spells a door address in its body.** Each callee gets a stub, chosen by `#ifdef` on
+`RECREATE_HOST_DIFFERENTIAL` — which `kit.mk`'s `ASM_CFLAGS` defines for the off-target assembly and
+a project's own target build does not:
+
+```gas
+door_collision_chain_walk:
+    jmp     (0xf0000 + 0 * 8).l        | off target: into the band
+    jmp     collision_chain_walk       | on target: the real core
+```
+
+so the body's `bsr.w door_collision_chain_walk` is **byte-identical in both builds**. In this
+simplest form the `jmp` is a TAIL jump, so on target the core's own `rts` returns straight to the
+twin's call site.
+
+**The door does not require that form**, and Zynaps's `frame.S` ships a fatter one. Its stubs save
+the ABI's scratch file, push the arguments, `jsr` (not `jmp`) the callee, and then regain control to
+unwind the arguments, restore the scratch file, and set the Z or X flag the original's callee answers
+in. The stub is where that belongs precisely because the stub exists in BOTH builds — see "the
+marshalling contract" below. All the door asks is the ordinary m68k SysV frame at the moment it is
+reached: **the return address at `A7`, the C arguments at `A7+4`, `A7+8`, …**, which both shapes give
+it.
+
+### The marshalling contract
+
+`osh_run_bench` stops **before** executing anything in the band and reports `OSH_BENCH_DOOR`;
+`AsmTwins.call` services the callback and continues the same run through `osh_bench_resume` (the CPU
+is not reset — Musashi's state IS the twin's). One service is:
+
+* the slot is `(door_pc - DOOR_BASE) / DOOR_STRIDE`, and a PC that is not exactly on a slot boundary
+  is refused with the rest;
+* the slot is looked up in the **project's** callback table,
+  `{id: DoorCallback(name, nargs, takes_image=True, returns=True)}`, passed to
+  `AsmTwins(asm_dir, image_size, callbacks=…, lib=harness._lib)`. The kit half names no game,
+  exactly as `asm_twin.py` and `kit.mk` already name none. **The band is armed either way**: a
+  project with no table can still have a blob full of door stubs, and a stub reaching an unarmed
+  band would execute the zeros there for sixteen million instructions and time out naming nothing;
+* the stub was reached by `bsr`, so the twin's return address is AT `A7` and the C arguments are
+  above it — `A7+4`, `A7+8`, … — one 32-bit stack word each, `nargs` of them;
+* **argument 0 is the image base**, and the door substitutes a HOST pointer into the emulated memory
+  buffer for it, because a core's `uint8_t *image` has to be a real pointer. The emulated value is
+  checked against the image base rather than discarded: a twin passing anything else has computed
+  the wrong base, and substituting over it would hide exactly that. A core that touches HARDWARE
+  rather than the image has none to be handed — `hw_bset8(addr, bit)`, `ikbd_send_cmd(cmd)` — and
+  declares `takes_image=False`; substituting a pointer over ITS first argument would corrupt the
+  value it needs, which is the same mistake from the other side;
+* the host function is called through ctypes, and its result goes to **D0** — read as a longword and
+  put there whole. The one residual: a core whose C return type is NARROWER than 32 bits would land
+  whatever the host left in the upper bits in D0 alongside its answer. No core any twin calls has
+  such a type (checked across Zynaps's sixteen: all `int`, `unsigned`, `uint32_t` or `void`), so the
+  table carries no declared return width; the day one does, that is the field to add;
+* then the stub's `rts` is simulated: the return address is popped into PC and `A7` moves on by 4.
+
+**And that is the whole of it. It is a plain C call — including what a C call WRECKS.** D0 carries
+the result; D1, A0, A1 and every condition-code bit come back as rubble, because on the machine this
+call site reaches the real core and the m68k SysV ABI lets it destroy exactly those. A door that
+politely preserved them would be preserving them **off target only**: a stub that forgot to save its
+scratch file across the call, or that branched on a flag its callee happened to leave, would be green
+here and broken on the STE, and nothing off target could say so. So the door destroys them on purpose,
+with a distinctive value (`osh_bench_door_poison()`), and `test_callback_door.py` requires the wreckage.
+
+**AND ONE OF THE FIVE CONDITION CODES IS A SCHEDULE RATHER THAN RUBBLE — read this before writing a
+stub that carries X.** N, Z, V and C come back set on every callback. **X ALTERNATES**: set on the
+first callback of a run, clear on the second, and so on, per `osh_bench_door_extend(nth)`, which is
+exported so a caller pins the schedule instead of mirroring its phase (`emu.door_extend`). The
+counter resets in `osh_run_bench` and is deliberately NOT reset by `osh_bench_resume`, so the phase
+is a property of the run and is reproducible per case.
+
+**Why it is not simply "rubble".** X is the one flag a stub carries ACROSS a call — it reads the
+68000's X in, hands its core an `extend` argument and writes the answer back, because the next
+`abcd` adds it. While X came back a constant 1, a stub that DROPPED that write-back handed the next
+chain the same 1 the poison would have left anyway, and the whole omission was invisible: measured
+on Zynaps' wave-C twin, deleting the write-back from all four of its X-carrying trampolines left its
+146-case suite green. Alternating removes the coincidence.
+
+**What it does NOT buy, stated because the measurement said so.** Re-running that sweep with the
+alternation in place turned ONE of five stubs red, not four of four. The other four are blocked by
+STAGING rather than by the poison — a flag-destroying door call sits between every award and the
+next reader — so a green run is not evidence that a stub's X marshalling is pinned. And the schedule
+is a bare parity, so an X-carrying callback at a fixed EVEN distance from the previous one still sees
+a constant X. `test_callback_door.py::test_the_doors_extend_alternates_so_a_dropped_write_back_reddens`
+pins the schedule itself.
+
+A core declared `returns=False` — `void` — gets that poison in D0 as well. Its D0 on the machine is
+whatever the callee happened to leave, and reading the host's arbitrary return register would turn a
+value that is undefined on target into a definite number here.
+
+Anything a call site needs beyond the result — the X flag in or out, a `tst.l` so a `beq` below the
+call has something to branch on, the scratch registers saved across it — belongs in the **stub**,
+which exists in both builds.
+
+### An unregistered slot is a REFUSAL
+
+A twin reaching a slot the table does not declare **raises**, naming the slot and everything that IS
+declared. It never answers 0 — that is the governing rule at the top of this file applied to the
+door: a fabricated result is one both sides then agree with, and a door nobody registered has no
+host core behind it, so there is no answer to give. Supplying a table at all is what arms the band,
+an empty table included, so a project with door stubs cannot get the zeros in the band instead of
+the refusal.
+
+### The door charges the emulated machine nothing
+
+The twin's `bsr` and the stub's `jmp` really execute and are charged normally. The C body does not
+exist on this side, so it costs nothing — and that is not tidiness. An off-target cost pin over a
+twin that calls cores measures **the twin's own instructions**; the callee's cost is measured on
+target, against the original's own call to the same routine. A door that charged for the service
+would corrupt both halves of that.
+
+**Which is a real limit on what such a pin may claim, and not only on what the door may do.** An
+off-target cost over a span that CONTAINS a door call is not comparable to the original's cost for
+the same span: the original really executed its callee and this side did not. So a twin that calls
+cores takes its cost pins over **call-free spans**, or states the number as *the twin's own
+instructions only*. A pin that quietly compared a door-crossing span against the original's would be
+measuring the door's absence and reporting it as a speed-up.
+
+### What a caller sees
+
+`emu.run_bench` gained named statuses — `BENCH_INSNS_EXHAUSTED` (0), `BENCH_SENTINEL` (1),
+`BENCH_DOOR` (2) — and `1` still means exactly what it always meant, so a caller reading the result
+as a boolean is unaffected. With no `door=` band it behaves as it always has, raising when the run
+does not reach the sentinel; a door-aware caller drives the loop. `bench_door_pc` / `bench_door_sp` /
+`bench_door_return` / `bench_resume` are the rest of the seam.
+
+**The budget the loop spends is the RUN's, not the segment's**, and a segment that executed NOTHING
+is a refusal. `bench_resume` takes a fresh cap each time, so without both a twin that keeps
+re-entering the door — a loop around a core call, or a stub whose frame is wrong enough to return
+INTO the band — would never end. A hung suite decides nothing and looks like a broken machine; these
+two make it the ordinary raise.
+
+**Neither side spells the band twice.** `kit.mk` passes `-DRECREATE_DOOR_BASE` / `-DRECREATE_DOOR_STRIDE`
+to the assembler, asked of `asm_twin.asm_door_flags()` exactly as `ASM_LINK_BASE` is asked of
+`asm_link_base()`. A `.S` with its own copy of the address would keep jumping to it the day the band
+moved, and would execute the zeros there rather than stopping at a door.
+
+## The callee-saved file, and the twin defect nothing else could see
+
+`osh_run_bench` used to report `D0` alone, so **nothing off target checked that a twin restores its
+callee-saved registers**. Measured on Zynaps's `draw_sprite_masked_asm`: drop `%d7` from both `movem`
+lists, correct the frame size to match, and the whole suite stays green — the image is identical, the
+return value is identical, and the cost pin gets **cheaper** — while on the machine the twin returns
+with its caller's `%d7` holding a sprite's planes. The only surface left was a play-test, whose
+failure signature would not point at a `movem` list.
+
+**Closed.** `osh_run_bench` and `osh_bench_resume` now report the whole `OSH_OUT_REGS` file (D0..D7
+then A0..A6) exactly as `osh_run` does — a caller must size its buffer to `osh_out_regs()`, which it
+already had to for `osh_run` — and `osh_bench_seed(regs)` installs the register file a run ENTERS
+with (`NULL` = the entry state this always had, which is what every non-twin caller passes).
+`AsmTwins.call` seeds `%d2`-`%d7`/`%a2`-`%a6` with a distinctive constant plus the register's index
+and requires each back, failing with the register's NAME. `%a5` and `%a6` are in the list like the
+rest: a twin may reserve them as base registers, but reserving one does not exempt it — it is still
+callee-saved, so the epilogue still has to put the caller's value back.
+
+The mutation above now reddens 35 Zynaps cases with
+`draw_sprite_masked_asm returned with d7 = 0x94d7f0be, not the 0xca11ed05 it was entered with`.
+
+**One residual, recorded rather than claimed.** A store through an address register the twin forgot
+to load now lands at `0xCA11ED0x`, outside the emulated memory, where `shim.c` drops it. It was never
+reliably caught before either — Musashi's reset does not clear `D0`-`D7`/`A0`-`A6`, so such a register
+held the PREVIOUS run's leftovers and the runner's "stored into its own code" check saw it only when
+those happened to be `0`. The trade is a deterministic entry state for an accident; what still
+catches an unloaded base register is the image comparison against the C core, which names a pixel
+diff rather than a register.
+
+## Phase 11 — the RASTER MODEL (`src/raster.c`), and why it is a shared `.c`
+
+A GEM application draws through the VDI, so `trap #2` is not a call whose effect can be a no-op: it
+is the program's **output**. Modelling it means modelling ST pixels.
+
+### Modeled
+
+> An **ST device-format raster**: planes interleaved a 16-pixel word at a time, most significant bit
+> leftmost. Pixel *(x, y)* of plane *p* is bit `15 - (x % 16)` of the word at
+> `addr + y*wdwidth*2*nplanes + (x/16)*2*nplanes + p*2`. One to eight planes; a one-plane raster is
+> the same formula with no interleave.
+>
+> ...and the **sixteen VDI logic operations** over it, bit by bit: op *n*, written `b3 b2 b1 b0`,
+> answers `b(3 - ((S << 1) | D))`. `RASTER_OP_S_ONLY` (3) is a plain copy and `RASTER_OP_S_OR_D` (7)
+> is the transparent-sprite mode; the other fourteen are implemented rather than left to a call site
+> to discover.
+
+**A pixel at a time, deliberately.** A real VDI moves words, with edge masks, a shift between
+differing source and destination alignments and a separate first/last-word path. That is perhaps
+twenty times quicker and three more places for an off-by-one — and an off-by-one *both sides would
+share*, because they run the same code, so no differential could see it. The per-pixel form is the
+operation's definition. The runs that use it move a few hundred thousand pixels at most.
+
+**One pixel's address is resolved ONCE, not once per plane.** The interleave formula is a division, a
+modulo, two multiplies and a high-byte test, and every plane of a pixel is the *same* mask one word
+further on — so `raster_locate()` returns a `raster_at_t` (plane 0's byte plus the mask) and the
+drawing loops step it by `RASTER_WORD_BYTES`. Measured 7.2x on the model's own cases. **The per-pixel
+semantics are unchanged**: this is the same address the formula gives, computed in one place instead
+of once per plane, and the single-pixel helpers are implemented over it rather than beside it, so
+there is still one addressing. Word-parallel drawing is still *not* done, for the reason above.
+
+**The COPY DIRECTION is chosen.** Source and destination may be the same raster and may overlap —
+scrolling a window is exactly that — and a copy that always ran top-left to bottom-right would
+re-read pixels it had already written and smear the source across the raster. Rows run backwards when
+the destination is BELOW the source and columns backwards when it is to the RIGHT, the ordinary blit
+rule: every source pixel is then read before the write that would have overwritten it. Chosen
+unconditionally rather than only on overlap, because for disjoint rasters the two orders write
+exactly the same bytes, and a test of "do these overlap?" is one more branch nothing would exercise.
+
+The limit that leaves, stated: direction selection is the right answer for the operations that IGNORE
+the destination bit (`RASTER_OP_S_ONLY` and friends). For one that reads it — `S_XOR_D` over an
+overlap — no ordering reproduces a read-all-then-write snapshot, and a real VDI does not produce one
+either. The reference's overlap cases therefore use the copy operations, where the two agree.
+
+### It is a SHARED `.c`, not a header of inlines, and it is STATELESS
+
+`src/raster.c` and `src/gem.c` are the only kit sources compiled into **both** shared objects:
+`kit.mk`'s `SRC` sweeps them into every candidate and its `$(ORACLE)` rule names them explicitly. So
+"the oracle's `trap #2` and a reconstruction's `os_vdi()` draw the same pixels" is true by
+construction rather than by two transcriptions agreeing — which is what every other model in this
+file has to settle for (the shim mirrors `src/psg.c`, `src/hw.c`, `src/dosound_log.c` by hand).
+
+That arrangement has one hazard and one answer. Two shared objects in one process each carry a copy
+of these symbols, and a flat-namespace loader may bind both references to whichever copy it saw
+first. **Neither file holds any state** — every byte they read or write is in the image, workstation
+attributes included (Phase 12) — so which copy runs cannot matter. That is why there is none.
+
+They also **refuse nothing themselves.** `os_refused()` is the candidate's tally and the oracle does
+not link it, so every "cannot serve this" is a `return 0` and the caller turns it into that side's
+refusal: `shim.c`'s `g_unmodeled`, or `os.h`'s `os_gem_trap` wrapper. The same split lets the
+off-image effects be *reported* through an `os_event_t` out-parameter instead of logged, because each
+side owns a different ledger (Phase 13).
+
+### What it does NOT capture
+
+* **`fd_stand = 1`, the VDI's STANDARD format** (planes consecutive rather than interleaved), is a
+  different layout and is **refused**, not misread as a device-format raster.
+* **No plane conversion.** A copy between rasters of differing `fd_nplanes` is refused.
+* **No scaling.** The extent is the SOURCE rectangle's; the destination rectangle contributes only
+  its top-left corner, which is what `vro_cpyfm` does and `vrt_cpyfm`/`vr_trnfm` (unmodeled) do not.
+* **No word-parallel timing.** The model says nothing about how long a copy takes, which matters on
+  target and is invisible here (`docs/on-target-execution.md`).
+
+### What pins it
+
+`test/test_os_model.py` carries a **second implementation** of the format and of the sixteen ops,
+written from the format's own definition rather than from `raster.c` — one explicit lambda per
+operation, not the truth-table shift the C uses, so a wrong shift has something to disagree with. It
+runs all sixteen ops plus five addressing shapes (a shift within a word, a copy crossing a word
+boundary, a negative destination, a destination past the edge, and a reversed source rectangle) —
+and three OVERLAPPING copies inside one raster, one per direction the choice has to get right
+(destination below the source, to its right, and above it). The reference models the copy as
+read-all-then-write, which for those operations is what a direction-chosen copy produces.
+Measured 2026-09-06, six mutants: reversing the truth-table index reddens 21 cases, permuting the
+plane stride reddens 31, dropping the destination extent check reddens 3 and makes 61 more
+un-runnable (the reference iterates the unclipped rectangle), and forcing either copy direction
+constant reddens exactly the one overlap case that needed it. The sixth is the direction walk's own
+hazard: it counts to an end rather than testing an ordering, so dropping the empty-range guard in
+front of it turns a fully clipped copy into a runaway and takes the whole probe down (150 cases).
+`clip_entirely_out` is the case that reaches it.
+
+---
+
+## Phase 12 — the VDI and AES OPCODES (`src/gem.c`)
+
+`trap #2` selects the subsystem in D0 (AES `0xc8`, VDI `0x73`) and points D1 at a parameter block of
+array pointers: AES `{contrl, global, intin, intout, addrin, addrout}`, VDI
+`{contrl, intin, ptsin, intout, ptsout}`. The opcode is `contrl[0]`.
+
+### Modeled
+
+| opcode | call | what the model does | reached by |
+| ---: | --- | --- | --- |
+| 100 | `v_opnvwk` | handle `1` into **`contrl[6]`** (where the DRI binding reads it), `intout[0..1] = 319/199`, `intout[13] = 16`, every other reported slot ZEROED; installs the attributes `work_in` asked for | Bubble Ghost |
+| 101 | `v_clsvwk` | clears the recorded handle | none yet |
+| 3 | `v_clrwk` | clears the whole screen (320x200x4 = 32,000 bytes) to colour 0 | Bubble Ghost |
+| 8 | `v_gtext` | the string in `intin`, in the current text colour, through the synthetic font below | Bubble Ghost |
+| 12 | `vst_height` | records the requested height; answers `ptsout[0..3] = 8, 8, 8, 8` | Bubble Ghost |
+| 22 / 25 | `vst_color` / `vsf_color` | stores the pen, **clamped to 0..15**, and echoes what it set | Bubble Ghost (25) |
+| 23 / 24 / 32 | `vsf_interior` / `vsf_style` / `vswr_mode` | stored and echoed; the INTERIOR is read by `vr_recfl` (below), the other two by nothing | none yet |
+| 109 | `vro_cpyfm` | Phase 11's raster copy between two MFDBs | Bubble Ghost |
+| 114 | `vr_recfl` | fills `ptsin[0..3]` on the screen per the fill interior (below) | Bubble Ghost |
+| 122 / 123 | `v_show_c` / `v_hide_c` | a Phase 13 ledger entry; the cursor is not in the image | none yet |
+| 124 | `vq_mouse` | the poked mouse state, **not consumed** | Bubble Ghost |
+| 128 | `vq_key_s` | the poked shift mask, likewise | Bubble Ghost |
+| 129 | `vs_clip` | stores the rectangle, normalised, and the on/off flag | none yet |
+| AES 10 / 19 / 77 / 78 | `appl_init` / `appl_exit` / `graf_handle` / `graf_mouse` | ap_id 0; success; handle 1 + four 8-pixel cell sizes; a ledger entry | Bubble Ghost (10, 77, 78) |
+
+**"Reached by" is per this workspace, and it is mostly EMPTY.** Bubble Ghost is the only GEM program
+here (`projects/bubbleghost/notes/frontend.md` §1 lists its calls: VDI 100, 3, 8, 12, 22, 25, 109,
+114, 124, 128 and AES 10, 77, 78); the rest are modeled for completeness, and "none yet" is a warning
+about how much of this table only the kit's own probe has ever run. It is also why the two-door cases
+below loop the whole table rather than sampling it.
+
+### `v_opnvwk` installs the CALLER's attributes, and writes the whole `work_out`
+
+Two facts a caller depends on and the model used not to keep.
+
+**The attributes come from `work_in`.** `intin[6..9]` are the text colour, the fill interior, the fill
+style and the fill colour a real VDI installs from the array the program passed; opening a
+workstation *is* that installation. (Bubble Ghost passes 1 in every one of `work_in[0..9]`, so its
+fills are SOLID in pen 1 — a model that installed a hollow default instead drew nothing where the
+game draws a box.) The three the array cannot express — the writing mode, the text height, the clip
+flag — take the VDI's own defaults.
+
+**Every reported `work_out` slot is written.** The call answers `contrl[2] = 6` pairs and
+`contrl[4] = 45` entries, and fills three of them; the other 48 are ZEROED rather than left, because
+a caller walking what the call says it wrote would otherwise read its own uninitialised memory back
+as workstation attributes. Zero is not a fabricated attribute table — it is the absence of one, and
+it is the same absence on both sides.
+
+### `vr_recfl` reads the FILL INTERIOR before the fill colour
+
+`vsf_interior` decides the question a fill asks: **hollow (0)** paints the background — colour 0 —
+and ignores the pen entirely; **solid (1)** paints the fill colour. **Pattern (2), hatch (3) and
+user-defined (4)** each need a pattern table this model does not have, and are **refused by name**
+rather than filled solid, which would draw pixels no real machine draws. The interior a run starts
+from is `work_in[7]`, or whatever `vsf_interior` last set.
+
+Every serviced VDI opcode also writes `contrl[2]` (ptsout PAIRS) and `contrl[4]` (intout entries),
+because a caller reads them and leaving the previous call's values standing is a wrong answer, not a
+missing one. Anything else — every other VDI and AES opcode — is **refused by opcode**.
+
+### The workstation state lives IN THE IMAGE
+
+`vsf_color` sets a fill colour a later `vr_recfl` reads. That state has to be somewhere both sides
+agree on, and the two sides are two shared objects with separate storage — so C statics would have to
+be reset and re-seeded per run, one more model for `harness.arm_candidate` to arm and one more to
+forget. In the image it is an ordinary test input **the byte diff already covers**: a reconstruction
+that sets the wrong fill colour diverges there, before it has drawn anything.
+
+It sits at `OS_VDI_STATE` (0x628, 28 bytes) **inside the harness-poked block**, with the mouse
+(0x620), the shift mask (0x626) and Phase 13's console key queue (0x644), for the reason the console
+key is there: under a program that
+covers those addresses they are the game's own bytes, and every guard keyed on the block then applies
+unchanged. `shim.c` therefore tallies every serviced VDI call in `osh_poked_input_calls`, so
+`emu._vet_no_poked_input_read` rejects such a run exactly as it rejects a `Bconin`.
+
+A fresh image is all zeroes, which is **not** a workstation's default state; `v_opnvwk` installs the
+defaults, as opening one does on a real machine. A case entering a program below its own `v_opnvwk`
+pokes them with `harness.vdi_state()`.
+
+### "The screen" is a DECLARED INPUT, because `Setscreen` is still a no-op
+
+An MFDB whose `fd_addr` is 0 means the VDI's own screen. The model's screen is
+`OS_VDI_STATE + OS_VDI_OFF_SCREEN`, and **zero there selects `OS_SCREEN_BASE`** — so a case that
+declares nothing draws where `Physbase`/`Logbase` already point.
+
+It is a declared input rather than something `Setscreen` sets, and that is a deliberate limit worth
+stating plainly: XBIOS `Setscreen` remains modeled as a **no-op** (it writes hardware, and changing
+that would alter every existing project's runs for a fact no case has ever needed). A game that moves
+its logical base — Bubble Ghost draws into `Logbase - 32000` — states the resulting address as an
+input, the same treatment every other un-modelable machine fact gets in this file. The residual is
+the standard one: **a wrong `Setscreen` is invisible to the differential**, and only shows up on
+target (`docs/on-target-execution.md`).
+
+Note also that this model draws into the base a case declares, which for a real VDI is the LOGICAL
+screen (`Logbase`). The physical base is not modeled at all: nothing displays anything here.
+
+### The font is SYNTHETIC and is NOT TOS's
+
+The kit has no ST system font and may not ship a copy of one. `v_gtext` draws through a glyph set
+defined in one line (`raster.c`): **row *r* of character *c* is *c*'s low byte rotated left by *r*.**
+Every character has a distinct 8x8 pattern (two glyphs agreeing on every row would have to agree on
+row 0, which is the character itself), it is a pure function of the character, and it resembles no
+typeface.
+
+What that buys: both sides draw the **same** pixels from the same parameter block, which is the whole
+of what a differential can pin. What it does not: text that reads as text. **Pixel fidelity to TOS is
+an on-target matter**, and this model says nothing about it.
+
+Three smaller non-captures in the same area, each stated rather than left to be discovered:
+
+* **Alignment is the VDI default** (left, baseline): `ptsin[1]` is the baseline, so the glyph's eight
+  rows occupy `[y - 7, y]`, and `vst_alignment` (39) is unmodeled and refused.
+* **Only the glyph's set bits are written**, in the text colour. The cell background is left alone and
+  the writing mode is not consulted — the model records `vswr_mode` and no drawing operation reads it.
+* **The model has ONE font.** `vst_height` records what was asked and always answers the 8x8 cell;
+  TOS would select among its 6x6 / 8x8 / 8x16 system fonts and answer differently.
+
+### The colour index is the PIXEL VALUE, not a VDI pen
+
+The model writes the colour index straight into the planes. Real TOS maps VDI **pen** numbers through
+a table (in low resolution pen 1 is not hardware index 1), so a reconstruction verified here will
+draw the right shapes in the wrong colours on a real machine. Not modeled because the table would be
+transcribed from memory rather than measured; closing it is a 16-entry table in `gem.c` plus a
+hardware check. Same class as the `Setscreen` residual above: invisible to the differential by
+construction.
+
+### The parameter block is BOUNDS-CHECKED, and the check is done in 64 BITS
+
+`pblk` and the five array pointers come straight off the emulated program's stack, so every word the
+model reads or writes through them is checked against the image and a failure **refuses the whole
+call**. Writes already made when a later access faults do not matter: a refused call throws the case
+away rather than comparing it.
+
+**The sum `base + index * 2` is taken in 64 bits and only then bounded.** A pointer near the top of
+the address space plus an array index WRAPS in 32-bit arithmetic and lands back in low memory, so a
+`contrl` of `0xfffffffe` used to address `0x00000004` — inside the image, so the bounds test passed
+and the model read and wrote the harness's own staging area while reporting the call served. The
+parameter block's own five slots are read with the same short-circuit: once one is unreachable the
+rest are being fetched through an address the model has already refused.
+
+### CLIPPING APPLIES ONLY WHERE THE DESTINATION IS THE SCREEN
+
+`vs_clip`'s rectangle is in SCREEN coordinates, so it governs a draw onto the workstation's screen —
+an MFDB whose `fd_addr` is 0 — and nothing else. A copy into a memory MFDB is not clipped, **including
+one whose `fd_addr` happens to point at screen memory**: a raster named by address is a raster, and
+the VDI clips it no more than it clips a sprite bank. That is the VDI's rule and not an omission of
+this model's; it is stated here, and in `gem.c` beside the code, because it reads as a bug to anyone
+who meets the second case first.
+
+The rectangle is read ONCE per call and narrowed into the loop bounds, rather than tested per pixel —
+five image reads per pixel for a fact that cannot change mid-call. Narrowing the loop is also what
+makes a garbage rectangle a failure instead of a hang: four signed words off the emulated stack can
+span 65,536 steps of nothing.
+
+### Handles are NOT validated
+
+`contrl[6]` is read for nothing but `v_opnvwk`'s reply. Bubble Ghost's `init_gem_and_screens` calls
+`graf_handle` four times into one scratch local and throws the result away, so the handle it passes
+to `v_opnvwk` is a BSS zero — and TOS tolerates it (`projects/bubbleghost/notes/frontend.md`). A
+model that checked handles would refuse a run the real machine serves.
+
+### What pins it
+
+`test/test_os_model.py`, through `test/os_model_probe.c`, which drives **both doors in one process**:
+`shim.c`'s `trap #2` decode and `os.h`'s `os_gem_trap()` wrapper on the same parameter block and the
+same starting state. That comparison runs **once per modeled opcode** — all seventeen VDI ones and all
+four AES ones, from a table the probe loops — and asks three things of each: that the two doors left
+the same bytes in every band the model may write, that they recorded the same LEDGER entries (the one
+thing the doors do not share: `shim.c` keeps the oracle's stream and `src/os_log.c` the candidate's),
+and that a serviced VDI call bumped `osh_poked_input_calls` while an AES one did not.
+
+Plus every opcode's outputs and `contrl` counts, the colour clamp at both ends, `v_opnvwk` under two
+different `work_in` arrays (so a swapped attribute slot shows) and with both `work_out` arrays
+pre-filled (so the zeroing shows), the fill interior in all five values, `vq_mouse` twice over (to
+show it does not consume), `vs_clip`'s normalisation, and `v_gtext`'s idempotence.
+
+Measured 2026-09-06, six mutants: drawing text from the top of the cell instead of the baseline
+reddens 1 case, filling with the text colour instead of the fill colour reddens 1, not writing
+`contrl[4]` reddens 11, dropping the `work_out` zeroing reddens 2, reading the fill colour instead of
+the fill interior reddens 7, and dropping the `trap #2` poked-input tally reddens 17. A seventh —
+taking the parameter block's `base + index * 2` in 32 bits again — does not merely redden: it
+crashes the probe outright, 148 cases, which is what writing through a wrapped pointer looks like.
+
+---
+
+## Phase 13 — the CONSOLE, `Fseek`, `Bconout`, and the OFF-IMAGE OS EVENT LEDGER
+
+Every kind of call that hands a byte to a device rather than storing one — the console, the serial
+line, the printer, the IKBD — plus the process ENDING, the GEMDOS calls that were missing from the
+console model, the one accessor of the staged-file cursor the model never grew, and the one file
+call that deletes rather than reads or writes.
+
+### The ledger
+
+> **One ordered `(kind, value)` stream**, `OS_EVENT_LOG_MAX` = 4096 entries, kept on BOTH sides —
+> `oracle/shim.c`'s mirror and `src/os_log.c`'s — and compared by `harness.differential`
+> (`_vet_os_event_state`). Kinds: `OS_EVENT_CONOUT` (a console byte, from GEMDOS `Cconout`, one byte
+> of a `Cconws`, or `Crawio`'s write direction), `OS_EVENT_AUXOUT` (a byte to AUX:, from `Cauxout`),
+> `OS_EVENT_PRNOUT` (a byte to the printer, from `Cprnout`), `OS_EVENT_IKBD` (a command byte, from
+> BIOS `Bconout` to device 4), `OS_EVENT_GEM_MOUSE` (AES `graf_mouse`'s mode), `OS_EVENT_VDI_CURSOR`
+> (`v_show_c` / `v_hide_c`), and `OS_EVENT_PTERM` (the process ended, value = its exit code).
+
+The kinds have ONE Python home, `os_map.py`, pinned against `os.h` by `test_os_memory_map.py` the way
+the PSG ledger's are — `harness.py` re-exports them, and the kit's own `test_os_model.py` (which runs
+in a bare checkout and cannot import `harness`) imports them there instead of spelling literals.
+
+**The value is 32 bits wide although no kind needs more than 16.** That is deliberate headroom: the
+two ledgers still outside this stream — Dosound's (a command-list POINTER) and the hardware write
+ledger's (an address and a longword) — *could* fold into it the day retiring them buys something, and
+a width change afterwards would have to move every reader on both sides at once. **Nothing is
+migrated now**: Dosound and the hardware ledgers are working surfaces and stay where they are.
+
+**Why one stream and not four.** The order *between* them is a fact about the program too — an IKBD
+command issued before rather than after a screen clear is a different program — and four
+near-identical ledgers would be four places for one of them to stop being reset. It is Dosound's
+ledger generalised, with Dosound left where it is (it carries a list POINTER, not a byte, and
+retiring a working surface buys nothing).
+
+**Why it exists at all.** Modeled as no-ops these calls are unverifiable: a reconstruction that
+prints nothing, sends no IKBD command or leaves the GEM pointer on screen is byte-identical to one
+that gets them right. This is the only thing that can tell them apart. A reconstruction calls
+`os_cconout(byte)` / `os_ikbd_out(byte)`; an **on-target** build supplies its own `g_os_event` that
+issues the real trap and does not compile `src/os_log.c`, exactly as it supplies its own `g_dosound`.
+
+`src/gem.c` **reports** its events through an out-parameter rather than logging them, because it is
+one file compiled into both sides and each side owns a different ledger (Phase 11).
+
+### GEMDOS console: `Cconis` (0x0b), `Crawcin` (0x07), `Cnecin` (0x08)
+
+The **same one staged keystroke** `Bconstat`/`Bconin`/`Crawio` serve, through GEMDOS's door —
+deliberately one model and not a second, disconnected one, so a program that polls with `Cconis` and
+reads with `Cnecin` sees exactly the key a case staged, once. GEMDOS's console calls take no device
+argument, so there is no device to refuse.
+
+**WHAT ONE MODEL COSTS, measured against Bubble Ghost's own idiom** (this paragraph used to cite that
+idiom as the thing the shared queue serves, and it is the thing it cannot). Every key that program
+reads it reads as `while (Cconis()) Crawcin(); c = Cnecin();` — a FLUSH and then a blocking read — so
+the flush empties the very queue the read then needs, and no `console_keys` staging can put a key on
+the far side of it: on a real machine the key arrives AFTER the flush, which is a MOMENT and not an
+order. A run entered before such a flush cannot reach the read; a case has to enter AT the `Cnecin`
+with its own key staged, and `projects/bubbleghost/recreate/STATUS.md`'s front-end section is what
+that costs in slices. **Closing it means a second staged stream the flush does not drain**, of
+`os_console_take_key`'s shape — the same second stream `Cauxin` below asks for, which is why the two
+are worth doing together.
+
+* `Cconis` only LOOKS: `-1L` if a key is staged, 0 if not, never consuming and **never refusing**, so
+  a poll loop may run it as often as it likes. Same relation to the pair below as `Bconstat` has to
+  `Bconin`.
+* `Crawcin` and `Cnecin` **consume** the key and return the whole longword (`scancode << 16 | ascii`).
+  With nothing staged they **refuse**: the real calls BLOCK, and there is nothing here to wait for,
+  so any answer would be fabricated. The model never spins — a loop would hang the oracle instead of
+  failing it.
+* **They are ONE model.** On a real machine `Cnecin` honours `^C`/`^S`/`^Q` and `Crawcin` does not,
+  and neither echoes. The model has no signal delivery, no flow control and no echo, so the two are
+  the same function; they keep separate names so a reconstruction still reads as the call the
+  original made, and so there is a place to put a difference the day one appears.
+
+### The staged key is a QUEUE, up to `OS_CON_QUEUE_MAX` deep
+
+`harness.console_keys(["a", "b", "c"])` stages a WALK: `OS_CON_CHAR` holds what the next read
+returns, `OS_CON_QUEUE` (0x644, seven longwords) holds the ones behind it, and `OS_CON_PENDING` holds
+how many are left. Every console read the model has — `Bconin`, `Crawcin`/`Cnecin`, `Crawio`'s read
+direction — takes the head and shifts the queue up, so all of them see ONE ordered stream, which is
+what makes their being one model worth anything. With the walk exhausted a blocking read refuses
+exactly as it does with nothing staged. `harness.console_key(k)` is the one-element case.
+
+**A count the queue cannot hold is ONE key.** `OS_CON_PENDING`'s contract has always been "nonzero =
+a character is waiting", and a hand-written poke dict may put any nonzero longword there
+(`projects/joust/recreate/test/test_os_traps.py` does); the queue refines the field without replacing
+it, so a count above `OS_CON_QUEUE_MAX` is read as that older spelling and served as a single
+keystroke. That is what keeps the one-key path writing exactly the one word it always wrote — which
+matters under a program whose own code covers this block.
+
+**The alternative, and when to reach for it.** A queue stages an ORDER the run drains at its own
+pace. For a key that must arrive at a particular MOMENT — inside a busy-wait the run cannot leave —
+the answer is still `differential(..., schedule=…)`, Phase 8's scheduled write.
+
+### GEMDOS `Fseek` (0x42)
+
+`Fseek(offset, handle, mode)` over the staged-file cursor: mode 0/1/2 from the start, the current
+position or the length, returning the new absolute position. The offset is **signed**.
+
+**The bound is the file's reserved CAPACITY, not its length.** Seeking past the end is legal on real
+GEMDOS and is how a program extends a file it is writing, so a position in `(size, capacity]` is
+served and `os_fread` answers 0 bytes there. (That is what widened `os_fread`'s "bytes remaining"
+from a bare subtraction to a test: the old form wrapped to ~4 GB and would have served the whole
+image as file content.) Past the capacity there is no staging space at all — the next file's bytes
+begin — and a negative position is not a position; both **refuse** rather than clamp, because a clamp
+hands the program a cursor it did not ask for and then goes on serving reads from it.
+
+**A refusal is not an error return.** Real GEMDOS answers a bad seek with a negative error code, and
+a C library's `lseek` has a fallback path for exactly that (Bubble Ghost's `c_lseek` at `0x159dc`
+does). The model cannot tell "the call failed" from "the model cannot serve this", so it refuses the
+RUN, loudly and by name, rather than inventing an error code.
+
+### BIOS `Bconout` (0x03)
+
+**Device 4 only.** A byte written there is a command to the IKBD's 6301 — off-image by definition, so
+it becomes a ledger entry. Every other device (the console, the printer, the serial line, MIDI) would
+need a model of what receiving the byte does and is **refused**.
+
+One residual, named rather than left to be found:
+
+* **XBIOS `Ikbdws` (0x19) is still a no-op**, and it sends IKBD bytes too. It was left alone because
+  changing an existing modeled call alters every project's runs for a fact no case needs today; a
+  game that uses it instead of `Bconout` gets no ledger entry and no refusal.
+
+### GEMDOS `Cconout` (0x02), `Cconws` (0x09) and `Crawio`'s write direction (0x06)
+
+The three doors onto the console, all three an `OS_EVENT_CONOUT` entry per byte.
+
+* **`Cconws` returns the CHARACTER COUNT**, which is what real GEMDOS answers and what a C library's
+  `puts` adds up; it used to return 0.
+* **It measures the string before it logs a byte of it.** A string with no terminator inside the image
+  is refused only once the walk has run off the end, and a walk that logged as it went would have
+  pushed every byte it passed onto the ledger of a call the run then threw away. A refused call
+  leaves no trace on either side's ledger — the same rule `gem_dispatch` follows when it drops an
+  event a faulted call had already reported.
+* **`Crawio`'s WRITE direction is logged too.** It is console output, so it belongs in this stream;
+  leaving it out made a reconstruction that prints through it indistinguishable from one that prints
+  nothing. It must not consume a staged key — the two directions share one trap number — and it is
+  not tallied as a poked-input call, since a program that merely prints reads nothing. Bubble Ghost's
+  own `Crawio` sites are all reads, and its C library prints through `Cconout`.
+
+### GEMDOS `Cauxout` (0x04) and `Cprnout` (0x05) — the console's two siblings
+
+The other two character devices a GEMDOS program can write, each with **a ledger kind of its own**.
+
+**Why not one shared "a byte went out somewhere" kind.** A reconstruction that printed to the screen
+what the original sent down the serial line writes the same nothing to the image, and under one kind
+its ledger would compare equal too. The device is half of what the call did.
+
+**`Cauxout` has no result at all.** Real GEMDOS declares it `VOID Cauxout(INT16)`, so the trap
+answers the model's own `0` — the "serviced, no image effect" every no-op call here answers. There
+is no result to be faithful to, and nothing may read one.
+
+**`Cprnout` answers `OS_CPRNOUT_SENT` = `-1L`, always.** Real GEMDOS answers 0 when the character
+could *not* be sent (the printer timed out) and non-zero when it was; TOS's non-zero is `-1`. **The
+model's printer never times out** — there is no device to be busy and no clock to time it against —
+so the 0 arm is unreachable on both sides. A reconstruction's wrapper must test the result the way
+the original does (non-zero = sent) rather than compare it against `-1`: on target the real trap is
+what answers, and there the timeout is real.
+
+**`Cauxin` (0x03) stays REFUSED, and is the mirror of the pair above.** The console has a staged
+keystroke queue behind it; the serial line has nothing at all — no builder, no poked field, no way
+for a case to put a byte there — and the real call BLOCKS until one arrives. Every answer would be
+invented, so `os_cauxin()` refuses unconditionally and the oracle's dispatch leaves selector 3 on its
+`default` arm. The day a case needs to feed the line, the shape is `os_console_take_key`'s over a
+second staged stream.
+
+**Reached by:** Bubble Ghost's C library, one site each and none of them on a path the game takes —
+`c_auxout_write` @ `0x16ba8` (`c_write`'s AUX: arm) and `c_prtout_write` @ `0x16bd6` (its PRT: arm),
+both of which ignore what the trap returns; `c_conin` @ `0x16518` takes `Cauxin` on the AUX: handle.
+
+### GEMDOS `Fdelete` (0x41) — the one file call that ANSWERS a GEMDOS error
+
+`Fdelete(fname)` over the staged-file table: **0** when the name is there, **`EFILNF` (-33)** when it
+is not. Deleting **clears the entry's name**, which is the whole of what makes a slot gone —
+`os_fs_find_slot` skips a slot whose name starts with a NUL and `os_fs_entry` reports one as unused —
+so a later `Fopen` of the name **refuses exactly as it refuses a name that was never staged**, and a
+handle still open on the slot refuses on its next `Fread`/`Fwrite`/`Fseek`/`Fclose`. Real GEMDOS lets
+a program delete a file it has open and leaves the handle stale, so that is the same shape.
+
+**Why EFILNF is an ANSWER here while `Fopen`'s identical "no such name" is a REFUSAL.** They look
+like one situation and are two:
+
+* `Fopen` has to hand back a HANDLE, and a handle is the door onto CONTENT the harness never staged.
+  There is nothing to serve, and answering `EFILNF` instead would send the program down an error path
+  on what is almost always a staging mistake — so it refuses, loudly and by name.
+* `Fdelete` has nothing to serve. Its whole observable outcome is the return code and the table edit,
+  and **both are fully determined by the table, which is the model's entire filesystem**. "The
+  harness declares the filesystem" (Phase 4) means a name it did not stage is a name that does not
+  exist: a fact the harness stated, not a value this model invented. Deleting a file that is not
+  there is a legal, deterministic outcome, and it gets TOS's own code for it.
+
+That is the only GEMDOS error code the model answers with, and `OS_EFILNF` is the only one it spells.
+
+**Reached by:** Bubble Ghost's `c_unlink` @ `0x16868`, whose sole caller is `c_open`'s truncating arm
+(`mode & OPEN_MODE_TRUNCATE`) — which `c_creat` never asks for.
+
+### GEMDOS `Pterm` (0x4c) — the run ENDS, and `Pterm0` (0x00) deliberately does not
+
+**The oracle ends the run at the trap, as a clean "returned".** `handle_trap` sets the PC to the
+run's sentinel and returns, so `osh_run`'s loop stops there and reports the run as REACHED, exactly
+as one arriving at the function's `rts` does. There is nothing after a `Pterm` to execute, so
+anything else would be a truncated run reported as a failure — and the routines that end this way
+(Bubble Ghost's `c_exit`, Joust's quit tail) have no `rts` to be diffed at otherwise. No register is
+set: on the real machine `Pterm` never comes back, so whatever `D0` held at the trap is the program's
+own leftover and not an answer the model is making. A run's registers after a `Pterm` are the
+project's business, not a claim.
+
+**The exit code goes in the ledger, and that is what makes the call comparable at all.** No image can
+carry "this process ended, with status 2": a reconstruction that terminated where the original did
+and one that simply ran off the end of the function leave the identical bytes behind. So both sides
+record `OS_EVENT_PTERM`, `harness.differential` compares the streams, and a mismatch **fails by
+name** — a missing entry on one side is *who terminated*, a differing value is the exit code, and
+`_os_event_text` prints it as `Pterm(0x2)`.
+
+**The candidate's `os_pterm(code)` cannot end anything, and a caller MUST RETURN IMMEDIATELY after
+it.** It is a C function reached from the candidate's glue, and the only way back to the harness is
+to return. A reconstruction that goes on running past `os_pterm` has executed instructions the
+original never executed. This is the one call in the model whose contract is on the CALLER, so it
+gets two surfaces rather than a comment:
+
+* a continuation that **stores into the image** is caught by the ordinary byte diff. The oracle
+  stopped at the trap, so its bytes are the state at the termination and the extra store is a plain
+  divergence.
+* a continuation that **makes any further OS event** is REFUSED by `g_os_event` itself
+  (`src/os_log.c`), which latches the recorded `Pterm`. The oracle cannot produce an event after one
+  — its run is over — so a second on the candidate's side can only be a run that carried on, and
+  `harness.differential`'s refusal check names it before anything is compared. `g_os_event_reset()`
+  clears the latch, which is why that function is now declared in `os.h`: it is part of the model's
+  contract rather than harness plumbing, and a C caller running two cases in one process must call it
+  between them.
+* **what neither sees** is a continuation that stores nothing and says nothing. That is left honestly
+  unpinned.
+
+**A TERMINATED RUN IS NOT A RETURNED ONE, and `osh_run`'s boolean cannot say which it was.** Both
+report REACHED. That matters for the idiom several projects pair a checkpoint diff with — a
+`pytest.raises(match="did not reach rts")` proving the routine never comes back — because on a path
+that ends in `Pterm` the oracle now *does* stop, and the proof passes by terminating rather than by
+never returning. Two things follow, both in this kit:
+
+* `emu.run` **refuses a run that terminated before a `stop_pc` it was given**: the case named the
+  point it wanted the state at and did not get there, so comparing at the termination instead would
+  be answering a different question. A run with no `stop_pc` is left alone — terminating IS an ending
+  for a routine that has no `rts`.
+* `emu.run` reports **`out_regs["terminated"]`** (from `osh_terminated()`), which is what a
+  never-returns proof over such a path should assert instead of the `rts` message.
+
+**`Pterm0` (0x00) is refused, although real GEMDOS answers it as `Pterm(0)`** — the one place this
+phase parts company with TOS on purpose. `osh_run` enters its trap arms on a **PC match** against
+`MAGIC_GEMDOS` rather than on a `trap #1` instruction, so a runaway PC walking the zero-filled vector
+page arrives at `0x120` on its own, and the "call frame" is then read off a zero stack: selector 0,
+return address 0. Modeling selector 0 would end every such run **cleanly** — a truncated image
+reported as a complete one — in place of the refusal that is the only sign the program went off the
+rails. Measured (2026-09-06): with `Pterm0` modeled, five of `projects/joust`'s `update_egg_physics`
+cases go green, each a deliberate runaway whose entire evidence is that it never ends. A zero
+selector is what "there was no GEMDOS call here" looks like, so it stays on the `default` arm. No
+game's C library needs it: Bubble Ghost's own exit path is `Pterm`.
+
+**Reached by:** Bubble Ghost's `c_exit_pterm` @ `0x14d16` (and `c_exit` @ `0x14d2c`, whose tail it
+is, reached from `crt0` and from `c_conin`'s Ctrl-C arm); Joust's quit tail at `0x11d4c` and its
+title screen's Ctrl-C branch.
+
+### GEMDOS `Malloc` on the CANDIDATE side
+
+`os_malloc(size)` (`src/os_heap.c`) mirrors the bump allocator `shim.c` services the trap with: round
+the request up to a word, hand back the pointer from BEFORE the bump. It exists so a reconstruction's
+`Malloc` wrapper calls the model instead of carrying a private copy of the shim's arithmetic — the
+copy is what drifts the day either changes.
+
+Three facts about the arena that used to be missing, all of them true on BOTH sides:
+
+* **`Malloc(-1)` answers a SIZE.** GEMDOS's "how big is the largest free block?" query reports
+  `OS_HEAP_LIMIT` minus the bump pointer, and moves nothing. It used to fall out of the rounding as
+  the arena BASE — a plausible-looking address, and the wrong answer to the question: a program that
+  then asked for that many bytes was asking for an address's worth of memory.
+* **The arena has a CEILING, and `os_malloc` refuses past it.** `OS_HEAP_LIMIT` is installed at
+  import the way `OS_HEAP_BASE` is (`os_set_heap_limit`, from `project.toml`'s `heap_limit` clamped
+  to `OS_FS_TABLE`). A block handed out over the staged-file table is a plain image write on BOTH
+  sides, so the two corrupted runs compare equal; the oracle's half of the same guard is
+  `emu._vet_heap_within_bounds`, which reads the pointer after the run, and this is the candidate's,
+  which fires at the call.
+* **Installing a base REWINDS the pointer to it.** Until it did, a candidate whose project moved its
+  heap allocated from `OS_HEAP_BASE_DEFAULT` — the wrong arena entirely — for every `os_malloc`
+  before the first `g_os_heap_reset()`.
+
+`g_os_heap_reset()` rewinds it, and `harness.arm_candidate` calls it before **every** candidate run,
+the poison re-run included: without that the second case in a process allocates where the first left
+off while the oracle starts from the base.
+
+**How far each side's arena grew is COMPARED per run** (`harness._vet_heap_pointers_agree`,
+`g_os_heap_pointer()` against the oracle's `heap`). The bump pointer is off-image on both sides, so a
+reconstruction that rounds a request differently, or allocates once where the original allocated
+twice, lands its NEXT block where the oracle's never was — and until that block's contents are
+written the byte diff sees nothing. **It is asked whenever EITHER side moved** — which is what
+catches an allocation the reconstruction never makes: a candidate that hands back a plausible
+address without calling `os_malloc` leaves the arena at the base, and its first block *is* the base,
+the one address at which the image diff agrees with an oracle that really allocated
+(`test_heap_base.py`, "a candidate that does not allocate"). It was once asked only of a candidate
+that had allocated, so that a project modelling `Malloc` privately did not redden; the one project
+doing that now calls `os_malloc` like everyone else.
+
+### What pins it
+
+`test/test_os_model.py` again: the trap cases run each GEMDOS/BIOS selector through `shim.c`'s own
+stack-frame decode and assert D0, the unmodeled tally and the ledger; the ledger case drives all four
+of the original kinds through the candidate in one order; `Crawio` is run both ways (the write logged
+and the staged key left alone; the read taken and nothing logged); the console-queue case walks three
+staged keys and then meets the refusal; and the Malloc cases compare the oracle's second block
+against the candidate's and drive the query, the ceiling and the base install.
+
+**The five calls added on 2026-09-06 are each driven through BOTH doors** — `shim.c`'s trap decode
+and the `os_*` helper a reconstruction calls — from the same starting image, since one model
+underneath means what a per-side door can break is an argument read from the wrong stack slot, a
+result the trap forgets to set, or an event one side's ledger never receives. `Fdelete` runs staged
+(0, and the slot's name gone), unstaged (`EFILNF`, and no OTHER slot removed) and then-`Fopen` (the
+refusal the delete leaves behind); `Cauxout` and `Cprnout` each assert their own kind and their own
+result; `Cauxin` asserts the refusal and an EMPTY ledger on both doors; `Pterm` asserts the clean
+`reached`, the exit code in the ledger, and — through a canary store planted immediately after the
+trap — that **nothing after it ran**; `Pterm0` asserts the refusal and that the trap RETURNED, which
+is the same canary read the other way. `test_os_refusal.py` adds `event_after_pterm`, which is the
+caller contract's own case: an event recorded after a `Pterm` moves the tally.
+
+**`test/test_pterm_run.py` pins the layer above the trap**, which needs a bound project and so runs
+on `kit_smoke_project`'s miniature one: that a terminating run comes back rather than being rejected,
+that the instruction after the trap did not execute, that `out_regs["terminated"]` tells the two
+endings apart (paired with an `rts` run, or the flag could be always-true), that a `stop_pc` the run
+terminates before is refused, and — through `kit_candidate.c`'s `g_pterm` and `g_pterm_then_speaks` —
+that a candidate terminating where the original did agrees while one that carries on is refused.
+
+**The `Pterm0` case pins the refusal and not the instruction cap**, which took a second pass to get
+right. Its planted routine has to CLEAN THE STACK before its `rts` — the terminating case does not
+need to and the refused one does — because without that the refused run pops the pushed selector as
+its return address, lands on PC 0 and walks the zero-filled vector page. Measured: at
+`PROBE_MAX_INSNS = 64` that walk halts eight instructions short of `MAGIC_GEMDOS` and the case passes
+for the wrong reason; at 256 it arrives, re-enters the trap on a zero frame, and `unmodeled` climbs
+to 4. The case now also asserts `reached == 1`, so a runaway is a failure rather than a coincidence —
+the asymmetry that hid it was `trap_pterm` asserting `reached` and `trap_pterm0` not.
+
+`test/test_os_refusal.py` pins every refusal site (`Crawcin`/`Cnecin` idle, `Cauxin`, the five
+`Fseek` shapes, the `Fopen` a delete leaves behind, the VDI/raster ones and the three patterned fill
+interiors) to the candidate's tally, and the mirror half — `Cauxout`, `Cprnout`, `os_pterm` and both
+`Fdelete` answers must move it by 0, or every case making one would fail the differential for no
+reason.
+
+Measured 2026-09-06, six mutants of the code this phase owned before the five calls: making `Cconws`
+log as it walks rather than measure first reddens 1 case, dropping `Crawio`'s write-direction ledger
+entry reddens 2, returning the arena base from `Malloc(-1)` reddens 2, dropping `os_malloc`'s ceiling
+refusal reddens 1, dropping the queue shift so every read returns the head reddens 1, and dropping
+the `trap #2` ledger entry in `shim.c` reddens 6.
+
+Measured 2026-09-06, fourteen more for the five calls, one per behaviour they own — all caught, none
+survived: `Fdelete` answering 0 for a missing name reddens 2 and leaving the slot staged reddens 4;
+dropping `Cauxout`'s ledger entry in `shim.c` reddens 1 and giving it the CONSOLE kind instead of its
+own reddens 1; `Cprnout` answering 0 rather than "sent" reddens 1; `os_cauxin` refusing without
+tallying reddens 2; `Pterm` returning from the trap instead of ending the run reddens 5, recording a
+fixed exit code reddens 4 and recording nothing reddens 4; the candidate's `os_pterm` recording
+nothing reddens 4; recording an event AFTER one instead of refusing it reddens 2; never setting
+`g_terminated` reddens 2 and serving a `stop_pc` the run terminated before reddens 1; and modeling
+`Pterm0` as `Pterm(0)` reddens 1 here — plus the five `projects/joust` cases named in its own section
+above, which is the measurement that decided it.
+
+**The `g_terminated` mutant SURVIVED the first sweep, and the hole was the sweep's.** `make` compares
+mtimes at about one-second granularity, so a script that edits `oracle/shim.c` and immediately builds
+gets the PREVIOUS `liboracle.so` — every `shim.c` mutant above was in fact being measured against a
+stale oracle by the four suites that load it, and only the ones the C probes catch (those recompile
+`shim.c` from source on every run) were reporting honestly. The three `Pterm` figures rose from
+2/2/2 to 5/4/4 once the sweep `rm`'d the artifact first. A mutation sweep over this kit must delete
+`oracle/build/liboracle.so` before each rebuild, and must count pytest's ERRORS as well as its
+failures — a mutant that makes a run overrun its instruction cap raises inside a fixture.
+
+`Cconws` logging as it walks was the one that SURVIVED the first sweep, and the hole it named was
+real: every case staged a terminated string, so nothing ever reached the refusal the ordering is
+about. `trap_cconws_unterminated` — a string laid at the end of the image with no NUL — is the case
+that closed it, and it asserts the empty ledger rather than only the refusal.
+
+A near-miss worth the same note, found while writing the `Pterm` canary: the store planted after the
+trap was first encoded `move.b #imm,(xxx).W` (`11 fc`) and not `.L` (`13 fc`), so it wrote to the top
+half of its own destination address and the canary could never change — a case that passed however
+the model behaved. **A planted-opcode probe asserting that something did NOT happen has to be shown
+happening once**, which is what the `Pterm0` case now does with the same store.
+
+---
+
+## Phase 14 — the XBIOS VIDEO AND COLOUR GROUP (`Setscreen`, `Setpalette`, `Setcolor`, `Vsync`)
+
+**Still modeled as no-ops, and now ORDERED EVENTS.** XBIOS `Setscreen` (0x05), `Setpalette` (0x06),
+`Setcolor` (0x07) and `Vsync` (0x25) touch no image byte and this phase does not change that: the
+oracle services each exactly as it did, and a candidate that calls the matching door writes nothing.
+What changed is that the call is now an entry in Phase 13's off-image OS event ledger, so a
+reconstruction that loads a picture's palette and one that silently drops it are separable.
+
+> **Four kinds**, in `os.h` and `os_map.py` like the rest: `OS_EVENT_SETSCREEN` (value = the
+> LOGICAL base), `OS_EVENT_SETPALETTE` (value = the address of the sixteen-word table),
+> `OS_EVENT_SETCOLOR` (value = `index << OS_SETCOLOR_INDEX_SHIFT | colour`), `OS_EVENT_VSYNC`
+> (value = 0). The doors are `os_setscreen(log, phys, rez)`, `os_setpalette(table)`,
+> `os_setcolor(index, colour)` and `os_vsync()`.
+
+**Why a door and not a comment.** The group is the one whose off-image effect is the POINT — a
+palette load is the picture the player sees — and it was reachable by nothing. A game's XBIOS
+trampoline is inside a verified core, so an on-target build with an include-path seam had no name to
+shadow: it could only *reissue* the call from the composition boundary AFTER the slice that would
+have made it. Bubble Ghost shipped that, and the cost was measurable by a person and by no check:
+`show_presentation` loads the presentation's palette and then hands control to a second program that
+plays a digitised voice, so the picture was in the DESKTOP's colours for the whole length of the
+speech (`projects/bubbleghost/recreate/atari/README.md`). The door removes the latency by giving the
+target something to substitute, and the ledger is what makes the substitution verifiable.
+
+**IT FOUND THREE MISSING CALLS ON ITS FIRST RUN**, which is the argument for the phase restated as a
+measurement. Bubble Ghost's `frame_blow_or_recover` and `frame_death_sequence` reproduced the trap
+trampoline's three save slots and made no call at all — the ghost's colour never changed when its
+breath ran out — and every battery over both routines was green, because the only difference was
+off-image. Adding the door reddened forty-five cases until the three `os_setcolor` calls were
+written.
+
+**WHAT THE LEDGER CANNOT CARRY, and it is Setscreen's.** An event is one 32-bit value and that call
+has three arguments, so the entry is the logical base alone; the physical base and the resolution
+reach a target build through the door's own parameters and are in no ordered stream. A reconstruction
+that passes the wrong physical base is still invisible to the differential. The residual is smaller
+than it was and it is not closed.
+
+**`tos_xbios_video_unmodeled = true`** in a `project.toml` drops the four kinds from BOTH streams
+before they are compared (`harness._vet_os_event_state`). It is for a project that models the group
+through seams of its OWN — Joust returns `Setpalette`'s table address and `Setcolor`'s colour word
+from the reconstruction so a test can compare them against the argument the ORACLE pushed; BuggyBoy
+routes all four through `src/os.c`'s empty `g_*` bodies, which its `.PRG` build replaces. Both
+declare it. The waiver reproduces exactly the coverage every project had before this phase existed,
+and retiring one is a reconstruction pass — every call site routed through its door — not a config
+change.
+
+## Still unmodeled (an honest raise is the right answer)
+
+**A SEQUENCE of bytes one address yields, one per read.** `$fffc02` is a Phase 7 slot now, which
+serves a handler that reads the port ONCE per entry (Phase 7, "The ACIA's DATA port") — and a
+declaration is one byte, so a routine that drains a multi-byte packet inside a single entry, or a
+poll loop whose two successive reads must DIFFER for it to terminate (the FDC status register Phase 7
+names as its non-goal), still has no model. The third shape would be a declared LIST, one entry per
+read, and nothing in the kit has one.
+
+**Zynaps's `ikbd_acia_isr` @ `0x14456` IS the routine waiting on it, and the slot above serves only
+part of it.** The handler reads the port once per PASS, and its last two instructions are
+`btst #4,$fffffa01 / beq.s $14456` — a branch back to its own entry with no `rte` between, so one
+interrupt can pop the port several times. Each pass is servable on its own; the LOOP is not, and it
+needs a sequence on TWO addresses: the data port's successive bytes, and a GPIP whose bit 4 must
+change from asserted to idle for the loop to end (a STATIC slot cannot say that, which is the same
+non-goal the FDC poll is excluded under). `projects/zynaps/recreate/STATUS.md` records the surviving
+mutant that leaves — a candidate that drops the loop and services exactly one byte passes every
+drivable case.
+
+**A REGISTER THAT READS BACK WHAT THE RUN JUST WROTE.** Zynaps's boot programs the MFP's Timer B data
+register and then spins until it reads the value back (`move.b #$ac,$fffa21` / `cmpi.b #$ac,$fffa21`
+/ `bne`, at `0x10626` and `0x10664`, and twice more in `title_attract_loop`). Neither half of the
+model fits: unmodeled, the read answers `0` and the spin never ends; declared as a Phase 7 slot, the
+run's own store makes the seed STALE and the case is refused — correctly, because the seed describes
+the byte the chip held on ENTRY. The shape it wants is Phase 6's YM2149 register FILE one address
+over: a slot whose write updates what a later read is served, which is not a fabrication because the
+value is one the run itself produced, identically on both sides. Zynaps slices around the four spins
+rather than model them; `projects/zynaps/recreate/STATUS.md` records the twenty bytes that costs.
+
+`Dgetdrv` (0x19) appears in Joust and is **not** modeled: its answer is a property of the machine the
+harness does not have. `Pexec`, `Cauxin` (0x03), `Pterm0` (0x00), GEM opcodes outside the set in
+Phase 12, and every BIOS selector but `Bconstat`/`Bconin`/`Bconout(dev 4)` are in the same position.
+They raise. `Cauxin` and `Pterm0` have reasons of their own rather than "nobody has needed it" —
+Phase 13's `Cauxout`/`Cprnout` and `Pterm` sections say what each would take.
+
+`Pterm` (0x4c) and `Fdelete` (0x41) used to be on this list and are modeled as of 2026-09-06; the
+note that `Pterm` "ends the process and never returns, so there is no post-state to diff" was the
+right observation and the wrong conclusion — the run ends at the trap as a clean `reached`, and what
+the image cannot carry goes in the event ledger instead.
+
+## Phase 14 — GEMDOS `Fsetdta` (0x1a) / `Fsfirst` (0x4e)
+
+**Modeled.** A per-run DTA address (`g_os_dta`, shared through `os.h` exactly as the staged-file
+window's base is). `Fsetdta(dta)` records it. `Fsfirst(pattern, attr)` matches the name at `pattern`
+against the staged-file table (the same lookup `Fopen` uses) and, when found, writes a minimal
+directory entry at the DTA — the 13-byte name at `+0x1e` and the file's size at `+0x1a` — then answers
+`0`. The size comes from the slot's `OS_FS_OFF_SIZE`, so it is the same staged length `Fread` serves.
+
+**Why it exists.** A boot that learns each file's length by *enumerating the directory* (rather than
+storing it in its own resource table) needs `Fsfirst`; Platinum/Kult's `load_resource_list`
+(`0x106f8`) sets the DTA, calls `Fsfirst` per name, then reads the size from `DTA+0x1a` before the
+`load_resource` that opens it. Without the trap the oracle raises and the loader can never be diffed.
+
+**Not captured.**
+
+- **An unstaged name is a REFUSAL.** `os_fsfirst` tallies through `os_refused()` and answers `-1`; the
+  shim sets `modeled = 0`. This is `Fopen`'s rule and for the same reason: the harness declares the
+  filesystem, so a name it never staged is a call it cannot answer. A case stages every name the
+  routine looks up.
+- **No `Fsnext` (0x4f).** The model holds no search cursor, so a second match has no meaning; a
+  reconstruction must mirror one `Fsfirst` per name. Kult issues no `Fsnext`, and the shim refuses
+  the selector rather than fabricate "no more files".
+- **The directory entry is minimal.** Only the name and the size are written, not the attribute,
+  time/date or cluster fields a real TOS fills in. Both sides write the same minimal entry, so a
+  differential is exact; a reconstruction that reads one of the *other* fields would be reading a
+  zero the model wrote rather than the machine's value — stated here so it is not mistaken for a
+  modeled field. Kult reads only `+0x1a`.
+- **Attributes are ignored.** The `attr` word is not compared against the entry; a search for any
+  attribute finds any staged file. Nothing in the workspace needs the filtering.
