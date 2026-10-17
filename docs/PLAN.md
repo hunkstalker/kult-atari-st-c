@@ -65,7 +65,10 @@ Regla de oro: una pieza está hecha solo si su prueba diferencial pasa.
   `text.c`, `sound.c`, `rooms.c`, `loop.c`, …).
 - **Nombres:** `snake_case` descriptivo; comentario con la dirección original en
   cada función y en cada global.
-- **Globals:** con nombre en `include/addrs.h` (hoy `A_*`).
+- **Globals:** `work/names.txt` es la **única fuente**; `include/addrs.h` se
+  **genera** con `tools/gen_addrs.py` (`make addrs`). Cada `var 0xADDR nombre`
+  produce `#define A_NOMBRE 0xADDR`. `test/test_conventions.py` falla si el
+  fichero no coincide (y prohíbe nombres duplicados y funciones sin nombre).
 - **Estado del juego:** decidir en el piloto entre (a) **imagen plana + vistas
   tipadas documentadas** (más directo, cercano al original) o (b) **structs
   tipados** (más legible). Propuesta: (a), documentando cada campo.
@@ -73,6 +76,26 @@ Regla de oro: una pieza está hecha solo si su prueba diferencial pasa.
   qué pruebas) + un mapa de módulos en `docs/mapa/`.
 - **Identificación total:** cada parte del juego debe poder localizarse por su
   nombre y su procedencia.
+
+### 4.1 Convenciones confirmadas en el piloto de la paleta (2026-10-17)
+
+- **Nombres:** el símbolo C es **exactamente el nombre de `work/names.txt`**
+  (p. ej. `set_palette_entry`, `xbios_setpalette`, `set_palette_current`). Así la
+  búsqueda por nombre sirve en los dos repos y `names.txt` es la única fuente de
+  nombres; el `.c` agrupa por subsistema. (Se descartó el prefijo de módulo
+  `palette_set_entry`.) Si una pieza no tiene nombre, se añade a `names.txt`.
+- **Comentarios:** cabecera de fichero con el subsistema, el estado que toca y la
+  cadena de control real; cada función con `/* 0xDIR — qué hace */`, citando los
+  registros que usa.
+- **Estado del juego:** (a) **imagen plana** `uint8_t *img` + direcciones con
+  nombre en `include/addrs.h` (`A_*`); acceso big-endian con
+  `be16/be32/wr16/wr32`. Cada campo se documenta en su módulo y en `addrs.h`.
+- **Registros:** los de entrada van en `regs={"d0":…,"a6":…}` (el glue pasa el
+  mismo valor al candidato); los de salida que importan **se devuelven** (p. ej.
+  el A6 que avanza el guion) y la prueba los compara con `info["regs"]`.
+- **Prueba:** `test/test_<módulo>.py`, una prueba por entrada del decomp
+  (`/* 0x… */`); se comparan imagen, registros y el ledger de eventos
+  off-image (p. ej. `harness.OS_EVENT_SETPALETTE` para XBIOS Setpalette).
 
 ## 5. Verificación
 

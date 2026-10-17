@@ -6,9 +6,13 @@ Aquí va el C moderno y legible, un fichero por subsistema (`palette.c`,
 
 Convenciones y primera tarea (piloto de paleta): ver `../docs/PLAN.md`.
 
-Cada función: nombre descriptivo + comentario con su **dirección original**, p. ej.:
+Cada función: nombre **igual al de `work/names.txt`** + comentario con su
+**dirección original**, p. ej.:
 
 ```c
-/* 0x162e2 — fija una entrada de la paleta (A_PAL_TABLE + idx*0xa -> A_PALETTE_PTR+2). */
-void palette_set_entry(uint8_t *img, uint32_t index) { ... }
+/* 0x162e2 — fija una entrada de paleta (A_PAL_TABLE + idx*0xa -> A_PALETTE_PTR+2). */
+void set_palette_entry(uint8_t *img, uint32_t index) { ... }
 ```
+
+Convenciones confirmadas (estado plano, registros de salida, pruebas): ver
+`../docs/PLAN.md` §4.1.

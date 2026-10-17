@@ -30,8 +30,6 @@ fn 0x10440 draw_text_box_variant     # idem (otra ruta de entrada)
 fn 0x12292 prompt_wait               # espera tecla/click tras mostrar un mensaje
 fn 0x13698 wait_frame                # sincronizacion de frame (VBL) + sondeo de input
 
-var 0x1a50e the_command              # opcode/command actual
-var 0x19eca cmd_jump_table           # tabla de punteros a manejadores de comando (indexada por opcode&0x3ff)
 
 # ==== subsistemas por frame ====
 fn 0x17e3c script_step              # ctx: avanza PTR_DAT_0001a822 y compara codigos de script 0x38/0x0c/0x0a
@@ -44,26 +42,9 @@ fn 0x10f8e advance_text_entry        # avanza D4 entradas [word len] desde A1 y 
 fn 0x108a2 print_word                # bucle con flags 0x40/0x80/0xc0 (equivale a printWord de ScummVM)
 
 # ==== recursos embebidos (offset de imagen + 0x10000) ====
-var 0x1d202 font_data                # CARAC.BIN (fuente)
-var 0x1d402 TEMPL_data               # TEMPL.BIN (plantillas de script)
-var 0x1a4e0 templ_ptr                # puntero actual dentro de TEMPL
-var 0x1a4dc cur_str_end              # fin de la cadena en curso
-var 0x1a55a cur_filename             # nombre del fichero a cargar en load_resource
-var 0x1a55e load_buffer              # destino de load_resource
-var 0x1a562 load_length              # longitud para load_resource
-var 0x1a45e screen_ptr_a             # buffer de pantalla A
-var 0x1a462 screen_ptr_b             # buffer de pantalla B
 
 # ==== input / objetos ====
 fn 0x14886 hit_test_objects          # recorre object_list (8 B/entrada) y fija the_command si acierta
-var 0x1a450 cursor_x                 # cursor x (pixeles)
-var 0x1a452 cursor_y                 # cursor y
-var 0x1a456 input_buttons            # bitmask de botones/teclas (bit2 = click/fuego)
-var 0x1a7ca object_list_begin        # inicio de la lista de objetos/spots
-var 0x1a7ce object_list_end          # fin de la lista
-var 0x1a776 command_hints_list       # lista de 16 hints/comandos
-var 0x1a81a selected_object          # entrada de objeto bajo el cursor
-var 0x1a81e selected_icon_ptr        # puntero al icono/hint seleccionado
 
 # ==== blit de sprites (planar) ====
 fn 0x124f8 blit_sprite               # ctx: escribe grupos de 4 bytes con mascara 0xf0f0f0f0 y rotacion (shift/flip)
@@ -72,8 +53,6 @@ fn 0x124f8 blit_sprite               # ctx: escribe grupos de 4 bytes con mascar
 fn 0x1929a ym_write                  # escribe registro/dato en $FF8800/$FF8802 (reg 7 = mixer)
 fn 0x18fc4 sound_timer_start         # MFP $FFFA13/07/19/1F + vector $134; arranca reproduccion
 fn 0x19084 sound_timer_stop          # limpia los registros MFP del timer de sonido
-var 0x192c2 sound_sample_ptr         # puntero/estado del sample en curso
-var 0x134 sound_timer_vector         # vector de interrupcion del timer B (sonido)
 
 # ==== carga de salas ====
 fn 0x13568 load_fond                 # carga FOND.PI1 (fondo de sala) en screen_ptr_b
@@ -93,6 +72,7 @@ fn 0x141ea run_text_entry_1          # FUN_00014138 sobre A6+1
 fn 0x162e2 set_palette_entry         # copia 5 words indexados + Setpalette
 fn 0x162da set_palette_current       # idem con indice de 0x1acf4
 fn 0x162ce set_palette_from_entry    # idem con indice de A6[1]
+fn 0x162d8 set_palette_advance       # addq.l #1,a6 + set_palette_current
 fn 0x11014 noop_11014                # `rts` (stub sin efecto)
 fn 0x121c4 copy_screen_a6            # addq.l #1,a6 + copy_screen
 fn 0x106e2 load_resource_list_a      # A5=0x1a3aa -> load_resource_list
@@ -169,9 +149,245 @@ fn 0x189aa object_info_wait          # ficha interactiva: 0x16dec hasta clic (bi
 fn 0x185e6 track_name_print          # nombre de pista/seccion (banco 0x3c534) + espera
 fn 0x14966 action_bar_hit_test       # hit-test de 0x1a6ae -> the_command + overlay B
 
-
-
-
-
-
+# ==== globales (direcciones de datos, base de carga 0x10000) ====
+# ---- screen buffers (crt0_init @ 0x135e2) ----
+var 0x1a45e screen_ptr_a    # buffer de pantalla A
+var 0x1a462 screen_ptr_b    # buffer de pantalla B
+# ---- input / cursor (wait_frame @ 0x13698) ----
+var 0x1a456 input_buttons    # bitmask de botones/teclas (bit2 = click/fuego)
+var 0x1a450 cursor_x    # cursor x (pixeles)
+var 0x1a452 cursor_y    # cursor y
+# ---- text bank cursor (FUN_00010f8e @ 0x10f8e) ----
+var 0x1a4dc cur_str_end    # fin de la cadena en curso
+# ---- text rendering (print_char @ 0x10838) ----
+var 0x1a50a cursor_text_x    # text cursor x (columns)
+var 0x1a50c cursor_text_y    # text cursor y (rows)
+var 0x1a46a screen_draw_base    # logical-vs-draw buffer offset subtracted by print_char
+var 0x1a4d8 color_table    # pointer to the font colour-expansion table
+var 0x1d202 font_data    # CARAC.BIN (fuente)
+var 0x1a508 text_end_flag    # set to 0xff when print_word reaches cur_str_end
+var 0x1a512 text_box_w    # text-box width (columns) measured by 0x10998
+var 0x1a514 text_box_h    # text-box height (rows) computed by the 0x9000 handler
+var 0x1a52e text_box_span    # box frame width in pixels (set by 0x10e66)
+var 0x1a530 text_box_y    # box top-left row in text cells
+var 0x1a532 text_box_x    # box top-left column in text cells
+# ---- overlay de texto (0x109fe / 0x10a88, modo alternativo del cursor) ----
+var 0x1acc6 mode_flag    # == 0x87 desactiva el overlay de texto
+var 0x1aa6a overlay_x    # posición X del overlay de texto
+var 0x1aa6c overlay_y    # posición Y del overlay de texto
+var 0x1a513 text_row    # fila/altura del overlay
+var 0x1ab45 text_sel_a    # selector de entrada del overlay A (0x41b76)
+var 0x1ab46 text_sel_b    # selector de entrada del overlay B (0x41586)
+var 0x1ab49 text_col    # ancho del overlay
+# ---- video / palette (set_palette @ 0x135da -> 0x16300) ----
+var 0x1a466 palette_ptr    # pointer to the 16-word colour table (XBIOS Setpalette arg)
+# ---- sprite blitter (blit_sprite @ 0x124f8) ----
+var 0x55b02 blit_scratch    # 4-byte nibble-expansion scratch buffer (image-visible)
+var 0xd8f0 save_desc    # screen save/restore descriptor (save @ 0x1258a, blit @ 0x124f2)
+# ---- resource loader (load_resource @ 0x1076a) ----
+var 0x1a55a cur_filename    # nombre del fichero a cargar en load_resource
+var 0x1a55e load_buffer    # destino de load_resource
+var 0x1a562 load_length    # longitud para load_resource
+var 0x1a47e file_handle    # last GEMDOS file handle (word)
+var 0x1a482 text_index    # text index stored by position_text (0x10fc4)
+# ---- cursor save/restore (FUN_0001060a @ 0x1060a, FUN_00010526 @ 0x10526) ----
+var 0x19ace cursor_save_dest    # dest pointer for the 16x16 restore
+var 0x199ce cursor_save_buf    # 16 rows x 16 bytes saved buffer
+var 0x199ca cursor_sprite_ptr    # pointer to the 16x16 cursor sprite
+var 0x19700 clip_x    # screen origin x (cursor coords are relative)
+var 0x19702 clip_y    # screen origin y
+var 0x1a48a cursor_hotspot    # nonzero enables the 4th word of the cursor
+var 0x1a44f ikbd_packet    # 5-byte IKBD packet copied by the handler
+var 0x1a570 skip_transition    # 0xff en wait_frame cuando el paquete pide botón
+var 0x1a752 clear_buf    # source buffer written to A:CLEAR.BIN
+var 0x1a439 clear_name    # "A:CLEAR.BIN" string
+# ---- FUN_000172ba: limpiar flag indirecto ----
+var 0x1a806 ptr_1a806    # puntero a un byte que se pone a 0
+var 0x1acaa w_1acaa    # word que se pone a 0
+# ---- script-VM text entry (FUN_00014138 @ 0x14138) ----
+var 0x41fb0 text_table    # tabla de entradas de texto (imagen 0x31fb0)
+var 0x1a49e dat_1a49e    # bit-LSB consumido por el efecto 'S'
+var 0x1a534 dat_1a534    # stride de fila del blit de texto
+var 0x1a4b2 dat_1a4b2    # fin de la lista de entradas de 3 bytes
+var 0x1a10a pal_table    # tabla de paletas (5 words por entrada)
+var 0x1acf4 pal_index_cur    # indice de paleta actual (byte)
+# ---- masked row blitter (FUN_00012698 @ 0x12698, FUN_000123c0 @ 0x123c0) ----
+var 0x1a538 blit_mask_first    # mascara de la primera palabra (calculada por 0x12698)
+var 0x1a53a blit_mask_last    # mascara de la ultima palabra
+var 0x1a53c blit_groups    # numero de grupos de 4 palabras del blit
+var 0xd8ea blit_d8ea    # byte de TOS comparado con 0x41 por FUN_0001215e
+var 0x1d402 TEMPL_data    # TEMPL.BIN (plantillas de script)
+# ---- interprete de animacion (FUN_000159d2 @ 0x159d2) ----
+var 0x23ee8 anim_table    # tabla de entradas de animacion (imagen 0x13ee8)
+var 0x1a4b6 anim_end    # puntero (long) al fin de la entrada actual
+var 0x1a472 anim_1a472    # word: A6[2] (parametro d0 del script)
+var 0x1a474 anim_1a474    # word: A6[3] (parametro d2 del script)
+var 0x1a476 anim_1a476    # word: se pone a 0
+var 0x1a478 anim_1a478    # word: se pone a 0
+var 0x1a47a anim_1a47a    # word: sign-ext de A6[1] del opcode 0xfe
+var 0x1a47c anim_1a47c    # word: sign-ext de A6[2] del opcode 0xfe
+# ---- despacho de comandos (run_command_keep_sp @ 0x103ae, FUN_00010630 @ 0x10630) ----
+var 0x1a50e the_command    # opcode/command actual
+var 0x1a4e0 templ_ptr    # puntero actual dentro de TEMPL
+var 0x1a7d6 call_stack    # pila de llamadas de script (0x13522/0x13552)
+var 0x1a826 run_stack    # A7 guardado por run_command (0x103a8)
+# ---- reveal pixelado (FUN_00012e2e @ 0x12e2e, FUN_00012ef6 @ 0x12ef6) ----
+var 0x1a532 rev_x0    # word: d0 (x) << 2
+var 0x1a530 rev_y0    # word: d1 (y)
+var 0x1a52e rev_w    # word: d2 (ancho) << 2
+var 0x1a49c rev_total    # word: d2 * d3 (total de pixels)
+# ---- motor de sprites de animacion (handlers de 0x159d2, engine 0x15bde) ----
+var 0x1a4c6 anim_spr_ptr    # puntero al sprite/descriptor activo (lo fija 0x15a90)
+var 0x27fe2 anim_tbl_27fe2    # tabla de entradas (walk_entry) del handler 0x15abe
+var 0x28ad2 anim_tbl_28ad2    # tabla de bitmaps indexada por 0x10f8e (handler 0x15abe)
+var 0x1a574 anim_1a574    # byte de flags del elemento (bits 0..2 significativos)
+var 0x1a46e anim_1a46e    # word: contador de pasos del elemento
+var 0x1a470 anim_1a470    # word: ancho (A6[1] & 0xfff8 >> 2)
+var 0x1a577 anim_1a577    # byte: A6[1] & 0x7f >> 1 (ancho/2)
+var 0x1a56a anim_1a56a    # word: 0x1f4 (retardo)
+var 0x1a578 anim_1a578    # byte: flag "primer frame"
+var 0x1a4a0 anim_1a4a0    # word: filas del blit de 0x15da6
+var 0x3b1ac anim_backup    # buffer de respaldo de 0x15da6
+# ---- seleccion de objeto bajo el cursor (FUN_00018d28 @ 0x18d28) ----
+var 0x1a81a selected_object    # entrada de objeto bajo el cursor
+var 0x1a81e selected_icon_ptr    # puntero al icono/hint seleccionado
+var 0x1a7d2 sel_1a7d2    # long: objeto seleccionado
+var 0x1ab4a sel_1ab4a    # byte: copia de 0x1acc9 - 1
+var 0x1acc9 sel_1acc9    # byte origen del contador
+# ---- lista de objetos y busqueda por clase (0x1778e/0x177bc, 0x166da/0x166ec) ----
+var 0x1a7ca object_list_begin    # inicio de la lista de objetos/spots
+var 0x1a7ce object_list_end    # fin de la lista
+var 0x1aa72 obj_tbl    # tabla de clases (byte/entrada)
+var 0x1a776 command_hints_list    # lista de 16 hints/comandos
+var 0x1ab48 1ab48    # byte: selector A por defecto
+var 0x1ad0f cur_class    # byte: clase del objeto bajo el cursor
+var 0x1ace6 class_idx    # byte: indice de clase en 0x1aa72
+var 0x1acd9 hit_mask    # byte: mascara de hit-test
+var 0x1acda hit_value    # byte: valor de hit-test
+var 0x1ace9 dat_1ace9    # byte: indice de la entrada del overlay (0x14966)
+var 0x1a75e dat_1a75e    # long: puntero a la entrada 6 B de 0x1a8f0 (0x14966)
+var 0x1a6ae tbl_1a6ae    # tabla de rects/acciones de 10 B (0x14966)
+var 0x1a74e dat_1a74e    # byte: mascara de hit-test guardada (0x167be/0x122ee)
+var 0x1a74f dat_1a74f    # byte: valor de hit-test guardado (0x167be)
+var 0x1ad20 dat_1ad20    # byte: contador del umbral de la animacion (0x14f24)
+var 0x1acec dat_1acec    # byte: fase/estado de la musica
+var 0x1acfd dat_1acfd    # byte: sub-estado
+var 0x1ad14 dat_1ad14    # byte: flag de transicion
+var 0x1ac06 dat_1ac06    # word: comando pendiente
+# ---- bucle principal (game_loop @ 0x101be) ----
+var 0x1acf2 dat_1acf2    # byte: umbral de comandos por frame
+var 0x1ace7 dat_1ace7    # byte: comandos ejecutados
+var 0x1abf8 dat_1abf8    # word: comando pendiente de objeto
+var 0x1ad0b dat_1ad0b    # byte: pausa del bucle
+var 0x1acac dat_1acac    # word: temporizador A
+var 0x1acaa dat_1acaa    # word: comando temporizador A
+var 0x1acb0 dat_1acb0    # word: temporizador B
+var 0x1acae dat_1acae    # word: comando temporizador B
+var 0x1acd3 dat_1acd3    # byte: flag de accion de objeto
+var 0x1ace8 dat_1ace8    # byte: contador de accion de objeto
+var 0x1ad0d dat_1ad0d    # byte: flag de carga/guardado de sala en curso
+var 0x1a750 dat_1a750    # byte: estado de la carga/guardado de sala
+var 0x1ad1d dat_1ad1d    # byte: flag de animacion de script (0x188ce)
+var 0x1aaf9 dat_1aaf9    # byte: comparado con $1acd2 en 0x188ce
+var 0x1ab08 dat_1ab08    # byte: habilita la segunda animacion de 0x188ce
+var 0x1ad00 dat_1ad00    # byte: indice rotatorio de 0x17480 (+5, tope 0x18)
+var 0x1a572 dat_1a572    # byte: flag de formulario/transicion de 0x1460a
+var 0x1ad0f dat_1ad0f    # byte: flags de entrada de 0x1460a (bit3 = formulario)
+var 0x1acc8 dat_1acc8    # byte: indice de objeto guardado por 0x1460a
+var 0x1acfe dat_1acfe    # byte: copia de $1acd2 guardada por 0x1460a
+var 0x1ad25 dat_1ad25    # byte: indice de tabla de texto pendiente (0x1460a)
+var 0x1acd8 dat_1acd8    # byte: flag puesto por 0x1682a tras cargar CLEAR.BIN
+var 0x1ad2c dat_1ad2c    # byte: contador de entradas de sample (0x18538)
+var 0x1a4d2 dat_1a4d2    # word: flag de fin del juego
+# ---- script_step (0x17e3c): punteros de guion y estado de overlay ----
+var 0x1a822 script_ptr    # long: puntero al byte actual del guion
+var 0x1aae0 ovl_entry    # base de la entrada de overlay [0..3]
+var 0x1aab3 1aab3    # byte: caracter actual
+var 0x1aab4 1aab4    # byte: flags de entrada
+var 0x1aab6 1aab6    # byte: atributo
+var 0x1aae1 1aae1    # byte: flags (bit5/bit6)
+var 0x1aad6 1aad6    # byte: eco del caracter
+var 0x1aadb 1aadb    # byte: eco del caracter
+var 0x1ad05 dat_1ad05    # byte: comando actual del guion
+var 0x1ad06 dat_1ad06    # byte: siguiente comando
+var 0x1ad07 dat_1ad07    # byte: flag de dos bytes
+var 0x1acf6 dat_1acf6    # byte: flags de modo
+var 0x1acf7 dat_1acf7    # byte: flag de fin de secuencia
+var 0x1acb2 dat_1acb2    # word: proximo umbral del guion
+# ---- comando de elemento / icono (FUN_000128a4, 0x1285a, 0x1296c, 0x129c8) ----
+var 0x1a772 elem_class    # puntero al descriptor; [3]&0xf8 es la clase buscada
+var 0x19e19 elem_tbl_19e19    # tabla de 6 bytes por clase (0x19e19..0x19ea9)
+var 0x19ea9 elem_tbl_19ea9    # fin de la tabla anterior
+var 0x1ab4c elem_1ab4c    # byte copiado de la entrada encontrada
+var 0x1ab4d elem_1ab4d    # byte copiado de la entrada encontrada
+var 0x1a252 elem_tbl_1a252    # tabla de patrones de 10 bytes (0x1296c)
+var 0x3b1ae elem_build    # bitmap construido por 0x1296c
+var 0x1a528 elem_1a528    # puntero guardado por 0x128a4
+var 0x1a52c elem_1a52c    # byte (alto) leido de 0x3b1ae
+var 0x1a52e elem_1a52e    # byte (ancho) leido de 0x3b1af
+var 0x1ab4e elem_1ab4e    # byte: clase del elemento
+var 0x1a532 elem_1a532    # word: x del elemento
+var 0x1a530 elem_1a530    # word: y del elemento
+var 0x2751e elem_tbl_2751e    # lista de entradas de elemento recorrida por 0x129c8
+var 0x31072 elem_tbl_31072    # tabla de texto referida por 0x129c8
+var 0x1ad0a dat_1ad0a    # copia de 0x1a851 usada por 0x128a4/0x120a8
+var 0x23e9c elem_tbl_23e9c    # lista de elementos de 0x12a4a (walk_entry)
+var 0x3b1ac elem_build2    # bitmap construido/leido por 0x12a4a
+var 0x1a484 dat_1a484    # word limpiada por 0x121fa
+# ---- save enmascarado (FUN_000127fa) ----
+var 0x1a4a2 save_1a4a2    # word: mascara de la ultima palabra
+var 0x1a4a4 save_1a4a4    # word: filas del save
+# ---- handlers de revelado por caja (FUN_00012ea2/12e08) ----
+var 0x1ab40 dat_1ab40    # byte: x0 de la caja
+var 0x1ab41 dat_1ab41    # byte: x1 de la caja
+var 0x1ab42 dat_1ab42    # byte: y0 de la caja
+var 0x1ab43 dat_1ab43    # byte: y1 de la caja
+# ---- input por frame / seleccion por cursor (0x1031c, 0x1478a/14798/147ce) ----
+var 0x1ab4f frame_1ab4f    # byte: si != 0 espera con el cursor bajo
+var 0x1ab44 1ab44    # byte: selector A pintado (0x1ab45 eco)
+var 0x1ab47 1ab47    # byte: selector B pintado (0x1ab46 eco)
+var 0x1a48a 1ab48a    # byte: flag de hotspot del cursor
+# ---- fila/paleta helpers (FUN_000159bc, FUN_00016210/230/27a) ----
+var 0x1a579 dat_1a579    # indice incremental de la tabla 0x2741e
+var 0x1acd7 dat_1acd7    # byte leido de la tabla 0x2741e por 0x16210
+var 0x2741e tbl_2741e    # tabla de bytes indexada por 0x1a579
+var 0x1ab60 dat_1ab60    # contador comparado en FUN_0001627a
+var 0x1a526 dat_1a526    # marca del ultimo umbral de FUN_0001627a
+var 0x1a8f0 list_1a8f0    # lista de entradas de 6 bytes (0x1627a, 0x178cc)
+var 0x1acd2 dat_1acd2    # byte comparado con el campo 1 de cada entrada
+var 0x1acd4 dat_1acd4    # contador de VBL (lo incrementa el handler de VBL)
+# ---- modo de escena / lista de objetos (0x1442c/0x1443e/0x14496/0x14588) ----
+var 0x1acc7 dat_1acc7    # byte: valor de modo que 0x1442c salva y restaura
+var 0x1accb dat_1accb    # byte: copia del modo anterior (0x1443e)
+var 0x1ad32 dat_1ad32    # byte: si != 0 fuerza el marcador 0xe5 en 0x1a695
+var 0x1a695 dat_1a695    # buffer de 8 bytes del marcador de modo (0x1443e)
+var 0x1ad38 mode_table    # tabla de entradas [len][datos] indexada por 0x1acc6 (1-based)
+var 0x1ab4b dat_1ab4b    # byte: nº de objetos empaquetados de la entrada de modo
+var 0x1ab62 dat_1ab62    # tabla de 5 words por objeto (0x14496)
+var 0x1a762 dat_1a762    # long: copia de object_list_begin
+var 0x1aceb dat_1aceb    # byte: contador de objetos (lo limpia 0x14496)
+var 0x1abfa dat_1abfa    # word: comando de 0x163a8 (lo limpia 0x14588)
+var 0x1ab5c dat_1ab5c    # word: comando 0xa01c (0x14588)
+var 0x1ab5e dat_1ab5e    # word: 0 (0x14588)
+var 0x1ab56 dat_1ab56    # word: 0xf7 (0x14588)
+var 0x1ab50 dat_1ab50    # word: 0x9048 (0x14588)
+var 0x1ab52 dat_1ab52    # word: 0xa01d (0x14588)
+var 0x1ab54 dat_1ab54    # word: 0 (0x14588)
+var 0x1ab58 dat_1ab58    # word: 0x9048 (0x14588)
+var 0x1ab5a dat_1ab5a    # word: 0x9048 (0x14588)
+var 0x1ad09 dat_1ad09    # byte: lo limpia 0x14588
+var 0x1ad11 dat_1ad11    # byte: lo limpia 0x14588
+var 0x1ad27 dat_1ad27    # byte: lo limpia 0x14588
+var 0x1acd1 dat_1acd1    # byte: lo limpia 0x14588
+var 0x1acf9 dat_1acf9    # byte: lo limpia 0x14588
+var 0x1acfa dat_1acfa    # byte: lo limpia 0x14588
+var 0x1acce dat_1acce    # byte: lo limpia 0x14588
+var 0x1acff dat_1acff    # byte: lo limpia 0x14588
+var 0x1acfc dat_1acfc    # byte: flags de objeto (bit7) y fin de secuencia
+var 0x1acf1 dat_1acf1    # byte: indice de color de la tabla de texto (0x13f2a)
+var 0xd8eb dat_d8eb    # byte: 0x52 permite a 0x14496 salir del reintento
+# ---- otros globales con nombre ----
+var 0x19eca cmd_jump_table    # tabla de punteros a manejadores de comando (indexada por opcode&0x3ff)
+var 0x192c2 sound_sample_ptr    # puntero/estado del sample en curso
+var 0x134 sound_timer_vector    # vector de interrupcion del timer B (sonido)
 

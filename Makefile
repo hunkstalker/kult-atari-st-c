@@ -4,3 +4,8 @@ GAME := kult
 # The toolchain here is gcc (Alpine); the kit defaults to clang.
 CC   := gcc
 include $(KIT)/kit.mk
+
+# Regenera include/addrs.h desde work/names.txt (unica fuente de los globales).
+.PHONY: addrs
+addrs:
+	$(PY) tools/gen_addrs.py --write
