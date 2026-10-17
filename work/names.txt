@@ -175,6 +175,27 @@ fn 0x13d0e reveal_line               # trazo Bresenham trasero->delantero (masca
 fn 0x13e14 reveal_lines_h            # dos tandas de trazos + VBL (x0/x1 y luego y0/y1)
 fn 0x13eae reveal_lines_v            # tres tandas de trazos + VBL (alto, ancho<<2, 0x1a52c)
 
+# ==== blit de filas enmascarado + tabla de hints (maskblit.c) ====
+fn 0x12698 blit_mask_setup           # precalcula mascaras de borde (0x1a538/0x1a53a/0x1a53c)
+fn 0x123c0 blit_mask_row             # blitea una fila enmascarada de A1 a A0
+fn 0x12466 blit_mask_rows            # D3 filas desde 0x1a534 con mascaras + VBL
+fn 0x120a8 hint_slot_alloc           # busca hueco en 0x1a850 y guarda el registro del icono
+fn 0x120dc hint_select_on            # selecciona el icono d0-esimo (D1=2)
+fn 0x120e4 hint_select_off           # selecciona el icono d0-esimo (D1=0)
+fn 0x1213a hint_find                 # busca el word d0 en 0x1a850 y lo desactiva; d5=0/1
+fn 0x1222e hint_blit_entry           # selecciona el icono A6[1] y lo blitea; A6 += 2
+fn 0x1232e hint_blit_stroke          # blitea los iconos 1 y un trazo 2x15
+fn 0x12368 hint_blit_2               # blitea los iconos 2
+fn 0x12384 hint_blit_3               # blitea los iconos 3
+
+# ==== blitter de sprites y save/restore de rect (sprite.c) ====
+fn 0x12590 save_rect_body            # empaqueta un rect de pantalla en un descriptor (A1)
+fn 0x1258a save_rect                 # save_rect_body con A1 = 0xd8f0; devuelve A4 (fin)
+fn 0x124f2 restore_rect              # blit_sprite desde el descriptor 0xd8f0
+fn 0x12510 blit_rect                 # bucle del blit de sprite (A0/A1/D2/D3/D7/A3)
+fn 0x124da blit_rect_vbl             # blit_rect con stride 0x1a534 + espera de VBL
+fn 0x123a0 copy_scratch_rows         # copia filas de 0xd8f0 a A0 (stride 0xa0)
+
 # ==== globales (direcciones de datos, base de carga 0x10000) ====
 # ---- screen buffers (crt0_init @ 0x135e2) ----
 var 0x1a45e screen_ptr_a    # buffer de pantalla A
