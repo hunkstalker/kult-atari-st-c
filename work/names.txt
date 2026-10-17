@@ -152,6 +152,29 @@ fn 0x189aa object_info_wait          # ficha interactiva: 0x16dec hasta clic (bi
 fn 0x185e6 track_name_print          # nombre de pista/seccion (banco 0x3c534) + espera
 fn 0x14966 action_bar_hit_test       # hit-test de 0x1a6ae -> the_command + overlay B
 
+# ==== escalado C: cursor / input / estado / stubs ====
+fn 0x135e0 noop_135e0                # `rts` (stub sin efecto)
+fn 0x160c0 noop_160c0                # `rts` (stub sin efecto)
+fn 0x16dba noop_16dba                # `rts` (stub sin efecto)
+fn 0x19312 noop_19312                # `rts` (stub sin efecto; FDC fuera de alcance)
+fn 0x172ba clear_flag                # limpia el byte indirecto *(0x1a806) y la word 0x1acaa
+fn 0x15192 clear_object_flags        # limpia bit7 del byte1 de 41 entradas de 0x1aa72 + 0x1acd3
+fn 0x14a98 set_cursor_clip           # clip $19700/$19702 y sprite de cursor desde tablas por D0
+fn 0x14bdc fix_sample_flag           # cambia 0x81 -> 0x80 en las 0x3f entradas de 0x1a8f0
+
+# ==== dibujo de la caja de texto (runs de pixeles, boxdraw.c) ====
+fn 0x12ffa box_hline                 # corre horizontal D3+1 px en (D0,D1) color D2 (base 0)
+fn 0x13216 box_vline                 # corre vertical (a0 += 0xa0 por px; base 0)
+fn 0x130a4 box_hline_copy            # copia el run horizontal de screen_ptr_b a screen_ptr_a
+fn 0x13162 box_vline_copy            # idem vertical
+fn 0x12fee box_hline_back            # box_hline con draw base fijo 0x8000
+fn 0x1320a box_vline_back            # box_vline con draw base fijo 0x8000
+
+# ==== revelado por linea / caja (line.c) ====
+fn 0x13d0e reveal_line               # trazo Bresenham trasero->delantero (mascara 0x80808080 rotada)
+fn 0x13e14 reveal_lines_h            # dos tandas de trazos + VBL (x0/x1 y luego y0/y1)
+fn 0x13eae reveal_lines_v            # tres tandas de trazos + VBL (alto, ancho<<2, 0x1a52c)
+
 # ==== globales (direcciones de datos, base de carga 0x10000) ====
 # ---- screen buffers (crt0_init @ 0x135e2) ----
 var 0x1a45e screen_ptr_a    # buffer de pantalla A

@@ -26,9 +26,10 @@ ADDRS = ROOT / "include" / "addrs.h"
 _FN_RE = re.compile(r"^fn\s+0x([0-9a-fA-F]+)\s+(\S+)")
 _VAR_RE = re.compile(r"^var\s+0x([0-9a-fA-F]+)\s+(\S+)")
 # definición de función en C: tipo(s) + nombre + (...) + `{` al inicio de línea.
-# Excluye declaraciones (acaban en `;`) y llamadas/control indentadas.
+# Excluye declaraciones (acaban en `;`), llamadas/control indentadas y las
+# funciones `static` (helpers internos del port, no piezas del original).
 _C_DEF_RE = re.compile(
-    r"(?m)^(?!\s)(?:[A-Za-z_]\w*[ \t\*]+)+([a-z_]\w*)\s*\([^;{]*\)\s*\{")
+    r"(?m)^(?!\s)(?!static\b)(?:[A-Za-z_]\w*[ \t\*]+)+([a-z_]\w*)\s*\([^;{]*\)\s*\{")
 _A_MACRO_RE = re.compile(r"\bA_[A-Z0-9_]+\b")
 
 
