@@ -70,6 +70,20 @@ def test_fun_16514():
     assert not diffs, report(diffs)
 
 
+harness._lib.icon_apply.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.icon_apply.restype = None
+
+
+def test_fun_1652e():
+    """Caso propio de 0x1652e: slot 0 (corta) y slot con descriptor (restaura)."""
+    for zero in (1, 0):
+        pokes = _table_common()
+        pokes[TABLE] = (0 if zero else DESC_REST).to_bytes(4, "big")
+        diffs, _ = differential(0x1652E, {"a2": TABLE, "_pokes": pokes},
+                                lambda lib, buf: lib.icon_apply(buf, TABLE))
+        assert not diffs, f"zero={zero}\n{report(diffs)}"
+
+
 def test_fun_164d4():
     for mode in (0x29, 0x16, 0x18, 0x15, 0x19, 0x00):
         pokes = _table_common()
