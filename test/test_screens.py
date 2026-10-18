@@ -57,6 +57,15 @@ def test_copy_screen():
     assert not diffs, report(diffs)
 
 
+def test_copy_screen_rev():
+    """0x121b6 copia screen_ptr_a -> screen_ptr_b (inversa de copy_screen)."""
+    harness._lib.copy_screen_rev.argtypes = [_u8p]
+    harness._lib.copy_screen_rev.restype = None
+    diffs, _ = differential(0x121B6, {"_pokes": _pokes()},
+                            lambda lib, buf: lib.copy_screen_rev(buf), poison=True)
+    assert not diffs, report(diffs)
+
+
 def test_swap_screens():
     diffs, _ = differential(SWAP_SCREENS, {"_pokes": _pokes()},
                             lambda lib, buf: lib.swap_screens(buf), poison=True)

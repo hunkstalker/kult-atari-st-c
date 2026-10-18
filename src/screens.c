@@ -83,39 +83,6 @@ uint32_t screen_address(uint8_t *img, uint32_t x, uint32_t y, uint32_t *phase) {
 
 #include "os.h"
 
-#define SCREEN_LONGS 8000
-
-
-
-/* FUN_000121c4 @ 0x121c4: `addq.l #1,a6` then falls into copy_screen; the copy is identical. */
-
-
-/* screen_address @ 0x10fec: ST planar address of (x, y) on screen_ptr_a.
- * d0 = x pixels, d1 = y rows; returns the byte address in a0 (d7 = pixel-in-word). */
-uint32_t screen_address_off(uint8_t *img, uint32_t x, uint32_t y) {
-    uint32_t base = be32(img + A_SCREEN_PTR_A);
-    x = (x << 2) & 0xffff;
-    y = y & 0xffff;
-    x &= 0xfff0;          /* word-aligned part (d7 = x & 0xf is the bit position) */
-    x >>= 1;
-    return base + x + y * 0xa0u;
-}
-
-/* screen_address @ 0x10fec, exposición completa: como screen_address_off pero devuelve
- * también d7 = (d0<<2) & 0xf (la fase de píxel dentro de la palabra), que el texto
- * proporcional necesita. */
-
-
-/* screen_address_raw @ 0x10fee: como screen_address pero sin el `lsl.w #2` (el
- * llamante ya pasa d0 listo). Devuelve a0 y deja el bit de pixel en d7. */
-
-
-/* FUN_00010ff4 @ 0x10ff4: la misma aritmetica de 0x10fec/0x10fee pero SIN cargar
- * A0 (lo aporta el llamante); suma el offset de (d0,d1) a A0 y deja d7 = d0 & 0xf. */
-
-
-
-
 /* FUN_000159bc @ 0x159bc: copy D3+1 rows of 16 bytes (4 longs) from A1, advancing
  * A1 by 16 a row, into A2 with a 0xa0 destination stride.  Pure image code. */
 void row_palette(uint8_t *img, uint32_t src, uint32_t dest, uint32_t rows) {
@@ -294,7 +261,8 @@ static void screen_copies(uint8_t *img, uint32_t base) {
     }
 }
 
-/* 0x15944 — mide y dibuja una caja de texto autodimensionada. 15944, walk_entry sobre la tabla 0x24982 (indice 0x1acc7-1), recorre bloques de 3 bytes: los bytes 0x32..0x... */
+/* 0x15944 — variante de `screen_copies` sobre screen_ptr_b que limpia el flag
+ * 0x1a573 (0x15934 lo deja a 1 y usa screen_ptr_a). */
 void copy_rows(uint8_t *img) {
     uint32_t back = be32(img + A_SCREEN_PTR_B);
     img[0x1a573] = 0;
