@@ -36,9 +36,9 @@ def _pokes():
 
 
 def test_box_hline():
-    for d0 in (0, 2, 16, 0x42, 0x3FE):
+    for d0 in (0, 2, 16, 0x42, 0x4F, 0x3FE):
         for d1 in (0, 1, 5):
-            for d2 in (0, 1, 5, 15):
+            for d2 in (0, 1, 5, 15, 0x1f):
                 for d3 in (1, 3, 20, 40):
                     diffs, _ = differential(
                         BOX_HLINE, {"d0": d0, "d1": d1, "d2": d2, "d3": d3, "_pokes": _pokes()},
@@ -48,9 +48,9 @@ def test_box_hline():
 
 
 def test_box_vline():
-    for d0 in (0, 2, 16, 0x42, 0x3FE):
+    for d0 in (0, 2, 16, 0x42, 0x4F, 0x3FE):
         for d1 in (0, 1, 5):
-            for d2 in (0, 1, 5, 15):
+            for d2 in (0, 1, 5, 15, 0x1f):
                 for d3 in (1, 3, 20, 40):
                     diffs, _ = differential(
                         BOX_VLINE, {"d0": d0, "d1": d1, "d2": d2, "d3": d3, "_pokes": _pokes()},
@@ -68,7 +68,7 @@ def _copy_pokes():
 
 
 def test_box_hline_copy():
-    for d0 in (0, 2, 16, 0x42, 0x3FE):
+    for d0 in (0, 2, 16, 0x42, 0x4F, 0x3FE):
         for d1 in (0, 1, 5):
             for d3 in (1, 3, 20, 40):
                 diffs, _ = differential(
@@ -78,7 +78,7 @@ def test_box_hline_copy():
 
 
 def test_box_vline_copy():
-    for d0 in (0, 2, 16, 0x42, 0x3FE):
+    for d0 in (0, 2, 16, 0x42, 0x4F, 0x3FE):
         for d1 in (0, 1, 5):
             for d3 in (1, 3, 20, 40):
                 diffs, _ = differential(
