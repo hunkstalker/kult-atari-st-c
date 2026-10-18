@@ -16,13 +16,14 @@
 #include "os.h"
 #include "sched.h"
 
-/* 0x13686 — copia el paquete IKBD de 5 bytes desde A0. */
+/* 0x13686 — copia el paquete IKBD de 5 bytes desde A0 (move.w #4,d0 + dbra). */
 void ikbd_packet_copy(uint8_t *img, uint32_t packet) {
     for (int i = 0; i < 5; i++)
         img[A_IKBD_PACKET + i] = img[packet + i];
 }
 
-/* 0x13698 — wait_frame. */
+/* 0x13698 — wait_frame. El original deja D0 = 0/0xff del botón (o el de Crawio);
+ * se modela por A_SKIP_TRANSITION y el retorno de Crawio, no por registro. */
 void wait_frame(uint8_t *img) {
     img[A_IKBD_PACKET] = 0xff;                       /* move.b #$ff,$1a44f */
     /* XBIOS Ikbdws (trap #14/$19): no-op en el kit (ni imagen ni ledger). */

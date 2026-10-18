@@ -6,8 +6,8 @@ input.c — paquete IKBD y espera de frame.  ikbd_packet_copy @ 0x13686 : copia 
 
 | dir | nombre | qué hace | pruebas |
 |---|---|---|---|
-| `0x13686` | `ikbd_packet_copy` | copia el paquete IKBD de 5 bytes desde A0. | test_input, test_loop |
-| `0x13698` | `wait_frame` | wait_frame. | test_input, test_objwait |
+| `0x13686` | `ikbd_packet_copy` | copia el paquete IKBD de 5 bytes desde A0 (move.w #4,d0 + dbra). | test_input, test_loop |
+| `0x13698` | `wait_frame` | wait_frame. El original deja D0 = 0/0xff del botón (o el de Crawio); se modela por A_SKIP_TRANSITION y el retorno de Crawio, no por registro. | test_input, test_objwait |
 
 ## Estado (globales A_* usadas)
 
