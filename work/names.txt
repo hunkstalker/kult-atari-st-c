@@ -44,6 +44,7 @@ fn 0x16582 update_icon_list         # ctx: recorre la lista DAT_0001a7ca..DAT_00
 fn 0x10838 print_char                # font = &DAT_0001d202 + c*6; dibuja 6 filas rotando nibbles
 fn 0x10f8e advance_text_entry        # avanza D4 entradas [word len] desde A1 y fija cur_str_end
 fn 0x108a2 print_word                # bucle con flags 0x40/0x80/0xc0 (equivale a printWord de ScummVM)
+fn 0x10fc4 position_text             # salta (D4-4) entradas [u8 len] desde A5 y fija cur_str_end
 
 # ==== recursos embebidos (offset de imagen + 0x10000) ====
 
