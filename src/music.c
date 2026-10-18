@@ -122,14 +122,13 @@ void mfp_setup(uint8_t *img) {
 }
 
 /* FUN_0003a5c2 @ 0x3a5c2: Supexec(0x3a604) y Setexc(0x23,0x3aa38)/Setexc(0x24,0x3aab6).
- * Devuelve en D0 el handler anterior del ultimo vector (0x90). */
-uint32_t music_install(uint8_t *img, uint32_t *old_out) {
+ * El `movem.l (a7)+,d0-...` final RESTAURA D0, asi que el valor devuelto es el D0 de
+ * entrada (el handler anterior que Setexc deja en D0 se descarta). */
+uint32_t music_install(uint8_t *img, uint32_t d0_in) {
     mfp_setup(img);
     wr32(img + 0x8c, 0x3aa38);
-    uint32_t old = be32(img + 0x90);
     wr32(img + 0x90, 0x3aab6);
-    if (old_out) *old_out = old;
-    return old;
+    return d0_in;
 }
 
 /* Codelets del despacho (no estan en el indice de 406): cada uno fija un parametro del
@@ -234,6 +233,9 @@ uint32_t music_cmd(uint8_t *img, uint32_t value, uint32_t cmd) {
             }
             if (cmd & 0x0100u) {
                 img[chan + 0x2b] = 0;
+                /* El original hace `move.b $1d(a6),d0`: pisa el byte bajo del
+                 * acumulador D0 (el minimo devuelto), no solo el canal. */
+                minv = (minv & 0xffffff00u) | (img[MUSIC_STATE + 0x1d] & 0xffu);
                 img[chan + 0x2f] = img[MUSIC_STATE + 0x1d];
             }
             if (cmd & 0x0200u)
@@ -467,7 +469,8 @@ L3ab3a:
     p = be32(img + chan + 8);
     b = img[p];
     p += 1;
-    wr32(img + chan + 8, p);
+    /* El original NO escribe channel[8] aqui: solo lo hace en l_03abe2 (byte
+     * != 0xff). En la ruta 0xff channel[8] queda apuntando al 0xff. */
     if (b != 0xff)
         goto L3abe2;
     /* fin de patron: lee el puntero de secuencia channel[0xc] */

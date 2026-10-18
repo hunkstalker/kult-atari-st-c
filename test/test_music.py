@@ -150,7 +150,7 @@ CONT_3AB3A = 0x3AB3A
 
 harness._lib.mfp_setup.argtypes = [_u8p]
 harness._lib.mfp_setup.restype = None
-harness._lib.music_install.argtypes = [_u8p, _u32p]
+harness._lib.music_install.argtypes = [_u8p, ctypes.c_uint32]
 harness._lib.music_install.restype = ctypes.c_uint32
 harness._lib.music_cmd_table.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32,
                                      ctypes.c_uint32, ctypes.c_uint32]
@@ -201,12 +201,14 @@ def test_fun_3a604_mfp_setup():
 
 
 def test_fun_3a5c2_supexec_setexc():
-    d0 = ctypes.c_uint32(0)
-    diffs, info = differential(
-        FUN_3A5C2, {"_pokes": {}},
-        lambda lib, buf: lib.music_install(buf, ctypes.byref(d0)))
-    assert not diffs, report(diffs)
-    assert d0.value == info["regs"]["d0"]
+    """El movem final restaura D0: el retorno es el D0 de entrada (no el handler
+    anterior que deja Setexc)."""
+    for d0_in in (0, 0x1234, 0x0000DEAD):
+        diffs, info = differential(
+            FUN_3A5C2, {"d0": d0_in, "_pokes": {}},
+            lambda lib, buf, v=d0_in: lib.music_install(buf, v))
+        assert not diffs, f"d0_in={d0_in:#x}\n{report(diffs)}"
+        assert info["ret"] == info["regs"]["d0"] == d0_in, f"d0_in={d0_in:#x}"
 
 
 def _table_pokes(pairs, base=0x3AF00):
@@ -260,10 +262,14 @@ def test_fun_3a734_comandos():
              (0x1000, 0x0034),
              (0x000F, 0x000F),   # seleccion de canales, sin comandos
              (0x0010, 0x0007),   # minimo de 0x24
+             (0x0100, 0x0007),   # bit8: pisa el byte bajo del acumulador D0
+             (0x0110, 0x0007),   # bit8 + bit4 (minimo)
              (0x00FF, 0x000F))   # bit7 (flags) + volumen + fade
     for d1, d5 in cases:
+        pokes = _stack_word_args(d5, d1)
+        pokes[STATE + 0x1D] = bytes([0x0B])   # valor que bit8 copia a D0
         diffs, info = differential(
-            FUN_3A734, {"_pokes": _stack_word_args(d5, d1)},
+            FUN_3A734, {"_pokes": pokes},
             lambda lib, buf, a=d5, b=d1: lib.music_cmd(buf, a, b))
         assert not diffs, f"d1={d1:#x} d5={d5:#x}\n{report(diffs)}"
         assert info["ret"] == info["regs"]["d0"], f"d1={d1:#x}"
