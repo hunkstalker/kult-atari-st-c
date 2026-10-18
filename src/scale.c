@@ -15,7 +15,7 @@
 #include "addrs.h"
 #include "kult_internal.h"
 
-void copy_scratch_rows(uint8_t *img, uint32_t a0, uint32_t d4, uint32_t d5);
+void copy_scratch_rows(uint8_t *, uint32_t, uint32_t, uint32_t);
 
 /* Un paso de la expansion roxl: word = (word << 1) | x; devuelve el nuevo X. */
 static uint32_t roxl1(uint8_t *img, uint32_t base, uint32_t off, uint32_t x) {
@@ -113,18 +113,18 @@ void scale_16_16(uint8_t *img, uint32_t w_in, uint32_t h_in, uint32_t phase,
         }
 
         {
-            uint32_t d0 = be32(img + desc), d1 = be32(img + desc + 4);
-            d0 <<= bits;
-            d1 <<= bits;
-            uint32_t d2m = (0xffffu << bits) & 0xffff;
-            uint32_t mask = (d2m << 16) | d2m;
-            d0 &= mask;
-            d1 &= mask;
+            uint32_t lo0 = be32(img + desc), lo1 = be32(img + desc + 4);
+            lo0 <<= bits;
+            lo1 <<= bits;
+            uint32_t word_mask = (0xffffu << bits) & 0xffff;
+            uint32_t mask = (word_mask << 16) | word_mask;
+            lo0 &= mask;
+            lo1 &= mask;
             mask = ~mask;
-            d0 |= be32(img + src2) & mask;
-            d1 |= be32(img + src2 + 4) & mask;
-            wr32(img + desc, d0);
-            wr32(img + desc + 4, d1);
+            lo0 |= be32(img + src2) & mask;
+            lo1 |= be32(img + src2 + 4) & mask;
+            wr32(img + desc, lo0);
+            wr32(img + desc + 4, lo1);
             desc += 8;
             wr16(img + 0x1a556, (be16(img + 0x1a556) + 2) & 0xffff);
         }
@@ -191,11 +191,11 @@ void scale_blit(uint8_t *img, uint32_t w_in, uint32_t h_in, uint32_t phase,
         }
 
         {
-            uint32_t d0 = be32(img + dst), d1 = be32(img + dst + 4);
-            d0 <<= bits;
-            d1 <<= bits;
-            wr32(img + dst, d0);
-            wr32(img + dst + 4, d1);
+            uint32_t lo0 = be32(img + dst), lo1 = be32(img + dst + 4);
+            lo0 <<= bits;
+            lo1 <<= bits;
+            wr32(img + dst, lo0);
+            wr32(img + dst + 4, lo1);
             dest += 0xa0;
         }
 
@@ -212,9 +212,9 @@ void scale_blit(uint8_t *img, uint32_t w_in, uint32_t h_in, uint32_t phase,
 /* FUN_00013702 @ 0x13702 (byte 16): 128a4 + setup de 0x1a544/0x1a542/0x1a486;
  * escribe [filas][cols] en la entrada de icono que 128a4 deja en A2 (+0xe) y llama
  * al escalador 0x13a18. Devuelve A6 + 2 (los dos bytes leidos). */
-uint32_t elem_command_wrap(uint8_t *img, uint32_t a6);
-uint32_t elem_blit_vbl(uint8_t *img, uint32_t a6);
-uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
+uint32_t elem_command_wrap(uint8_t *, uint32_t);
+uint32_t elem_blit_vbl(uint8_t *, uint32_t);
+uint32_t screen_address(uint8_t *, uint32_t, uint32_t, uint32_t *);
 
 /* 0x13702 — scale prep */
 uint32_t scale_prep(uint8_t *img, uint32_t script) {
@@ -301,10 +301,10 @@ void scale_list_build(uint8_t *img, uint32_t w_in, uint32_t h_in, uint32_t phase
 /* FUN_000138a6 @ 0x138a6 (byte 34): 120e4 + 1398e construyen la lista en 0xd8f0 y
  * luego, pasada a pasada (con espera de VBL), escribe en pantalla los grupos cuyo
  * contador < pasada, desplazando el offset segun el contador; A6 += 2. */
-void hint_select_off(uint8_t *img, uint32_t d0, uint32_t *o);
-void hint_blit_entry(uint8_t *img, uint32_t a6, uint32_t *a6_out);
-void wait_vbl(uint8_t *img);
-void scale_list_build(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t d7, uint32_t a0);
+void hint_select_off(uint8_t *, uint32_t, uint32_t *);
+void hint_blit_entry(uint8_t *, uint32_t, uint32_t *);
+void wait_vbl(uint8_t *);
+void scale_list_build(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
 /* 0x138a6 — scale anim */
 uint32_t scale_anim(uint8_t *img, uint32_t script) {
     if (img[A_SKIP_TRANSITION] != 0) {
@@ -378,9 +378,9 @@ uint32_t scale_anim(uint8_t *img, uint32_t script) {
  * el origen (0x10fee) y las razones 1a54a/54c/552/554, y repite 13a18 con los
  * factores d2/d3 evolucionando por los acumuladores 1a546/1a54e, desplazando a2.
  * Termina con 124da sobre los registros originales del elemento. */
-void blit_rect_vbl(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
-                 uint32_t d7);
-uint32_t screen_address_raw(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
+void blit_rect_vbl(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t);
+uint32_t screen_address_raw(uint8_t *, uint32_t, uint32_t, uint32_t *);
 
 /* 0x13740 — scale loop */
 uint32_t scale_loop(uint8_t *img, uint32_t script) {
@@ -405,22 +405,22 @@ uint32_t scale_loop(uint8_t *img, uint32_t script) {
 
     uint32_t w3 = (be16(img + A_ELEM_1A52E) << 2) & 0xffff;
     uint32_t w4 = w3;
-    uint32_t d4b = w3;
+    uint32_t half = w3;
     if (w3 < h)
-        d4b = h;
-    uint32_t d3b = d4b;
-    d4b >>= 1;
-    wr16(img + 0x1a54a, ((h << 1) / d3b) & 0xffff);
-    wr16(img + 0x1a54c, ((((h << 1) % d3b) << 16) / d3b) & 0xffff);
-    wr16(img + 0x1a552, ((w4 << 1) / d3b) & 0xffff);
-    wr16(img + 0x1a554, (((((w4 << 1) % d3b)) << 16) / d3b) & 0xffff);
+        half = h;
+    uint32_t den = half;
+    half >>= 1;
+    wr16(img + 0x1a54a, ((h << 1) / den) & 0xffff);
+    wr16(img + 0x1a54c, ((((h << 1) % den) << 16) / den) & 0xffff);
+    wr16(img + 0x1a552, ((w4 << 1) / den) & 0xffff);
+    wr16(img + 0x1a554, (((((w4 << 1) % den)) << 16) / den) & 0xffff);
     wr32(img + 0x1a546, 2);
     wr32(img + 0x1a54e, 2);
-    uint32_t d2 = 2, d3 = 2;
-    uint32_t d4 = (d4b - 3) & 0xffff;
+    uint32_t f2 = 2, f3 = 2;
+    uint32_t n = (half - 3) & 0xffff;
     uint32_t dst = addr;
     for (;;) {
-        scale_16_16(img, d2, d3, phase, dst);
+        scale_16_16(img, f2, f3, phase, dst);
         {
             uint32_t acc = be32(img + 0x1a546);
             uint32_t lo = acc & 0xffff, hi = acc >> 16;
@@ -428,7 +428,7 @@ uint32_t scale_loop(uint8_t *img, uint32_t script) {
             uint32_t sum = hi + be16(img + 0x1a54c);
             uint32_t cy = (sum > 0xffff) ? 1 : 0;
             wr32(img + 0x1a546, ((sum & 0xffff) << 16) | nlo);
-            d2 = nlo;
+            f2 = nlo;
             if (cy || !(nlo & 1))
                 dst -= 0xa0;
         }
@@ -441,25 +441,25 @@ uint32_t scale_loop(uint8_t *img, uint32_t script) {
             int adjust;
             if (cy) {
                 wr32(img + 0x1a54e, ((sum & 0xffff) << 16) | ((nlo + 1) & 0xffff));
-                d3 = (nlo + 1) & 0xffff;
+                f3 = (nlo + 1) & 0xffff;
                 adjust = 1;
             } else {
                 wr32(img + 0x1a54e, ((sum & 0xffff) << 16) | nlo);
-                d3 = nlo;
+                f3 = nlo;
                 adjust = !(nlo & 1);
             }
             if (adjust) {
-                uint32_t d0p = be16(img + 0x1a486);
-                if (d0p == 0) {
+                uint32_t phase_tmp = be16(img + 0x1a486);
+                if (phase_tmp == 0) {
                     dst -= 8;
-                    d0p = 0x10;
+                    phase_tmp = 0x10;
                 }
-                wr16(img + 0x1a486, (d0p - 1) & 0xffff);
+                wr16(img + 0x1a486, (phase_tmp - 1) & 0xffff);
             }
         }
-        if (d4 == 0)
+        if (n == 0)
             break;
-        d4 = (d4 - 1) & 0xffff;
+        n = (n - 1) & 0xffff;
     }
     blit_rect_vbl(img, addr_elem, src, w, h, phase_elem);
     return script;

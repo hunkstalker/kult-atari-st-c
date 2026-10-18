@@ -22,8 +22,8 @@
 #include "machine.h"
 #include "addrs.h"
 
-void wait_vbl(uint8_t *img);
-void copy_scratch_rows(uint8_t *img, uint32_t a0, uint32_t d4, uint32_t d5);
+void wait_vbl(uint8_t *);
+void copy_scratch_rows(uint8_t *, uint32_t, uint32_t, uint32_t);
 
 static uint16_t r16l(uint16_t v, uint32_t n) { return rotate_left16(v, n); }
 static uint16_t r16r(uint16_t v, uint32_t n) { return rotate_right16(v, n); }
@@ -76,9 +76,9 @@ void overlay_compose_planes(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t
             carry = 0;
             for (uint32_t row = rows;; row = (row - 1) & 0xffff) {
                 uint32_t row_dest = w_dest, row_desc = w_desc;
-                uint32_t d6 = r16l(be16(img + w_src), subword);
-                d6 = r16r((uint16_t)d6, pix);
-                data = d6;
+                uint32_t word = r16l(be16(img + w_src), subword);
+                word = r16r((uint16_t)word, pix);
+                data = word;
                 uint16_t dmask = r16r(0x8000, pix);
                 for (uint32_t k = 4;; k = (k - 1) & 0xffff) {
                     uint32_t w08 = be16(img + row_dest + 8);
@@ -118,9 +118,9 @@ void overlay_compose_planes(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t
             carry = 0;
             for (uint32_t row = rows;; row = (row - 1) & 0xffff) {
                 uint32_t row_dest = w_dest, row_desc = w_desc;
-                uint32_t d6 = r16l(be16(img + w_src), subword);
-                d6 = r16r((uint16_t)d6, pix);
-                data = d6;
+                uint32_t word = r16l(be16(img + w_src), subword);
+                word = r16r((uint16_t)word, pix);
+                data = word;
                 uint16_t dmask = r16r(0x8000, pix);
                 for (uint32_t k = 4;; k = (k - 1) & 0xffff) {
                     uint32_t w08 = be16(img + row_dest + 8);
@@ -156,9 +156,9 @@ void overlay_compose_planes(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t
             int bit = 0;
             for (uint32_t row = rows;; row = (row - 1) & 0xffff) {
                 uint32_t row_dest = w_dest, row_desc = w_desc;
-                uint32_t d6 = r16l(be16(img + w_src), subword);
-                d6 = r16r((uint16_t)d6, pix);
-                data = d6;
+                uint32_t word = r16l(be16(img + w_src), subword);
+                word = r16r((uint16_t)word, pix);
+                data = word;
                 uint16_t dmask = r16r(0x8000, pix);
                 for (uint32_t k = 4;; k = (k - 1) & 0xffff) {
                     uint32_t w08 = be16(img + row_dest + 8);
@@ -190,9 +190,9 @@ void overlay_compose_planes(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t
             int bit = 1;
             for (uint32_t row = rows;; row = (row - 1) & 0xffff) {
                 uint32_t row_dest = w_dest, row_desc = w_desc;
-                uint32_t d6 = r16l(be16(img + w_src), subword);
-                d6 = r16r((uint16_t)d6, pix);
-                data = d6;
+                uint32_t word = r16l(be16(img + w_src), subword);
+                word = r16r((uint16_t)word, pix);
+                data = word;
                 uint16_t dmask = r16r(0x8000, pix);
                 bit = carry;
                 for (uint32_t k = 4;; k = (k - 1) & 0xffff) {
@@ -238,19 +238,19 @@ void overlay_compose_planes(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t
 }
 
 /* FUN_000111ac @ 0x111ac */
-void overlay_compose_planes_wrap(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3,
-                 uint32_t a0, uint32_t a1) {
-    (void)d2;
-    overlay_compose_planes(img, d0, (d1 << 2) - 1, 5, d3 - 1, a0, a1);
+void overlay_compose_planes_wrap(uint8_t *img, uint32_t pix, uint32_t sub, uint32_t width, uint32_t height,
+                 uint32_t dest, uint32_t src) {
+    (void)width;
+    overlay_compose_planes(img, pix, (sub << 2) - 1, 5, height - 1, dest, src);
 }
 
 /* FUN_000114ba @ 0x114ba: variante de 32 bits de 0x111b6; el acarreo vive en D6
  * (entrada/salida) y el sub-word usa (3 - (D1&3)). Compone igual en 0xd8f0 y
  * aplica con 0x123a0. FUN_000114b0 @ 0x114b0 fija D3-=1, D2=5, D1=(D1<<2)-1. */
 void overlay_compose_planes32(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t d2in,
-                 uint32_t d3in, uint32_t d6in, uint32_t a0in, uint32_t a1in) {
+                 uint32_t d3in, uint32_t carry_in, uint32_t a0in, uint32_t a1in) {
     uint32_t pix = d0in & 0xffff, sub = d1in & 0xffff, width = d2in & 0xffff;
-    uint32_t height = d3in & 0xffff, dest = a0in, src = a1in, d6 = d6in;
+    uint32_t height = d3in & 0xffff, dest = a0in, src = a1in, carry = carry_in;
 
     for (;;) {
         uint32_t s_pix = pix, s_sub = sub, s_width = width, s_height = height, s_dest = dest, s_src = src;
@@ -291,10 +291,10 @@ void overlay_compose_planes32(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32
             case_d4 = 0xf;
             for (uint32_t row = rows;; row = (row - 1) & 0xffff) {
                 uint32_t row_dest = w_dest, row_desc = w_desc;
-                uint32_t hi = (d6 >> 16) & 0xffff;
+                uint32_t hi = (carry >> 16) & 0xffff;
                 uint32_t word = ((be16(img + w_src) << 16) | hi) & 0xffffffffu;
                 word = rotate_right32(word, rotm);
-                d6 = rotate_left32(word, rot6);
+                carry = rotate_left32(word, rot6);
                 uint32_t dmask = rotate_right32(0x80000000u, rotm);
                 for (uint32_t k = 4;; k = (k - 1) & 0xffff) {
                     uint32_t w0 = be16(img + row_dest), w4 = be16(img + row_dest + 8);
@@ -314,11 +314,11 @@ void overlay_compose_planes32(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32
                     acc = (hi_mask & ((long0 << 1) | ((w8 & 0x8000) != 0))) | (lo_mask & long0);
                     wr16(img + row_desc + 8, (uint16_t)acc);
                     wr16(img + row_desc, (uint16_t)(acc >> 16));
-                    acc = (dmask & d6) |
+                    acc = (dmask & carry) |
                           ((~dmask) & ((~end_mask & ((long30 << 1) | carry_in)) | (end_mask & long30)));
                     wr16(img + row_desc + 0x38, (uint16_t)acc);
                     wr16(img + row_desc + 0x30, (uint16_t)(acc >> 16));
-                    d6 = rotate_left32(d6, 4);
+                    carry = rotate_left32(carry, 4);
                     row_dest += 2; row_desc += 2;
                     if (k == 1) break;
                 }
@@ -331,10 +331,10 @@ void overlay_compose_planes32(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32
             case_d4 = 0xb;
             for (uint32_t row = rows;; row = (row - 1) & 0xffff) {
                 uint32_t row_dest = w_dest, row_desc = w_desc;
-                uint32_t hi = (d6 >> 16) & 0xffff;
+                uint32_t hi = (carry >> 16) & 0xffff;
                 uint32_t word = ((be16(img + w_src) << 16) | hi) & 0xffffffffu;
                 word = rotate_right32(word, rotm);
-                d6 = rotate_left32(word, rot6);
+                carry = rotate_left32(word, rot6);
                 uint32_t dmask = rotate_right32(0x80000000u, rotm);
                 for (uint32_t k = 4;; k = (k - 1) & 0xffff) {
                     uint32_t w0 = be16(img + row_dest), w4 = be16(img + row_dest + 8);
@@ -350,11 +350,11 @@ void overlay_compose_planes32(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32
                     acc = (hi_mask & ((carry_in << 1) | ((w8 & 0x8000) != 0))) | (lo_mask & carry_in);
                     wr16(img + row_desc + 8, (uint16_t)acc);
                     wr16(img + row_desc, (uint16_t)(acc >> 16));
-                    acc = (dmask & d6) |
+                    acc = (dmask & carry) |
                           ((~dmask) & ((~end_mask & ((long0 << 1) | acc2)) | (end_mask & long0)));
                     wr16(img + row_desc + 0x28, (uint16_t)acc);
                     wr16(img + row_desc + 0x20, (uint16_t)(acc >> 16));
-                    d6 = rotate_left32(d6, 4);
+                    carry = rotate_left32(carry, 4);
                     row_dest += 2; row_desc += 2;
                     if (k == 1) break;
                 }
@@ -368,10 +368,10 @@ void overlay_compose_planes32(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32
             int bit2 = 0;
             for (uint32_t row = rows;; row = (row - 1) & 0xffff) {
                 uint32_t row_dest = w_dest, row_desc = w_desc;
-                uint32_t hi = (d6 >> 16) & 0xffff;
+                uint32_t hi = (carry >> 16) & 0xffff;
                 uint32_t word = ((be16(img + w_src) << 16) | hi) & 0xffffffffu;
                 word = rotate_right32(word, rotm);
-                d6 = rotate_left32(word, rot6);
+                carry = rotate_left32(word, rot6);
                 uint32_t dmask = rotate_right32(0x80000000u, rotm);
                 for (uint32_t k = 4;; k = (k - 1) & 0xffff) {
                     uint32_t w0 = be16(img + row_dest), w4 = be16(img + row_dest + 8);
@@ -383,11 +383,11 @@ void overlay_compose_planes32(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32
                     acc = (hi_mask & ((acc << 1) | ((w8 & 0x8000) != 0))) | (lo_mask & acc);
                     wr16(img + row_desc + 8, (uint16_t)acc);
                     wr16(img + row_desc, (uint16_t)(acc >> 16));
-                    acc = (dmask & d6) |
+                    acc = (dmask & carry) |
                           ((~dmask) & ((~end_mask & ((carry_in << 1) | acc2)) | (end_mask & carry_in)));
                     wr16(img + row_desc + 0x18, (uint16_t)acc);
                     wr16(img + row_desc + 0x10, (uint16_t)(acc >> 16));
-                    d6 = rotate_left32(d6, 4);
+                    carry = rotate_left32(carry, 4);
                     row_dest += 2; row_desc += 2;
                     if (k == 1) break;
                 }
@@ -401,21 +401,21 @@ void overlay_compose_planes32(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32
             int bit2 = 1;
             for (uint32_t row = rows;; row = (row - 1) & 0xffff) {
                 uint32_t row_dest = w_dest, row_desc = w_desc;
-                uint32_t hi = (d6 >> 16) & 0xffff;
+                uint32_t hi = (carry >> 16) & 0xffff;
                 uint32_t word = ((be16(img + w_src) << 16) | hi) & 0xffffffffu;
                 word = rotate_right32(word, rotm);
-                d6 = rotate_left32(word, rot6);
+                carry = rotate_left32(word, rot6);
                 uint32_t dmask = rotate_right32(0x80000000u, rotm);
                 for (uint32_t k = 4;; k = (k - 1) & 0xffff) {
                     uint32_t w0 = be16(img + row_dest), w4 = be16(img + row_dest + 8);
                     uint32_t word2 = (w0 << 16) | w4;
                     bit = (w0 & 0x8000) != 0;
-                    word2 = (dmask & d6) |
+                    word2 = (dmask & carry) |
                            ((~dmask) & ((~(end_mask | lo_mask) & ((word2 << 1) | (uint32_t)bit2)) |
                                         ((end_mask | lo_mask) & word2)));
                     wr16(img + row_desc + 8, (uint16_t)word2);
                     wr16(img + row_desc, (uint16_t)(word2 >> 16));
-                    d6 = rotate_left32(d6, 4);
+                    carry = rotate_left32(carry, 4);
                     row_dest += 2; row_desc += 2;
                     bit2 = bit;
                     if (k == 1) break;
@@ -452,10 +452,10 @@ void overlay_compose_planes32(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32
 }
 
 /* 0x114b0 — 0x114ba con D3-=1, D2=5, D1=(D1<<2)-1 */
-void overlay_compose_planes32_wrap(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3,
-                 uint32_t d6, uint32_t a0, uint32_t a1) {
-    (void)d2;
-    overlay_compose_planes32(img, d0, (d1 << 2) - 1, 5, d3 - 1, d6, a0, a1);
+void overlay_compose_planes32_wrap(uint8_t *img, uint32_t pix, uint32_t sub, uint32_t width, uint32_t height,
+                 uint32_t carry, uint32_t dest, uint32_t src) {
+    (void)width;
+    overlay_compose_planes32(img, pix, (sub << 2) - 1, 5, height - 1, carry, dest, src);
 }
 
 /* FUN_000117fe @ 0x117fe: compone dos fuentes (A0 = mascara, A1 = dato) en 0xd8f0
@@ -500,21 +500,21 @@ void overlay_compose_masked(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t
         if (planes == 2) {
             case_d4 = 7;
             for (uint32_t row = rows;; row = (row - 1) & 0xffff) {
-                uint32_t row_dest = w_dest, a1r = w_src, row_desc = w_desc;
+                uint32_t row_dest = w_dest, row_src = w_src, row_desc = w_desc;
                 for (uint32_t k = 4;; k = (k - 1) & 0xffff) {
                     uint32_t w4 = be16(img + row_dest + 8);
                     uint32_t acc = ((uint32_t)be16(img + row_dest) << 16) | w4;
                     uint32_t w10 = be16(img + row_dest + 0x10);
                     uint32_t w18 = be16(img + row_dest + 0x18);
-                    uint32_t a1v = ((uint32_t)be16(img + a1r) << 16) | be16(img + a1r + 8);
-                    acc = (~pix_mask & (((acc & hi_mask) >> 1) | (lo_mask & acc))) | (pix_mask & a1v);
+                    uint32_t src1 = ((uint32_t)be16(img + row_src) << 16) | be16(img + row_src + 8);
+                    acc = (~pix_mask & (((acc & hi_mask) >> 1) | (lo_mask & acc))) | (pix_mask & src1);
                     wr16(img + row_desc + 8, (uint16_t)acc);
                     wr16(img + row_desc, (uint16_t)(acc >> 16));
                     acc = (~end_mask & (((w4 & 1) << 31) | (((w10 << 16) | w18) >> 1))) |
                          (end_mask & ((w10 << 16) | w18));
                     wr16(img + row_desc + 0x18, (uint16_t)acc);
                     wr16(img + row_desc + 0x10, (uint16_t)(acc >> 16));
-                    row_dest += 2; a1r += 2; row_desc += 2;
+                    row_dest += 2; row_src += 2; row_desc += 2;
                     if (k == 1) break;
                 }
                 w_dest += 0xa0; w_src += 0xa0; w_desc += 0x20;
@@ -523,7 +523,7 @@ void overlay_compose_masked(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t
         } else if (planes == 3) {
             case_d4 = 0xb;
             for (uint32_t row = rows;; row = (row - 1) & 0xffff) {
-                uint32_t row_dest = w_dest, a1r = w_src, row_desc = w_desc;
+                uint32_t row_dest = w_dest, row_src = w_src, row_desc = w_desc;
                 for (uint32_t k = 4;; k = (k - 1) & 0xffff) {
                     uint32_t w4 = be16(img + row_dest + 8);
                     uint32_t acc2 = ((uint32_t)be16(img + row_dest) << 16) | w4;
@@ -531,18 +531,18 @@ void overlay_compose_masked(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t
                     uint32_t w18 = be16(img + row_dest + 0x18);
                     uint32_t w20 = be16(img + row_dest + 0x20);
                     uint32_t w28 = be16(img + row_dest + 0x28);
-                    uint32_t a1v = ((uint32_t)be16(img + a1r) << 16) | be16(img + a1r + 8);
+                    uint32_t src1 = ((uint32_t)be16(img + row_src) << 16) | be16(img + row_src + 8);
                     uint32_t acc = ((((uint32_t)w10 << 16) | w18) >> 1);
                     wr16(img + row_desc + 0x18, (uint16_t)acc);
                     wr16(img + row_desc + 0x10, (uint16_t)((((w4 & 1) << 31) | acc) >> 16));
-                    acc = (~pix_mask & (((hi_mask & acc2) >> 1) | (lo_mask & acc2))) | (pix_mask & a1v);
+                    acc = (~pix_mask & (((hi_mask & acc2) >> 1) | (lo_mask & acc2))) | (pix_mask & src1);
                     wr16(img + row_desc + 8, (uint16_t)acc);
                     wr16(img + row_desc, (uint16_t)(acc >> 16));
                     acc = (~end_mask & (((w18 & 1) << 31) | (((w20 << 16) | w28) >> 1))) |
                          (end_mask & ((w20 << 16) | w28));
                     wr16(img + row_desc + 0x28, (uint16_t)acc);
                     wr16(img + row_desc + 0x20, (uint16_t)(acc >> 16));
-                    row_dest += 2; a1r += 2; row_desc += 2;
+                    row_dest += 2; row_src += 2; row_desc += 2;
                     if (k == 1) break;
                 }
                 w_dest += 0xa0; w_src += 0xa0; w_desc += 0x30;
@@ -551,7 +551,7 @@ void overlay_compose_masked(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t
         } else if (planes == 4) {
             case_d4 = 0xf;
             for (uint32_t row = rows;; row = (row - 1) & 0xffff) {
-                uint32_t row_dest = w_dest, a1r = w_src, row_desc = w_desc;
+                uint32_t row_dest = w_dest, row_src = w_src, row_desc = w_desc;
                 for (uint32_t k = 4;; k = (k - 1) & 0xffff) {
                     uint32_t w4 = be16(img + row_dest + 8);
                     uint32_t long0 = ((uint32_t)be16(img + row_dest) << 16) | w4;
@@ -561,21 +561,21 @@ void overlay_compose_masked(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t
                     uint32_t w28 = be16(img + row_dest + 0x28);
                     uint32_t w30 = be16(img + row_dest + 0x30);
                     uint32_t w38 = be16(img + row_dest + 0x38);
-                    uint32_t a1v = ((uint32_t)be16(img + a1r) << 16) | be16(img + a1r + 8);
+                    uint32_t src1 = ((uint32_t)be16(img + row_src) << 16) | be16(img + row_src + 8);
                     uint32_t acc = ((((uint32_t)w10 << 16) | w18) >> 1);
                     uint32_t acc2 = ((((uint32_t)w20 << 16) | w28) >> 1);
                     wr16(img + row_desc + 0x18, (uint16_t)acc);
                     wr16(img + row_desc + 0x10, (uint16_t)((((w4 & 1) << 31) | acc) >> 16));
                     wr16(img + row_desc + 0x28, (uint16_t)acc2);
                     wr16(img + row_desc + 0x20, (uint16_t)((((w18 & 1) << 31) | acc2) >> 16));
-                    acc = (~pix_mask & (((hi_mask & long0) >> 1) | (lo_mask & long0))) | (pix_mask & a1v);
+                    acc = (~pix_mask & (((hi_mask & long0) >> 1) | (lo_mask & long0))) | (pix_mask & src1);
                     wr16(img + row_desc + 8, (uint16_t)acc);
                     wr16(img + row_desc, (uint16_t)(acc >> 16));
                     acc = (~end_mask & (((w28 & 1) << 31) | (((w30 << 16) | w38) >> 1))) |
                          (end_mask & ((w30 << 16) | w38));
                     wr16(img + row_desc + 0x38, (uint16_t)acc);
                     wr16(img + row_desc + 0x30, (uint16_t)(acc >> 16));
-                    row_dest += 2; a1r += 2; row_desc += 2;
+                    row_dest += 2; row_src += 2; row_desc += 2;
                     if (k == 1) break;
                 }
                 w_dest += 0xa0; w_src += 0xa0; w_desc += 0x40;
@@ -585,20 +585,20 @@ void overlay_compose_masked(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t
             case_d4 = 3;
             int bit = 1;
             for (uint32_t row = rows;; row = (row - 1) & 0xffff) {
-                uint32_t row_dest = w_dest, a1r = w_src, row_desc = w_desc;
+                uint32_t row_dest = w_dest, row_src = w_src, row_desc = w_desc;
                 for (uint32_t k = 4;; k = (k - 1) & 0xffff) {
                     uint32_t w0 = be16(img + row_dest);
                     uint32_t w4 = be16(img + row_dest + 8);
-                    uint32_t a1v = ((uint32_t)be16(img + a1r) << 16) | be16(img + a1r + 8);
+                    uint32_t src1 = ((uint32_t)be16(img + row_src) << 16) | be16(img + row_src + 8);
                     uint32_t long0b = (w0 << 16) | w4;
                     carry = (w4 & 1) != 0;
                     long0b = (~pix_mask & ((~(end_mask | lo_mask) &
                                         (((uint32_t)bit << 31) | (long0b >> 1))) |
                                        ((end_mask | lo_mask) & long0b))) |
-                           (pix_mask & a1v);
+                           (pix_mask & src1);
                     wr16(img + row_desc + 8, (uint16_t)long0b);
                     wr16(img + row_desc, (uint16_t)(long0b >> 16));
-                    row_dest += 2; a1r += 2; row_desc += 2;
+                    row_dest += 2; row_src += 2; row_desc += 2;
                     bit = carry;
                     if (k == 1) break;
                 }
@@ -630,10 +630,10 @@ void overlay_compose_masked(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t
 }
 
 /* 0x117de — 0x117fe con 0x1a53e=1 */
-void overlay_compose_masked_wrap(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3,
-                 uint32_t a0) {
+void overlay_compose_masked_wrap(uint8_t *img, uint32_t pix, uint32_t sub, uint32_t width, uint32_t height,
+                 uint32_t dest) {
     wr16(img + 0x1a53e, 1);
-    overlay_compose_masked(img, d0, (d1 << 2) - 1, d2 << 2, d3 - 1, a0, a0 - 0x8000);
+    overlay_compose_masked(img, pix, (sub << 2) - 1, width << 2, height - 1, dest, dest - 0x8000);
 }
 
 /* 0x11afa — variante roxl (flag 0x1a53e) */
@@ -679,22 +679,22 @@ void overlay_compose_shift(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t 
             case_d4 = 7;
             uint32_t fill = 0;
             for (uint32_t row = rows;; row = (row - 1) & 0xffff) {
-                uint32_t row_dest = w_dest, a1r = w_src, row_desc = w_desc;
+                uint32_t row_dest = w_dest, row_src = w_src, row_desc = w_desc;
                 for (uint32_t k = 4;; k = (k - 1) & 0xffff) {
-                    uint32_t d1o = ((uint32_t)be16(img + row_dest) << 16) | be16(img + row_dest + 8);
-                    uint32_t d3o = ((uint32_t)be16(img + row_dest + 0x10) << 16) | be16(img + row_dest + 0x18);
-                    uint32_t d0o = ((uint32_t)be16(img + a1r + 0x10) << 16) | be16(img + a1r + 0x18);
-                    uint32_t d3s = (d3o << 1) | fill;
-                    uint32_t d1s = (d1o << 1) | (d3o >> 31);
-                    fill = d1o >> 31;
-                    uint32_t acc = (d1o & lo_mask) | (d1s & hi_mask);
-                    uint32_t acc2 = (d3o & end_mask) | (d3s & ~end_mask);
-                    uint32_t acc3 = (d0o & pix_mask) | (acc2 & ~pix_mask);
+                    uint32_t src1 = ((uint32_t)be16(img + row_dest) << 16) | be16(img + row_dest + 8);
+                    uint32_t src3 = ((uint32_t)be16(img + row_dest + 0x10) << 16) | be16(img + row_dest + 0x18);
+                    uint32_t src0 = ((uint32_t)be16(img + row_src + 0x10) << 16) | be16(img + row_src + 0x18);
+                    uint32_t sh3 = (src3 << 1) | fill;
+                    uint32_t sh1 = (src1 << 1) | (src3 >> 31);
+                    fill = src1 >> 31;
+                    uint32_t acc = (src1 & lo_mask) | (sh1 & hi_mask);
+                    uint32_t acc2 = (src3 & end_mask) | (sh3 & ~end_mask);
+                    uint32_t acc3 = (src0 & pix_mask) | (acc2 & ~pix_mask);
                     wr16(img + row_desc + 8, (uint16_t)acc);
                     wr16(img + row_desc, (uint16_t)(acc >> 16));
                     wr16(img + row_desc + 0x18, (uint16_t)acc3);
                     wr16(img + row_desc + 0x10, (uint16_t)(acc3 >> 16));
-                    row_dest += 2; a1r += 2; row_desc += 2;
+                    row_dest += 2; row_src += 2; row_desc += 2;
                     if (k == 1) break;
                 }
                 w_dest += 0xa0; w_src += 0xa0; w_desc += 0x20;
@@ -703,25 +703,25 @@ void overlay_compose_shift(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t 
         } else if (planes == 3) {
             case_d4 = 0xb;
             for (uint32_t row = rows;; row = (row - 1) & 0xffff) {
-                uint32_t row_dest = w_dest, a1r = w_src, row_desc = w_desc;
+                uint32_t row_dest = w_dest, row_src = w_src, row_desc = w_desc;
                 for (uint32_t k = 4;; k = (k - 1) & 0xffff) {
-                    uint32_t d0o = ((uint32_t)be16(img + a1r + 0x20) << 16) | be16(img + a1r + 0x28);
-                    uint32_t d1o = ((uint32_t)be16(img + row_dest) << 16) | be16(img + row_dest + 8);
-                    uint32_t d2o = ((uint32_t)be16(img + row_dest + 0x10) << 16) | be16(img + row_dest + 0x18);
-                    uint32_t d3o = ((uint32_t)be16(img + row_dest + 0x20) << 16) | be16(img + row_dest + 0x28);
-                    uint32_t d3s = d3o << 1;
-                    uint32_t d2s = (d2o << 1) | (d3o >> 31);
-                    uint32_t d1s = (d1o << 1) | (d2o >> 31);
-                    uint32_t acc = (d1o & lo_mask) | (d1s & hi_mask);
-                    uint32_t acc2 = (d3o & end_mask) | (d3s & ~end_mask);
-                    uint32_t acc3 = (d0o & pix_mask) | (acc2 & ~pix_mask);
-                    wr16(img + row_desc + 0x18, (uint16_t)d2s);
-                    wr16(img + row_desc + 0x10, (uint16_t)(d2s >> 16));
+                    uint32_t src0 = ((uint32_t)be16(img + row_src + 0x20) << 16) | be16(img + row_src + 0x28);
+                    uint32_t src1 = ((uint32_t)be16(img + row_dest) << 16) | be16(img + row_dest + 8);
+                    uint32_t src2 = ((uint32_t)be16(img + row_dest + 0x10) << 16) | be16(img + row_dest + 0x18);
+                    uint32_t src3 = ((uint32_t)be16(img + row_dest + 0x20) << 16) | be16(img + row_dest + 0x28);
+                    uint32_t sh3 = src3 << 1;
+                    uint32_t sh2 = (src2 << 1) | (src3 >> 31);
+                    uint32_t sh1 = (src1 << 1) | (src2 >> 31);
+                    uint32_t acc = (src1 & lo_mask) | (sh1 & hi_mask);
+                    uint32_t acc2 = (src3 & end_mask) | (sh3 & ~end_mask);
+                    uint32_t acc3 = (src0 & pix_mask) | (acc2 & ~pix_mask);
+                    wr16(img + row_desc + 0x18, (uint16_t)sh2);
+                    wr16(img + row_desc + 0x10, (uint16_t)(sh2 >> 16));
                     wr16(img + row_desc + 8, (uint16_t)acc);
                     wr16(img + row_desc, (uint16_t)(acc >> 16));
                     wr16(img + row_desc + 0x28, (uint16_t)acc3);
                     wr16(img + row_desc + 0x20, (uint16_t)(acc3 >> 16));
-                    row_dest += 2; a1r += 2; row_desc += 2;
+                    row_dest += 2; row_src += 2; row_desc += 2;
                     if (k == 1) break;
                 }
                 w_dest += 0xa0; w_src += 0xa0; w_desc += 0x30;
@@ -730,29 +730,29 @@ void overlay_compose_shift(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t 
         } else if (planes == 4) {
             case_d4 = 0xf;
             for (uint32_t row = rows;; row = (row - 1) & 0xffff) {
-                uint32_t row_dest = w_dest, a1r = w_src, row_desc = w_desc;
+                uint32_t row_dest = w_dest, row_src = w_src, row_desc = w_desc;
                 for (uint32_t k = 4;; k = (k - 1) & 0xffff) {
-                    uint32_t d0o = ((uint32_t)be16(img + a1r + 0x30) << 16) | be16(img + a1r + 0x38);
-                    uint32_t d1o = ((uint32_t)be16(img + row_dest) << 16) | be16(img + row_dest + 8);
-                    uint32_t d2o = ((uint32_t)be16(img + row_dest + 0x10) << 16) | be16(img + row_dest + 0x18);
-                    uint32_t d4o = ((uint32_t)be16(img + row_dest + 0x20) << 16) | be16(img + row_dest + 0x28);
-                    uint32_t d3o = ((uint32_t)be16(img + row_dest + 0x30) << 16) | be16(img + row_dest + 0x38);
-                    uint32_t d3s = d3o << 1;
-                    uint32_t d4s = (d4o << 1) | (d3o >> 31);
-                    uint32_t d2s = (d2o << 1) | (d4o >> 31);
-                    uint32_t d1s = (d1o << 1) | (d2o >> 31);
-                    uint32_t acc = (d1o & lo_mask) | (d1s & hi_mask);
-                    uint32_t acc2 = (d3o & end_mask) | (d3s & ~end_mask);
-                    uint32_t acc3 = (d0o & pix_mask) | (acc2 & ~pix_mask);
-                    wr16(img + row_desc + 0x18, (uint16_t)d2s);
-                    wr16(img + row_desc + 0x10, (uint16_t)(d2s >> 16));
-                    wr16(img + row_desc + 0x28, (uint16_t)d4s);
-                    wr16(img + row_desc + 0x20, (uint16_t)(d4s >> 16));
+                    uint32_t src0 = ((uint32_t)be16(img + row_src + 0x30) << 16) | be16(img + row_src + 0x38);
+                    uint32_t src1 = ((uint32_t)be16(img + row_dest) << 16) | be16(img + row_dest + 8);
+                    uint32_t src2 = ((uint32_t)be16(img + row_dest + 0x10) << 16) | be16(img + row_dest + 0x18);
+                    uint32_t src4 = ((uint32_t)be16(img + row_dest + 0x20) << 16) | be16(img + row_dest + 0x28);
+                    uint32_t src3 = ((uint32_t)be16(img + row_dest + 0x30) << 16) | be16(img + row_dest + 0x38);
+                    uint32_t sh3 = src3 << 1;
+                    uint32_t sh4 = (src4 << 1) | (src3 >> 31);
+                    uint32_t sh2 = (src2 << 1) | (src4 >> 31);
+                    uint32_t sh1 = (src1 << 1) | (src2 >> 31);
+                    uint32_t acc = (src1 & lo_mask) | (sh1 & hi_mask);
+                    uint32_t acc2 = (src3 & end_mask) | (sh3 & ~end_mask);
+                    uint32_t acc3 = (src0 & pix_mask) | (acc2 & ~pix_mask);
+                    wr16(img + row_desc + 0x18, (uint16_t)sh2);
+                    wr16(img + row_desc + 0x10, (uint16_t)(sh2 >> 16));
+                    wr16(img + row_desc + 0x28, (uint16_t)sh4);
+                    wr16(img + row_desc + 0x20, (uint16_t)(sh4 >> 16));
                     wr16(img + row_desc + 8, (uint16_t)acc);
                     wr16(img + row_desc, (uint16_t)(acc >> 16));
                     wr16(img + row_desc + 0x38, (uint16_t)acc3);
                     wr16(img + row_desc + 0x30, (uint16_t)(acc3 >> 16));
-                    row_dest += 2; a1r += 2; row_desc += 2;
+                    row_dest += 2; row_src += 2; row_desc += 2;
                     if (k == 1) break;
                 }
                 w_dest += 0xa0; w_src += 0xa0; w_desc += 0x40;
@@ -762,17 +762,17 @@ void overlay_compose_shift(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t 
             case_d4 = 3;
             uint32_t fill = 0;
             for (uint32_t row = rows;; row = (row - 1) & 0xffff) {
-                uint32_t row_dest = w_dest, a1r = w_src, row_desc = w_desc;
+                uint32_t row_dest = w_dest, row_src = w_src, row_desc = w_desc;
                 for (uint32_t k = 4;; k = (k - 1) & 0xffff) {
-                    uint32_t d1o = ((uint32_t)be16(img + row_dest) << 16) | be16(img + row_dest + 8);
-                    uint32_t d0o = ((uint32_t)be16(img + a1r) << 16) | be16(img + a1r + 8);
-                    uint32_t d1s = (d1o << 1) | fill;
-                    fill = d1o >> 31;
-                    uint32_t acc = (d1o & (lo_mask | end_mask)) | (d1s & ~(lo_mask | end_mask));
-                    uint32_t acc2 = (d0o & pix_mask) | (acc & ~pix_mask);
+                    uint32_t src1 = ((uint32_t)be16(img + row_dest) << 16) | be16(img + row_dest + 8);
+                    uint32_t src0 = ((uint32_t)be16(img + row_src) << 16) | be16(img + row_src + 8);
+                    uint32_t sh1 = (src1 << 1) | fill;
+                    fill = src1 >> 31;
+                    uint32_t acc = (src1 & (lo_mask | end_mask)) | (sh1 & ~(lo_mask | end_mask));
+                    uint32_t acc2 = (src0 & pix_mask) | (acc & ~pix_mask);
                     wr16(img + row_desc + 8, (uint16_t)acc2);
                     wr16(img + row_desc, (uint16_t)(acc2 >> 16));
-                    row_dest += 2; a1r += 2; row_desc += 2;
+                    row_dest += 2; row_src += 2; row_desc += 2;
                     if (k == 1) break;
                 }
                 w_dest += 0xa0; w_src += 0xa0; w_desc += 0x10;
@@ -802,8 +802,8 @@ void overlay_compose_shift(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t 
 }
 
 /* 0x11ada — 0x11afa con 0x1a53e=1 */
-void overlay_compose_shift_wrap(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3,
-                 uint32_t a0) {
+void overlay_compose_shift_wrap(uint8_t *img, uint32_t pix, uint32_t sub, uint32_t width, uint32_t height,
+                 uint32_t dest) {
     wr16(img + 0x1a53e, 1);
-    overlay_compose_shift(img, d0, (d1 << 2) - 1, d2 << 2, d3 - 1, a0, a0 - 0x8000);
+    overlay_compose_shift(img, pix, (sub << 2) - 1, width << 2, height - 1, dest, dest - 0x8000);
 }

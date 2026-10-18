@@ -18,13 +18,13 @@
 #include "os.h"
 #include "kult_internal.h"
 
-uint32_t advance_text_entry(uint8_t *img, uint32_t a1, uint32_t d4);
-uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
+uint32_t advance_text_entry(uint8_t *, uint32_t, uint32_t);
+uint32_t screen_address(uint8_t *, uint32_t, uint32_t, uint32_t *);
 
 /* the 0x55b02 scratch is read back with `move.l (a5)`, four consecutive bytes */
 /* movep: bytes alternos (alto en +0, bajo en +2, ...) */
 /* 0x11196 — permutacion de palabra (resultado en D0/D1) */
-void bit_reverse_word(uint32_t w0, uint32_t w1, uint32_t *d0o, uint32_t *d1o) {
+void bit_reverse_word(uint32_t w0, uint32_t w1, uint32_t *w0_out, uint32_t *w1_out) {
     w0 &= 0xffff;
     w1 &= 0xffff;
     uint32_t x;
@@ -44,8 +44,8 @@ void bit_reverse_word(uint32_t w0, uint32_t w1, uint32_t *d0o, uint32_t *d1o) {
         x = (w1 >> 15) & 1;
         w1 = n1;
     }
-    *d0o = w1;
-    *d1o = w1;
+    *w0_out = w1;
+    *w1_out = w1;
 }
 
 /* 0x11050 — blit de texto directo (A0/A1/A3/D2/D3/D7) */
@@ -173,7 +173,7 @@ void text_blit_rev(uint8_t *img, uint32_t dest, uint32_t src, uint32_t stride,
  * (0x141dc) feeds them straight into FUN_0001215e, so the reconstruction has to
  * hand them back. */
 void run_text_entry_ex(uint8_t *img, uint32_t entry,
-                    uint32_t *a0o, uint32_t *d2o, uint32_t *d3o, uint32_t *d7o) {
+                    uint32_t *addr_out, uint32_t *cols_out, uint32_t *rows_out, uint32_t *phase_out) {
     uint32_t count = img[entry] & 0xff;
     uint32_t table = advance_text_entry(img, A_TEXT_TABLE, count);
 
@@ -202,10 +202,10 @@ void run_text_entry_ex(uint8_t *img, uint32_t entry,
     }
     uint32_t phase;
     uint32_t screen = screen_address(img, ch, flags, &phase);
-    if (a0o) *a0o = screen;
-    if (d2o) *d2o = cols;
-    if (d3o) *d3o = rows;
-    if (d7o) *d7o = phase;
+    if (addr_out) *addr_out = screen;
+    if (cols_out) *cols_out = cols;
+    if (rows_out) *rows_out = rows;
+    if (phase_out) *phase_out = phase;
     uint32_t addr = screen - 0x8000;
     uint32_t stride2 = be32(img + A_DAT_1A534);
     if (img[entry + 1] & 0x80)
@@ -219,7 +219,7 @@ void run_text_entry(uint8_t *img, uint32_t entry) {
     run_text_entry_ex(img, entry, 0, 0, 0, 0);
 }
 
-void grid_fill(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t d7, uint32_t a1);
+void grid_fill(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
 
 /* FUN_00016dbc @ 0x16dbc: `a6 += 1`; calcula la direccion de pantalla de (D0,D1)
  * (0x10fec), avanza la entrada del banco A_TEXT_TABLE por D4 (0x10f8e), lee
@@ -240,10 +240,10 @@ uint32_t text_transition(uint8_t *img, uint32_t *entry, uint32_t x, uint32_t y, 
     return addr;
 }
 
-void or_rows(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t a3, uint32_t a5);
-void row_blit(uint8_t *img, uint32_t a3, uint32_t d2, uint32_t d3);
-void wait_vbl_even(uint8_t *img);
-void reveal_region(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
+void or_rows(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void row_blit(uint8_t *, uint32_t, uint32_t, uint32_t);
+void wait_vbl_even(uint8_t *);
+void reveal_region(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
 
 /* FUN_00016c6c @ 0x16c6c: cuerpo compartido del wipe de texto horizontal. A0 = base
  * de pantalla (de 0x16dbc), D2/D3 grupos/filas, A5 = offset del descriptor. Rota D3
@@ -364,7 +364,7 @@ uint32_t wipe_f(uint8_t *img, uint32_t entry) {
 
 /* FUN_000141dc @ 0x141dc: run FUN_00014138 on A6+1, then the masked row blit
  * (FUN_0001215e) with the A0/D2/D3/D7 that FUN_00014138 left behind. */
-void mask_restore_rows(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7);
+void mask_restore_rows(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
 /* 0x141dc — dispatch.c — el despacho de comandos y la VM de bytes del script. run_command @ 0x103a8 / run_command_keep_sp @ 0x103ae: leen `the_command` ($1a50e) y despac... */
 void text_entry_blit(uint8_t *img, uint32_t entry) {
     uint32_t addr, w, h, phase;
@@ -438,8 +438,8 @@ void text_end(uint8_t *img) { (void)img; }
 
 /* FUN_000122ee @ 0x122ee: espera un frame (0x13594) y dibuja el prompt parpadeante con el
  * overlay 0x11020 en (0x4b, 0x9b); alterna el flag 0x1a74e (el color 0x16/0x17). */
-void wait_vbl(uint8_t *img);
-void text_blit_ovl_b(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4);
+void wait_vbl(uint8_t *);
+void text_blit_ovl_b(uint8_t *, uint32_t, uint32_t, uint32_t);
 /* 0x122ee — prompt */
 void prompt(uint8_t *img) {
     if (img[0x1acc6] == 0x87)
@@ -453,8 +453,8 @@ void prompt(uint8_t *img) {
 /* FUN_00012292 @ 0x12292: espera un clic (bit 2 de $1a456) leyendo frames con 0x13698 y
  * parpadeando el prompt (0x122ee) cada 16 frames. En modo $1acc6 == 0x87 (sin overlay)
  * sale por GEMDOS Cnecin (trap #1/$8). A5/A6 los preserva el `movem.l` de entrada. */
-void wait_frame(uint8_t *img);
-void prompt(uint8_t *img);
+void wait_frame(uint8_t *);
+void prompt(uint8_t *);
 /* 0x12292 — wipe grande de texto. Primer 0x16dbc (d4=3, x=0x23, y=0xad) + 0x16b2e(2,7); segundo 0x16dbc (d4=0x77, x=0x20, y=0x5e) + 0x16b2e(3,0x47); prompt (0x12292) y 7... */
 void prompt_wait(uint8_t *img) {
     if (img[0x1acc6] == 0x87) {
@@ -480,8 +480,8 @@ void prompt_wait(uint8_t *img) {
 /* FUN_00016abe @ 0x16abe: rejilla de texto sobre la caja ($1ab40..43): 16dbc prepara
  * (d4=0x50) y por cada banda de 0x1e filas (d3 = alto/0x1e) blitea D2+1 grupos de
  * 0x1d filas con 0x16b2e. Devuelve A6 (avanzado por 16dbc). */
-uint32_t text_transition(uint8_t *img, uint32_t *a6, uint32_t d0, uint32_t d1, uint32_t d4,
-                     uint32_t *a5_out);
+uint32_t text_transition(uint8_t *, uint32_t *, uint32_t, uint32_t, uint32_t,
+                     uint32_t *);
 
 /* 0x16abe — (cmd idx 10): rejilla de texto 0x16abe + espera de clic (0x167be) + repintados, y despacho por la tabla de objetos o por el umbral (0x9005) en la cola 0x15022. */
 uint32_t grid_bands(uint8_t *img, uint32_t entry) {
@@ -518,9 +518,9 @@ uint32_t grid_bands(uint8_t *img, uint32_t entry) {
  * 0x16b2e(3,0x47); prompt (0x12292) y 72 pasadas {0x16d1e (VBL), 0x16b76 con
  * d3+1, 0x16b2e con d3, a3 += 0xa0}; cierra con 0x16b76(d3=0). Devuelve
  * A6 = entrada+1 (16dbc +1, subq -1, 16dbc +1). */
-void prompt_wait(uint8_t *img);
-void wait_vbl_even(uint8_t *img);
-void row_blit(uint8_t *img, uint32_t a3, uint32_t d2, uint32_t d3);
+void prompt_wait(uint8_t *);
+void wait_vbl_even(uint8_t *);
+void row_blit(uint8_t *, uint32_t, uint32_t, uint32_t);
 
 /* 0x16b9c — wipe 72 */
 uint32_t wipe_72(uint8_t *img, uint32_t entry) {

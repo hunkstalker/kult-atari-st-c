@@ -22,8 +22,8 @@
 #include "machine.h"
 #include "addrs.h"
 
-void walk_entry(uint8_t *img, uint32_t a4, uint32_t d1, uint32_t *a4o,
-                  uint32_t *a5o);
+void walk_entry(uint8_t *, uint32_t, uint32_t, uint32_t *,
+                  uint32_t *);
 
 /* 0x14588 — reinicia globals de comando (0xa01c/0xf7/0x9048/...) */
 void command_state_reset(uint8_t *img) {
@@ -138,28 +138,28 @@ uint32_t cmd74_wrap(uint8_t *img, uint32_t script) {
  *   0x1460a): restaura los iconos 1..3, transicion 0x15934/copy_screen, para el
  *   sonido, modo 0x16 -> sonido 0x83 + espera, 0x14748, paleta, 0x1857c/0x18944,
  *   formulario inverso 0x1424c con $1acc9 y los iconos de pista (0x16556). */
-void anim_mode(uint8_t *img, uint32_t a6);
-void sample_find_body(uint8_t *img);
-void icon_repeat(uint8_t *img);
-void rot_action(uint8_t *img);
-void scene_text_box(uint8_t *img);
-void run_text_table(uint8_t *img, uint32_t a6, uint32_t d0, uint32_t d1);
-void textform_fwd(uint8_t *img, uint32_t a6, uint32_t d0);
-void textform_rev(uint8_t *img, uint32_t a6, uint32_t d0);
-void icon_table(uint8_t *img);
-void hint_state_a(uint8_t *img, uint32_t a1);
-void hint_state_b(uint8_t *img);
-void update_icon_list(uint8_t *img);
-void draw_hint_icons(uint8_t *img);
-void elem_mode_blit(uint8_t *img);
-void set_palette_current(uint8_t *img);
-void copy_rows_a(uint8_t *img);
-void copy_screen(uint8_t *img);
-void sound_play_a(uint8_t *img, uint32_t d4);
-void sound_stop(uint8_t *img);
-void hint_blit_2(uint8_t *img, uint32_t *a6);
-void hint_blit_stroke(uint8_t *img, uint32_t *a6);
-void hint_blit_3(uint8_t *img, uint32_t *a6);
+void anim_mode(uint8_t *, uint32_t);
+void sample_find_body(uint8_t *);
+void icon_repeat(uint8_t *);
+void rot_action(uint8_t *);
+void scene_text_box(uint8_t *);
+void run_text_table(uint8_t *, uint32_t, uint32_t, uint32_t);
+void textform_fwd(uint8_t *, uint32_t, uint32_t);
+void textform_rev(uint8_t *, uint32_t, uint32_t);
+void icon_table(uint8_t *);
+void hint_state_a(uint8_t *, uint32_t);
+void hint_state_b(uint8_t *);
+void update_icon_list(uint8_t *);
+void draw_hint_icons(uint8_t *);
+void elem_mode_blit(uint8_t *);
+void set_palette_current(uint8_t *);
+void copy_rows_a(uint8_t *);
+void copy_screen(uint8_t *);
+void sound_play_a(uint8_t *, uint32_t);
+void sound_stop(uint8_t *);
+void hint_blit_2(uint8_t *, uint32_t *);
+void hint_blit_stroke(uint8_t *, uint32_t *);
+void hint_blit_3(uint8_t *, uint32_t *);
 
 /* 0x1460a — procesa el modo tras input (formulario, objeto, overlays) */
 uint32_t scene_mode_apply(uint8_t *img, uint32_t script) {

@@ -72,7 +72,7 @@ void pal_threshold(uint8_t *img) {
 }
 
 /* FUN_000162d8 @ 0x162d8: `addq.l #1,a6` y cae en 0x162da (paleta por 0x1acf4). */
-void set_palette_current(uint8_t *img);
+void set_palette_current(uint8_t *);
 
 
 /* FUN_00016d1e @ 0x16d1e: espera de VBL (contador 0x1acd4): gira hasta que cambie y
@@ -86,11 +86,11 @@ void set_palette_current(uint8_t *img);
  * por pasada), despacha $1abfa, y luego acerca los 5 colores al target
  * 0x1a10a[$1acf4] (decrementando componentes, VBL + Setpalette por pasada) hasta
  * igualarlo. */
-uint32_t advance_text_entry(uint8_t *img, uint32_t a1, uint32_t d4);
-void sound_play_b(uint8_t *img, uint32_t d4);
-void set_palette(uint8_t *img);
-void wait_vbl(uint8_t *img);
-void run_command_keep_sp(uint8_t *img, uint32_t a6);
+uint32_t advance_text_entry(uint8_t *, uint32_t, uint32_t);
+void sound_play_b(uint8_t *, uint32_t);
+void set_palette(uint8_t *);
+void wait_vbl(uint8_t *);
+void run_command_keep_sp(uint8_t *, uint32_t);
 
 /* 0x16310 — (cmd idx 9): umbral 2, ciclo de paleta 0x16310 y flag $1ad0f. */
 void palette_cycle(uint8_t *img) {

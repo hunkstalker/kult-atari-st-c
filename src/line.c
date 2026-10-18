@@ -19,8 +19,8 @@
 #include "addrs.h"
 #include "kult_internal.h"
 
-uint32_t screen_address_raw(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7);
-void wait_vbl(uint8_t *img);
+uint32_t screen_address_raw(uint8_t *, uint32_t, uint32_t, uint32_t *);
+void wait_vbl(uint8_t *);
 
 /* 0x13d0e — trazo Bresenham. */
 void reveal_line(uint8_t *img) {

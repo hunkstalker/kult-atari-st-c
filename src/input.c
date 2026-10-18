@@ -30,12 +30,12 @@ void wait_frame(uint8_t *img) {
         ;                                            /* espera el paquete del IKBD */
 
     img[A_INPUT_BUTTONS] = img[A_IKBD_PACKET];       /* $1a44f -> $1a456 */
-    uint32_t d0 = 0;
+    uint32_t moved = 0;
     if (img[A_INPUT_BUTTONS] & 0x01) {               /* btst #0 */
         img[A_INPUT_BUTTONS] |= 0x04;                /* clic */
-        d0 = 0xff;
+        moved = 0xff;
     }
-    img[A_SKIP_TRANSITION] = (uint8_t)d0;
+    img[A_SKIP_TRANSITION] = (uint8_t)moved;
 
     if (os_crawio(img, 0x00ff) != 0)                 /* trap #1/$6: Crawio(0xff) */
         img[A_INPUT_BUTTONS] |= 0x04;                /* hubo movimiento -> clic */

@@ -19,8 +19,8 @@
 #include "psg.h"
 #include "hw.h"
 
-void load_eche_bank_wrap(uint8_t *img, uint32_t d0);
-uint32_t advance_text_entry(uint8_t *img, uint32_t a1, uint32_t d4);
+void load_eche_bank_wrap(uint8_t *, uint32_t);
+uint32_t advance_text_entry(uint8_t *, uint32_t, uint32_t);
 
 /* 0x1929a — escribe registro/dato en $FF8800/$FF8802 (reg 7 = mixer) */
 void ym_write(uint8_t *img, uint32_t reg_in, uint32_t data, uint32_t *reg_out,

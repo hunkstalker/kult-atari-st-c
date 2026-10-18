@@ -134,34 +134,34 @@ void row_palette(uint8_t *img, uint32_t src, uint32_t dest, uint32_t rows) {
 
 /* FUN_0001350c @ 0x1350c: salta a la plantilla número (a6[2]<<8 | a6[1]): a6 = TEMPL+d0.
  * El word leído es el destino (no se usa aquí). Devuelve el A6 nuevo por out-param. */
-void script_push(uint8_t *img, uint32_t *a6) {
-    uint32_t target = ((img[*a6 + 2] << 8) | img[*a6 + 1]) & 0xffff;
-    *a6 = A_TEMPL_DATA + target;
+void script_push(uint8_t *img, uint32_t *script) {
+    uint32_t target = ((img[*script + 2] << 8) | img[*script + 1]) & 0xffff;
+    *script = A_TEMPL_DATA + target;
 }
 
 /* FUN_00013522 @ 0x13522: como 0x1350c pero antes apila el A6 de retorno (a6+3) y el fin
  * de script actual ($1a4e0) en la pila de llamadas en 0x1a7d6. */
-void script_pop(uint8_t *img, uint32_t *a6) {
+void script_pop(uint8_t *img, uint32_t *script) {
     uint32_t stack = be32(img + A_CALL_STACK);
-    uint32_t target = ((img[*a6 + 2] << 8) | img[*a6 + 1]) & 0xffff;
-    wr32(img + stack - 4, *a6 + 3);
+    uint32_t target = ((img[*script + 2] << 8) | img[*script + 1]) & 0xffff;
+    wr32(img + stack - 4, *script + 3);
     wr32(img + stack - 8, be32(img + A_TEMPL_PTR));
     wr32(img + A_CALL_STACK, stack - 8);
-    *a6 = A_TEMPL_DATA + target;
+    *script = A_TEMPL_DATA + target;
 }
 
 /* FUN_00013552 @ 0x13552: desapila de 0x1a7d6: restaura $1a4e0 y A6 (vuelve de 0x13522). */
-void script_call(uint8_t *img, uint32_t *a6) {
+void script_call(uint8_t *img, uint32_t *script) {
     uint32_t stack = be32(img + A_CALL_STACK);
     wr32(img + A_TEMPL_PTR, be32(img + stack));
-    *a6 = be32(img + stack + 4);
+    *script = be32(img + stack + 4);
     wr32(img + A_CALL_STACK, stack + 8);
 }
 
 /* load_fond @ 0x13568: fija el nombre 0x1a41e y carga una pantalla de 0x7d22 bytes en
  * screen_ptr_b-0x22 (cae en load_named_screen). FUN_00013572 @ 0x13572: solo estas dos
  * últimas asignaciones (el nombre lo trae ya quien llame). */
-void load_resource(uint8_t *img);
+void load_resource(uint8_t *);
 /* 0x13568 — carga FOND.PI1 (fondo de sala) en screen_ptr_b */
 void load_fond(uint8_t *img) {
     wr32(img + A_CUR_FILENAME, 0x1a41e);
@@ -192,8 +192,8 @@ void copy_screen_rev(uint8_t *img) {
 /* FUN_00012190 @ 0x12190: restaura D3 filas desde la capa delantera (screen_ptr_a) a la
  * trasera: precalcula máscaras (0x12698) y blitea cada fila (0x123c0) con a0 = origen-0x8000
  * y a1 = origen. */
-void blit_mask_setup(uint8_t *img, uint32_t d2, uint32_t d7);
-void blit_mask_row(uint8_t *img, uint32_t a0, uint32_t a1);
+void blit_mask_setup(uint8_t *, uint32_t, uint32_t);
+void blit_mask_row(uint8_t *, uint32_t, uint32_t);
 /* 0x12190 — mask row blit */
 void mask_row_blit(uint8_t *img, uint32_t src, uint32_t cols, uint32_t rows, uint32_t phase) {
     blit_mask_setup(img, cols, phase);
@@ -258,14 +258,14 @@ void or_rows(uint8_t *img, uint32_t group_count, uint32_t row_count, uint32_t de
 /* FUN_00015944 @ 0x15944: 0x35 copias de 0x1e (0x1d+1) filas de 16 bytes desde
  * 0x2723e + k*0x1e0 a screen_ptr_b+0x150+k*tabla(0x19900) (con espera si 0x1a573),
  * mas 9 copias de 9 filas desde 0x2705e a screen_ptr_b+0x7070+k*0x10. */
-void wait_vbl(uint8_t *img);
+void wait_vbl(uint8_t *);
 
 /* FUN_00015944 @ 0x15944 y su variante 0x15934: 0x35 copias de 0x1e (0x1d+1) filas de
  * 16 bytes desde 0x2723e + k*0x1e0 a screen_ptr+0x150+k*tabla(0x19900) (con espera
  * si 0x1a573), mas 9 copias de 9 filas desde 0x2705e a screen_ptr+0x7070+k*0x10.
  * 0x15944 usa screen_ptr_b y limpia el flag; 0x15934 usa screen_ptr_a y lo deja a 1
  * (entra directo al bucle, saltandose la carga). */
-void wait_vbl(uint8_t *img);
+void wait_vbl(uint8_t *);
 
 static void screen_copies(uint8_t *img, uint32_t base) {
     base += 0x150;
@@ -310,8 +310,8 @@ void copy_rows_a(uint8_t *img) {
 /* FUN_00018a30 @ 0x18a30: avanza la pista (0x18a10), limpia 0x500 bytes en
  * screen_ptr_a-0x500 y alterna el Setscreen a esa zona y de vuelta 5 veces (2 VBLs
  * por vuelta); al final copia 0x200 bytes desde screen_ptr_a+0x7b00 a la zona. */
-void track_advance(uint8_t *img);
-void wait_vbl(uint8_t *img);
+void track_advance(uint8_t *);
+void wait_vbl(uint8_t *);
 
 /* 0x18a30 — screen clean */
 void screen_clean(uint8_t *img) {
@@ -351,18 +351,18 @@ void screen_clean(uint8_t *img) {
  * VBL, gasta $1a84e iteraciones y suma 0x1f4. Al acabar: 0x182f0 y el bucle infinito
  * 0x18c80 (0x1834a con d5=0x64) — frontera verificada hasta 0x18c80; el bucle final no
  * se transcribe (los tests cortan con stop_pc). Devuelve A6 = entry+1. */
-uint32_t elem_command(uint8_t *img, uint32_t a6, uint32_t *a6o, uint32_t *d0o,
-                        uint32_t *d1o);
-uint32_t screen_address_raw(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
-void scale_blit(uint8_t *img, uint32_t d2in, uint32_t d3in, uint32_t d7, uint32_t a1in);
-void set_palette(uint8_t *img);
-void copy_screen(uint8_t *img);
-void wait_vbl(uint8_t *img);
-void sound_play_a(uint8_t *img, uint32_t d4);
-void icon_list_reset(uint8_t *img);
+uint32_t elem_command(uint8_t *, uint32_t, uint32_t *, uint32_t *,
+                        uint32_t *);
+uint32_t screen_address_raw(uint8_t *, uint32_t, uint32_t, uint32_t *);
+void scale_blit(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void set_palette(uint8_t *);
+void copy_screen(uint8_t *);
+void wait_vbl(uint8_t *);
+void sound_play_a(uint8_t *, uint32_t);
+void icon_list_reset(uint8_t *);
 
 /* 0x18a98 — attract */
-uint32_t attract(uint8_t *img, uint32_t a6) {
+uint32_t attract(uint8_t *img, uint32_t script) {
     img[0x1ad0d] = 5;
     uint32_t back = be32(img + A_SCREEN_PTR_B);
     for (uint32_t y = 0x1f3f;; y = (y - 1) & 0xffff) {
@@ -524,5 +524,5 @@ uint32_t attract(uint8_t *img, uint32_t a6) {
     }
 
     icon_list_reset(img);
-    return a6 + 1;
+    return script + 1;
 }

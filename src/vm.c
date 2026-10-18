@@ -13,7 +13,7 @@
 #include "machine.h"
 #include "addrs.h"
 
-void run_text_entry(uint8_t *img, uint32_t a6);
+void run_text_entry(uint8_t *, uint32_t);
 
 /* 0x12950 — walk entry */
 void walk_entry(uint8_t *img, uint32_t table, uint32_t index, uint32_t *end_out, uint32_t *entry_out) {
@@ -33,15 +33,15 @@ void walk_entry(uint8_t *img, uint32_t table, uint32_t index, uint32_t *end_out,
 void run_text_table(uint8_t *img, uint32_t script, uint32_t color, uint32_t index) {
     (void)script;
     wr16(img + A_DAT_1A49E, color & 0xffff);
-    uint32_t a4o, a5o;
-    walk_entry(img, 0x24982, (index - 1) & 0xffff, &a4o, &a5o);
-    wr32(img + A_DAT_1A4B2, a4o);
-    for (uint32_t p = a5o; p != a4o; p += 3)
+    uint32_t end_out, entry_out;
+    walk_entry(img, 0x24982, (index - 1) & 0xffff, &end_out, &entry_out);
+    wr32(img + A_DAT_1A4B2, end_out);
+    for (uint32_t p = entry_out; p != end_out; p += 3)
         run_text_entry(img, p);
 }
 
 /* 0x13f4c — D0=0, D1=A6[1] -> FUN_00013f56 */
 void text_table_entry(uint8_t *img, uint32_t script) {
-    uint32_t d1 = img[script + 1] & 0xff;
-    run_text_table(img, script + 2, 0, d1);
+    uint32_t index = img[script + 1] & 0xff;
+    run_text_table(img, script + 2, 0, index);
 }

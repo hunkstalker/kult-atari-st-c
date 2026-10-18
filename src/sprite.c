@@ -23,7 +23,7 @@
 #include "addrs.h"
 #include "kult_internal.h"
 
-void wait_vbl(uint8_t *img);
+void wait_vbl(uint8_t *);
 
 /* 0x124f8 — blitter de sprite por descriptor. */
 void blit_sprite(uint8_t *img, uint32_t desc) {
@@ -167,8 +167,8 @@ void blit_rect(uint8_t *img, uint32_t dest, uint32_t src, uint32_t cols, uint32_
 /* 0x124da — blit_rect con stride 0x1a534 + espera de VBL. */
 void blit_rect_vbl(uint8_t *img, uint32_t dest, uint32_t src, uint32_t cols, uint32_t rows,
                    uint32_t phase) {
-    uint32_t a3 = be32(img + 0x1a534);
-    blit_rect(img, dest, src, cols, rows, phase, a3);
+    uint32_t stride = be32(img + 0x1a534);
+    blit_rect(img, dest, src, cols, rows, phase, stride);
     wait_vbl(img);
 }
 

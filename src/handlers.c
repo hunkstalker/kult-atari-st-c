@@ -15,18 +15,18 @@
 #include "machine.h"
 #include "addrs.h"
 
-void prompt_wait(uint8_t *img);
-void hint_select_off(uint8_t *img, uint32_t d0, uint32_t *o);
-void mask_restore_rows(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7);
-uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
-void blit_mask_rows(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d3);
-void blit_mask_setup(uint8_t *img, uint32_t d2, uint32_t d7);
-void blit_mask_row(uint8_t *img, uint32_t a0, uint32_t a1);
-void blit_rect_vbl(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
-                 uint32_t d7);
-void elem_blit_pair(uint8_t *img);
-void elem_blit_pair_vbl(uint8_t *img);
-void hint_blit_entry(uint8_t *img, uint32_t a6, uint32_t *a6_out);
+void prompt_wait(uint8_t *);
+void hint_select_off(uint8_t *, uint32_t, uint32_t *);
+void mask_restore_rows(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+uint32_t screen_address(uint8_t *, uint32_t, uint32_t, uint32_t *);
+void blit_mask_rows(uint8_t *, uint32_t, uint32_t, uint32_t);
+void blit_mask_setup(uint8_t *, uint32_t, uint32_t);
+void blit_mask_row(uint8_t *, uint32_t, uint32_t);
+void blit_rect_vbl(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t);
+void elem_blit_pair(uint8_t *);
+void elem_blit_pair_vbl(uint8_t *);
+void hint_blit_entry(uint8_t *, uint32_t, uint32_t *);
 
 /* 0x1228a — prompt wait entry */
 uint32_t prompt_wait_entry(uint8_t *img, uint32_t script) {
@@ -116,8 +116,8 @@ void copy_grid(uint8_t *img, uint32_t x, uint32_t y, uint32_t w, uint32_t h,
     }
 }
 
-void box_hline_copy(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d3);
-void box_vline_copy(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d3);
+void box_hline_copy(uint8_t *, uint32_t, uint32_t, uint32_t);
+void box_vline_copy(uint8_t *, uint32_t, uint32_t, uint32_t);
 
 /* FUN_00013370 @ 0x13370: revela una caja (D0,D1,D2,D3) con cuatro corridas
  * (0x130a4/0x13162) que van cerrando un rombo; por iteracion actualiza los ocho
@@ -212,7 +212,7 @@ void elem_mode_blit(uint8_t *img) {
     if (img[0x1acc6] == 0x67) elem_blit_pair_vbl(img);
 }
 
-void wait_frame(uint8_t *img);
+void wait_frame(uint8_t *);
 
 /* Cuerpo comun de 0x12240/0x1224e: espera D5 frames comprobando el boton. D5 = byte
  * A6[1] (0x12240) o 4 (0x1224e) mas *(0x1a84e). Si el bit 15 esta puesto o el resultado
@@ -260,10 +260,10 @@ uint32_t wait_button_b(uint8_t *img, uint32_t script) {
  * (y de `screen_address`) en el mismo punto en que el original los tendria.
  */
 
-uint32_t elem_command_wrap(uint8_t *img, uint32_t a6);
-void grid_fill(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t d7, uint32_t a1);
-void row_blit_a(uint8_t *img, uint32_t d1, uint32_t a0, uint32_t a1);
-void row_blit_b(uint8_t *img, uint32_t d1, uint32_t a0, uint32_t a1);
+uint32_t elem_command_wrap(uint8_t *, uint32_t);
+void grid_fill(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void row_blit_a(uint8_t *, uint32_t, uint32_t, uint32_t);
+void row_blit_b(uint8_t *, uint32_t, uint32_t, uint32_t);
 
 typedef struct {
     uint32_t dest, src, cols, rows, phase;
@@ -313,20 +313,20 @@ uint32_t blit_dispatch_b(uint8_t *img, uint32_t script) {
     return script;
 }
 
-void wait_vbl(uint8_t *img);
-uint32_t elem_blit_vbl(uint8_t *img, uint32_t script);
-void scroll_up(uint8_t *img, uint32_t passes, uint32_t d2, uint32_t d3, uint32_t d7,
-                 uint32_t p);
-void scroll_down(uint8_t *img, uint32_t passes, uint32_t d2, uint32_t d3, uint32_t d7,
-                 uint32_t p);
-void overlay_compose_planes32_wrap(uint8_t *img, uint32_t d0, uint32_t passes, uint32_t d2, uint32_t d3,
-                 uint32_t d6, uint32_t p, uint32_t a1);
-void overlay_compose_planes_wrap(uint8_t *img, uint32_t d0, uint32_t passes, uint32_t d2, uint32_t d3,
-                 uint32_t p, uint32_t a1);
-void overlay_compose_masked_wrap(uint8_t *img, uint32_t d0, uint32_t passes, uint32_t d2, uint32_t d3,
-                 uint32_t p);
-void overlay_compose_shift_wrap(uint8_t *img, uint32_t d0, uint32_t passes, uint32_t d2, uint32_t d3,
-                 uint32_t p);
+void wait_vbl(uint8_t *);
+uint32_t elem_blit_vbl(uint8_t *, uint32_t);
+void scroll_up(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t);
+void scroll_down(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t);
+void overlay_compose_planes32_wrap(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t, uint32_t, uint32_t);
+void overlay_compose_planes_wrap(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t, uint32_t);
+void overlay_compose_masked_wrap(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t);
+void overlay_compose_shift_wrap(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t);
 
 /* FUN_00011dee @ 0x11dee / FUN_00011e5e @ 0x11e5e: desplazan el elemento D1+1
  * pasadas copiando D3 filas con 0x123c0 (hacia arriba/abajo) y rebliteando la fila
@@ -355,28 +355,28 @@ void scroll_up(uint8_t *img, uint32_t passes_in, uint32_t cols, uint32_t rows,
 }
 
 /* 0x11e5e — scroll down */
-void scroll_down(uint8_t *img, uint32_t d1in, uint32_t d2in, uint32_t d3in,
-                 uint32_t d7in, uint32_t a0in) {
-    uint32_t d1 = d1in & 0xffff, a0 = a0in;
+void scroll_down(uint8_t *img, uint32_t passes_in, uint32_t d2in, uint32_t d3in,
+                 uint32_t d7in, uint32_t base) {
+    uint32_t passes = passes_in & 0xffff, p = base;
     wr32(img + 0x1a53e, 1);
     blit_mask_setup(img, d2in, d7in);
-    int32_t a3 = (int32_t)(int16_t)(d3in & 0xffff);
-    for (uint32_t k = 0; k <= d1; k++) {
-        uint32_t base = a0;
-        uint32_t inner = (uint32_t)a3 & 0xffff;
+    int32_t n = (int32_t)(int16_t)(d3in & 0xffff);
+    for (uint32_t k = 0; k <= passes; k++) {
+        uint32_t base = p;
+        uint32_t inner = (uint32_t)n & 0xffff;
         if (inner == 0)
             inner = 0x10000;
         for (uint32_t i = 0; i < inner; i++) {
-            uint32_t a1 = a0;
-            a0 -= 0xa0;
-            blit_mask_row(img, a0, a1);
-            a0 += 0x140;
+            uint32_t tmp = p;
+            p -= 0xa0;
+            blit_mask_row(img, p, tmp);
+            p += 0x140;
         }
-        a0 -= 0xa0;
-        blit_mask_row(img, a0, a0 - 0x8000);
+        p -= 0xa0;
+        blit_mask_row(img, p, p - 0x8000);
         wait_vbl(img);
-        a0 = base;
-        a3 -= 1;
+        p = base;
+        n -= 1;
     }
 }
 
@@ -405,12 +405,12 @@ uint32_t overlay_dispatch_2(uint8_t *img, uint32_t script) {
     uint32_t addr = screen_address(img, be16(img + A_ELEM_1A532) + r.cols - 1,
                                      be16(img + A_ELEM_1A530), &phase);
     blit_rect_vbl(img, addr, r.src, 1, r.rows, phase);
-    uint32_t d0 = (phase - 1) & 0xffff;
+    uint32_t phase_adj = (phase - 1) & 0xffff;
     if (phase == 0) {
-        d0 = 0xf;
+        phase_adj = 0xf;
         addr -= 8;
     }
-    overlay_compose_planes32_wrap(img, d0, be16(img + A_ELEM_1A52E) - 1, 0, r.rows, 0, addr, r.src + 2);
+    overlay_compose_planes32_wrap(img, phase_adj, be16(img + A_ELEM_1A52E) - 1, 0, r.rows, 0, addr, r.src + 2);
     return script;
 }
 
@@ -439,9 +439,9 @@ uint32_t overlay_dispatch_4(uint8_t *img, uint32_t script) {
     }
     uint32_t out[8];
     hint_select_off(img, img[script + 1], out);
-    uint32_t d1 = (out[4] + out[6] - 1) & 0xffff;
+    uint32_t y = (out[4] + out[6] - 1) & 0xffff;
     uint32_t phase;
-    uint32_t addr = screen_address(img, out[3], d1, &phase);
+    uint32_t addr = screen_address(img, out[3], y, &phase);
     scroll_up(img, (out[6] - 1) & 0xffff, out[5], out[6], out[2], addr);
     addr += 0xa0;
     blit_mask_row(img, addr, addr - 0x8000);
@@ -477,11 +477,11 @@ uint32_t overlay_dispatch_6(uint8_t *img, uint32_t script) {
     return script + 2;
 }
 
-void masked_save(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
-                 uint32_t d7);
-void reveal_diamond(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
-void reveal_lines_h(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
-void reveal_lines_v(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
+void masked_save(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t);
+void reveal_diamond(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void reveal_lines_h(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void reveal_lines_v(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
 
 /* Tras 0x127e0 el A0 real queda en a0-0x8000 (127e0 resta 0x8000 y 127fa/124da
  * preservan A0); los handlers que continuan con 0x12466 usan ese valor. */
@@ -566,12 +566,12 @@ uint32_t icon_reveal_v(uint8_t *img, uint32_t script) {
 
 /* ---- bucle principal: piezas inmediatas ---- */
 
-void run_command_keep_sp(uint8_t *img, uint32_t a6);
-void cursor_restore(uint8_t *img);
-void cursor_draw(uint8_t *img);
-void overlay_a_frame(uint8_t *img);
-void overlay_b_frame(uint8_t *img);
-void wait_vbl(uint8_t *img);
+void run_command_keep_sp(uint8_t *, uint32_t);
+void cursor_restore(uint8_t *);
+void cursor_draw(uint8_t *);
+void overlay_a_frame(uint8_t *);
+void overlay_b_frame(uint8_t *);
+void wait_vbl(uint8_t *);
 
 /* FUN_000103a8 @ 0x103a8: guarda A7 en 0x1a826 y cae en run_command_keep_sp (0x103ae). */
 void run_command(uint8_t *img, uint32_t stack) {
@@ -607,8 +607,8 @@ void handle_frame_input(uint8_t *img) {
 
 /* FUN_00014798 @ 0x14798: devuelve el C si (d0b,d1b) cae en el rect [a4..a4+3]
  * (bytes). FUN_0001478a @ 0x1478a carga (cursor_x>>2, cursor_y) y cae en el. */
-int rect_hit_test(uint8_t *img, uint32_t rect, uint32_t d0, uint32_t d1) {
-    uint8_t x = (uint8_t)d0, y = (uint8_t)d1;
+int rect_hit_test(uint8_t *img, uint32_t rect, uint32_t x_in, uint32_t y_in) {
+    uint8_t x = (uint8_t)x_in, y = (uint8_t)y_in;
     if (x < img[rect] || x >= img[rect + 1])
         return 0;
     if (y < img[rect + 2] || y >= img[rect + 3])
@@ -727,7 +727,7 @@ void action_bar_hit_test(uint8_t *img, uint32_t count_in) {
 
 /* FUN_00015588 @ 0x15588 (cmd idx 5) y FUN_000155b8 @ 0x155b8 (idx 6): fijan
  * the_command a 0xc35c/0xc35d y entran al despacho. */
-void run_command_keep_sp(uint8_t *img, uint32_t a6);
+void run_command_keep_sp(uint8_t *, uint32_t);
 /* 0x15588 — mode flag wrap */
 void mode_flag_wrap(uint8_t *img) {
     wr16(img + A_THE_COMMAND, 0xc35c);
@@ -741,22 +741,22 @@ void mode_queue_wrap(uint8_t *img) {
 
 /* FUN_000134da @ 0x134da: rama compartida por los dispatchers 0x11xxx con
  * 0x1a570 != 0: 0x128a4 y rebliteo (0x124da). */
-uint32_t elem_blit_vbl(uint8_t *img, uint32_t a6) {
-    a6 = elem_command_wrap(img, a6);
+uint32_t elem_blit_vbl(uint8_t *img, uint32_t script) {
+    script = elem_command_wrap(img, script);
     elem_regs r = elem_after_128a4(img);
     blit_rect_vbl(img, r.dest, r.src, r.cols, r.rows, r.phase);
-    return a6;
+    return script;
 }
 
 /* ---- espera con hit-test (0x167aa/0x167be/0x1680c) ---- */
 
-void wait_frame_cursor(uint8_t *img);
-void wait_frame(uint8_t *img);
-void hit_test_objects(uint8_t *img, uint32_t d2, uint32_t d3);
-void overlay_a_draw(uint8_t *img, uint32_t a6);
-void handle_frame_input(uint8_t *img);
-void cursor_restore(uint8_t *img);
-void set_cursor_clip(uint8_t *img, uint32_t a0, uint32_t d0);
+void wait_frame_cursor(uint8_t *);
+void wait_frame(uint8_t *);
+void hit_test_objects(uint8_t *, uint32_t, uint32_t);
+void overlay_a_draw(uint8_t *, uint32_t);
+void handle_frame_input(uint8_t *);
+void cursor_restore(uint8_t *);
+void set_cursor_clip(uint8_t *, uint32_t, uint32_t);
 
 /* FUN_000167be @ 0x167be: bucle de espera (hasta clic, bit2 de 0x1a456). Guarda
  * (D2,D3) en 0x1a74e/0x1a74f y hace 0x10522 (espera frame + dibuja cursor) UNA
@@ -823,10 +823,10 @@ void obj_name_table(uint8_t *img) {
  * 0x10fb4 (A5 = 0x3c534); despues imprimen con 0x10b6c sobre la estructura de
  * 0x1996c/0x19970 y esperan (0x1228a -> Cnecin en modo 0x87). La diferencia entre
  * ellas es el sonido (0x168a0), el filtro del nombre (0x168d4) o nada (0x1687e). */
-uint32_t text_index_arg(uint8_t *img, uint32_t a5, uint32_t d4, uint32_t *a6);
-void text_window(uint8_t *img, uint32_t a5, uint32_t a6);
-void hint_blit_stroke(uint8_t *img, uint32_t *a6);
-void supexec_b(uint8_t *img, uint32_t d1, uint32_t d4);
+uint32_t text_index_arg(uint8_t *, uint32_t, uint32_t, uint32_t *);
+void text_window(uint8_t *, uint32_t, uint32_t);
+void hint_blit_stroke(uint8_t *, uint32_t *);
+void supexec_b(uint8_t *, uint32_t, uint32_t);
 
 /* FUN_0001687e @ 0x1687e: nombre del objeto sin sonido ni filtro. */
 void obj_name(uint8_t *img, uint32_t script) {

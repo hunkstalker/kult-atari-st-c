@@ -27,8 +27,8 @@
 #include "machine.h"
 #include "addrs.h"
 
-uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7);
-void wait_vbl(uint8_t *img);
+uint32_t screen_address(uint8_t *, uint32_t, uint32_t, uint32_t *);
+void wait_vbl(uint8_t *);
 
 /* 68k: el resultado de un desplazamiento de word es 0 si el count (mod 64) >= 16. */
 static uint16_t lsr_w(uint16_t v, unsigned count) {

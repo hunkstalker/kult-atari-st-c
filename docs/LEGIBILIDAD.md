@@ -157,8 +157,11 @@ Cada tanda = un commit. Dentro de cada módulo, función a función.
 | 3 | element, anim, scale, reveal, overlay, commands, handlers | **HECHA** |
 | 4 | dispatch, sound, fileio, music, loop | **HECHA** |
 
-Totales: **`ids_reg` 8801 → 1468** (~83% menos), `goto` 95 (los de
-`select.c`/`text.c`/`fileio.c` se conservan por fidelidad; §2).
+Totales: **`ids_reg` 8801 → 0** en código (los nombres de registro que quedan
+están en **comentarios**, documentando el registro del ASM; es lo deseado).
+`goto` 95 (los de `select.c`/`text.c`/`fileio.c` se conservan por fidelidad; §2).
+Los **prototipos** (forward declarations) se limpiaron: sus parámetros ya no
+llevan nombre (los nombres no aportan nada en una declaración).
 
 ### Tanda 1 — hojas y base
 
@@ -211,8 +214,12 @@ Totales: **`ids_reg` 8801 → 1468** (~83% menos), `goto` 95 (los de
 | sound.c | 98 | 3 | 0 |
 | music.c | 581 | 44 | 18 |
 | fileio.c | 23 | 4 | 10 |
-| loop.c | 1547 | 354 | 29 |
+| loop.c | 1547 | 0 | 29 |
 
-Todas las tandas **cerradas**. Quedan solo residuales pequeños repartidos por
-los módulos (variables sueltas que se afinan al tocar cada uno). Los `goto`
+Todas las tandas **cerradas**. `ids_reg` en código = **0**; los nombres de
+registro que quedan viven en comentarios (procedencia del ASM). Los `goto`
 conservados son colas compartidas del original (§2).
+
+**Nota de método:** el renombrado por función se hizo con un `span` consciente
+de **definiciones** (un primer intento cogía el prototipo anterior a la
+definición y dejaba funciones sin tocar; se corrigió y se repasó).

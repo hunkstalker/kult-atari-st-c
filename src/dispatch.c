@@ -17,157 +17,157 @@
 #include "machine.h"
 #include "addrs.h"
 
-void  walk_entry(uint8_t *img, uint32_t a4, uint32_t d1, uint32_t *a4o, uint32_t *a5o);
-void  copy_screen_a6(uint8_t *img);      /* copy_screen (byte handler 68 / cmd 105) */
-void  noop_11014(uint8_t *img);      /* rts (byte/cmd handler) */
-void  text_entry_blit(uint8_t *img, uint32_t script);
-void  run_text_entry_1(uint8_t *img, uint32_t script);
-void  text_table_entry(uint8_t *img, uint32_t script);
-void  anim_entry_a(uint8_t *img, uint32_t script);
-void  set_palette_from_entry(uint8_t *img, uint32_t script);
-void  draw_text_box_variant(uint8_t *img, uint32_t the_command);
-void  clear_flag(uint8_t *img);
-void  mode_flag_wrap(uint8_t *img);
-void  mode_queue_wrap(uint8_t *img);
-uint32_t inline_cmd_walk(uint8_t *img, uint32_t script);
-uint32_t load_eche_bank_cmd(uint8_t *img, uint32_t script);
-void  dispatch_cmd(uint8_t *img);
-void  clear_globals(uint8_t *img);
-uint32_t overlay_dispatch_1(uint8_t *img, uint32_t script);
-uint32_t overlay_dispatch_2(uint8_t *img, uint32_t script);
-uint32_t blit_dispatch_a(uint8_t *img, uint32_t script);
-uint32_t blit_dispatch_b(uint8_t *img, uint32_t script);
-uint32_t elem_blit_vbl(uint8_t *img, uint32_t script);
-uint32_t draw_text_box(uint8_t *img, uint32_t script);
-uint32_t overlay_dispatch_6(uint8_t *img, uint32_t script);
-uint32_t overlay_dispatch_5(uint8_t *img, uint32_t script);
-uint32_t overlay_dispatch_3(uint8_t *img, uint32_t script);
-uint32_t overlay_dispatch_4(uint8_t *img, uint32_t script);
-uint32_t icon_reveal(uint8_t *img, uint32_t script);
-uint32_t reveal_box_a(uint8_t *img, uint32_t script);
-uint32_t hint_blit_entry_b(uint8_t *img, uint32_t script);
-void     hint_blit_entry(uint8_t *img, uint32_t script, uint32_t *a6_out);
-void     hint_blit_2(uint8_t *img, uint32_t *script);
-uint32_t icon_blit_handler(uint8_t *img, uint32_t script);
-void     hint_blit_stroke(uint8_t *img, uint32_t *script);
-uint32_t prompt_wait_entry(uint8_t *img, uint32_t script);
-void     script_push(uint8_t *img, uint32_t *script);
-void     script_pop(uint8_t *img, uint32_t *script);
-void     script_call(uint8_t *img, uint32_t *script);
-void     script_store(uint8_t *img, uint32_t *script);
-void     script_jump_zero(uint8_t *img, uint32_t *script);
-void     hint_blit_3(uint8_t *img, uint32_t *script);
-uint32_t reveal_box_b(uint8_t *img, uint32_t script);
-void     set_palette_advance(uint8_t *img);
-void     icon_anim_a(uint8_t *img, uint32_t *script);
-void     icon_anim_b(uint8_t *img, uint32_t *script);
+void  walk_entry(uint8_t *, uint32_t, uint32_t, uint32_t *, uint32_t *);
+void  copy_screen_a6(uint8_t *);      /* copy_screen (byte handler 68 / cmd 105) */
+void  noop_11014(uint8_t *);      /* rts (byte/cmd handler) */
+void  text_entry_blit(uint8_t *, uint32_t);
+void  run_text_entry_1(uint8_t *, uint32_t);
+void  text_table_entry(uint8_t *, uint32_t);
+void  anim_entry_a(uint8_t *, uint32_t);
+void  set_palette_from_entry(uint8_t *, uint32_t);
+void  draw_text_box_variant(uint8_t *, uint32_t);
+void  clear_flag(uint8_t *);
+void  mode_flag_wrap(uint8_t *);
+void  mode_queue_wrap(uint8_t *);
+uint32_t inline_cmd_walk(uint8_t *, uint32_t);
+uint32_t load_eche_bank_cmd(uint8_t *, uint32_t);
+void  dispatch_cmd(uint8_t *);
+void  clear_globals(uint8_t *);
+uint32_t overlay_dispatch_1(uint8_t *, uint32_t);
+uint32_t overlay_dispatch_2(uint8_t *, uint32_t);
+uint32_t blit_dispatch_a(uint8_t *, uint32_t);
+uint32_t blit_dispatch_b(uint8_t *, uint32_t);
+uint32_t elem_blit_vbl(uint8_t *, uint32_t);
+uint32_t draw_text_box(uint8_t *, uint32_t);
+uint32_t overlay_dispatch_6(uint8_t *, uint32_t);
+uint32_t overlay_dispatch_5(uint8_t *, uint32_t);
+uint32_t overlay_dispatch_3(uint8_t *, uint32_t);
+uint32_t overlay_dispatch_4(uint8_t *, uint32_t);
+uint32_t icon_reveal(uint8_t *, uint32_t);
+uint32_t reveal_box_a(uint8_t *, uint32_t);
+uint32_t hint_blit_entry_b(uint8_t *, uint32_t);
+void     hint_blit_entry(uint8_t *, uint32_t, uint32_t *);
+void     hint_blit_2(uint8_t *, uint32_t *);
+uint32_t icon_blit_handler(uint8_t *, uint32_t);
+void     hint_blit_stroke(uint8_t *, uint32_t *);
+uint32_t prompt_wait_entry(uint8_t *, uint32_t);
+void     script_push(uint8_t *, uint32_t *);
+void     script_pop(uint8_t *, uint32_t *);
+void     script_call(uint8_t *, uint32_t *);
+void     script_store(uint8_t *, uint32_t *);
+void     script_jump_zero(uint8_t *, uint32_t *);
+void     hint_blit_3(uint8_t *, uint32_t *);
+uint32_t reveal_box_b(uint8_t *, uint32_t);
+void     set_palette_advance(uint8_t *);
+void     icon_anim_a(uint8_t *, uint32_t *);
+void     icon_anim_b(uint8_t *, uint32_t *);
 
 /* Un handler de byte de la VM (tabla 0x19f62): recibe script y devuelve el script nuevo.
  * El avance de A6 es el neto del handler original (los `addq`/push-pop), dato que
  * no modela la firma C, así que se codifica aquí. Solo los reconstruidos. */
-uint32_t sample_menu_a(uint8_t *img, uint32_t script);
-uint32_t sample_menu_b(uint8_t *img, uint32_t script);
-void obj_text_box(uint8_t *img, uint32_t script);
-uint32_t class30_apply(uint8_t *img, uint32_t script);
-uint32_t reveal_box_build(uint8_t *img, uint32_t script);
-uint32_t reveal_box_wait_a(uint8_t *img, uint32_t script);
-uint32_t reveal_box_wait_b(uint8_t *img, uint32_t script);
-uint32_t reveal_pixel(uint8_t *img, uint32_t script);
-uint32_t scale_loop(uint8_t *img, uint32_t script);
-uint32_t scale_prep(uint8_t *img, uint32_t script);
-uint32_t obj_find_or_exit(uint8_t *img, uint32_t script);
-uint32_t track5_apply(uint8_t *img, uint32_t script);
-void obj_name_snd(uint8_t *img, uint32_t script);
-uint32_t object_info_card(uint8_t *img, uint32_t script);
-uint32_t icon_reveal_h(uint8_t *img, uint32_t script);
-uint32_t icon_reveal_v(uint8_t *img, uint32_t script);
-uint32_t scale_anim(uint8_t *img, uint32_t script);
-uint32_t cmd74_wrap(uint8_t *img, uint32_t script);
-uint32_t prepare_room(uint8_t *img, uint32_t script);
-void obj_name(uint8_t *img, uint32_t script);
-uint32_t obj_wait(uint8_t *img, uint32_t script);
-uint32_t text_window_entry(uint8_t *img, uint32_t script);
-uint32_t wait_button_b(uint8_t *img, uint32_t script);
-uint32_t wait_button_a(uint8_t *img, uint32_t script);
-uint32_t obj_consume(uint8_t *img, uint32_t script);
-uint32_t view_change(uint8_t *img, uint32_t script);
-uint32_t use_object(uint8_t *img, uint32_t script);
-uint32_t track_icon_anim(uint8_t *img, uint32_t script);
-void scene_mode_draw_wrap(uint8_t *img, uint32_t script);
-uint32_t text_box_icon(uint8_t *img, uint32_t script);
-void textform_fwd_entry(uint8_t *img, uint32_t script);
-void textform_rev_entry(uint8_t *img, uint32_t script);
-uint32_t icon_ring_loop(uint8_t *img, uint32_t script);
-uint32_t view_mode_cycle(uint8_t *img, uint32_t script);
-uint32_t text_table_paint(uint8_t *img, uint32_t script);
-uint32_t scene_mode_apply(uint8_t *img, uint32_t script);
-uint32_t scene_mode_draw(uint8_t *img, uint32_t script);
-uint32_t wipe_72(uint8_t *img, uint32_t script);
-uint32_t wipe_f(uint8_t *img, uint32_t script);
-uint32_t wipe_d(uint8_t *img, uint32_t script);
-uint32_t wipe_c(uint8_t *img, uint32_t script);
-uint32_t wipe_e(uint8_t *img, uint32_t script);
-void noop_16dba(uint8_t *img);
-uint32_t class30_dispatch(uint8_t *img, uint32_t script);
-uint32_t update_icon_list_wrap(uint8_t *img, uint32_t script);
-void dispatch_a6(uint8_t *img, uint32_t script);
-uint32_t sample_mark_b(uint8_t *img, uint32_t script);
-uint32_t sample_mark_a(uint8_t *img, uint32_t script);
-uint32_t sample_mark_c(uint8_t *img, uint32_t script);
-uint32_t action_menu(uint8_t *img, uint32_t script);
-uint32_t hint_icons_wrap(uint8_t *img, uint32_t script);
-uint32_t sample_find(uint8_t *img, uint32_t script);
-uint32_t sample_find_wrap(uint8_t *img, uint32_t script);
-uint32_t copy_rows_vbl(uint8_t *img, uint32_t script);
-uint32_t bank_blit_b(uint8_t *img, uint32_t script);
-uint32_t bank_blit_a(uint8_t *img, uint32_t script);
-uint32_t draw_hint_icons_wrap(uint8_t *img, uint32_t script);
-uint32_t attract(uint8_t *img, uint32_t script);
-uint32_t obj_refresh(uint8_t *img, uint32_t script);
-void obj_name_clean(uint8_t *img, uint32_t script);
-uint32_t cmd135(uint8_t *img, uint32_t script);
-uint32_t obj_dec(uint8_t *img, uint32_t script);
-uint32_t draw_selection_frame_wrap(uint8_t *img, uint32_t script);
-uint32_t wipe_b(uint8_t *img, uint32_t script);
-uint32_t wipe_a(uint8_t *img, uint32_t script);
-uint32_t sample_pair_a(uint8_t *img, uint32_t script);
-uint32_t supexec_wrap(uint8_t *img, uint32_t script);
-void supexec_a(uint8_t *img, uint32_t *script);
+uint32_t sample_menu_a(uint8_t *, uint32_t);
+uint32_t sample_menu_b(uint8_t *, uint32_t);
+void obj_text_box(uint8_t *, uint32_t);
+uint32_t class30_apply(uint8_t *, uint32_t);
+uint32_t reveal_box_build(uint8_t *, uint32_t);
+uint32_t reveal_box_wait_a(uint8_t *, uint32_t);
+uint32_t reveal_box_wait_b(uint8_t *, uint32_t);
+uint32_t reveal_pixel(uint8_t *, uint32_t);
+uint32_t scale_loop(uint8_t *, uint32_t);
+uint32_t scale_prep(uint8_t *, uint32_t);
+uint32_t obj_find_or_exit(uint8_t *, uint32_t);
+uint32_t track5_apply(uint8_t *, uint32_t);
+void obj_name_snd(uint8_t *, uint32_t);
+uint32_t object_info_card(uint8_t *, uint32_t);
+uint32_t icon_reveal_h(uint8_t *, uint32_t);
+uint32_t icon_reveal_v(uint8_t *, uint32_t);
+uint32_t scale_anim(uint8_t *, uint32_t);
+uint32_t cmd74_wrap(uint8_t *, uint32_t);
+uint32_t prepare_room(uint8_t *, uint32_t);
+void obj_name(uint8_t *, uint32_t);
+uint32_t obj_wait(uint8_t *, uint32_t);
+uint32_t text_window_entry(uint8_t *, uint32_t);
+uint32_t wait_button_b(uint8_t *, uint32_t);
+uint32_t wait_button_a(uint8_t *, uint32_t);
+uint32_t obj_consume(uint8_t *, uint32_t);
+uint32_t view_change(uint8_t *, uint32_t);
+uint32_t use_object(uint8_t *, uint32_t);
+uint32_t track_icon_anim(uint8_t *, uint32_t);
+void scene_mode_draw_wrap(uint8_t *, uint32_t);
+uint32_t text_box_icon(uint8_t *, uint32_t);
+void textform_fwd_entry(uint8_t *, uint32_t);
+void textform_rev_entry(uint8_t *, uint32_t);
+uint32_t icon_ring_loop(uint8_t *, uint32_t);
+uint32_t view_mode_cycle(uint8_t *, uint32_t);
+uint32_t text_table_paint(uint8_t *, uint32_t);
+uint32_t scene_mode_apply(uint8_t *, uint32_t);
+uint32_t scene_mode_draw(uint8_t *, uint32_t);
+uint32_t wipe_72(uint8_t *, uint32_t);
+uint32_t wipe_f(uint8_t *, uint32_t);
+uint32_t wipe_d(uint8_t *, uint32_t);
+uint32_t wipe_c(uint8_t *, uint32_t);
+uint32_t wipe_e(uint8_t *, uint32_t);
+void noop_16dba(uint8_t *);
+uint32_t class30_dispatch(uint8_t *, uint32_t);
+uint32_t update_icon_list_wrap(uint8_t *, uint32_t);
+void dispatch_a6(uint8_t *, uint32_t);
+uint32_t sample_mark_b(uint8_t *, uint32_t);
+uint32_t sample_mark_a(uint8_t *, uint32_t);
+uint32_t sample_mark_c(uint8_t *, uint32_t);
+uint32_t action_menu(uint8_t *, uint32_t);
+uint32_t hint_icons_wrap(uint8_t *, uint32_t);
+uint32_t sample_find(uint8_t *, uint32_t);
+uint32_t sample_find_wrap(uint8_t *, uint32_t);
+uint32_t copy_rows_vbl(uint8_t *, uint32_t);
+uint32_t bank_blit_b(uint8_t *, uint32_t);
+uint32_t bank_blit_a(uint8_t *, uint32_t);
+uint32_t draw_hint_icons_wrap(uint8_t *, uint32_t);
+uint32_t attract(uint8_t *, uint32_t);
+uint32_t obj_refresh(uint8_t *, uint32_t);
+void obj_name_clean(uint8_t *, uint32_t);
+uint32_t cmd135(uint8_t *, uint32_t);
+uint32_t obj_dec(uint8_t *, uint32_t);
+uint32_t draw_selection_frame_wrap(uint8_t *, uint32_t);
+uint32_t wipe_b(uint8_t *, uint32_t);
+uint32_t wipe_a(uint8_t *, uint32_t);
+uint32_t sample_pair_a(uint8_t *, uint32_t);
+uint32_t supexec_wrap(uint8_t *, uint32_t);
+void supexec_a(uint8_t *, uint32_t *);
 
 /* Prototipos de los comandos de la tabla 0x19eca que aun no estaban declarados
  * aqui (las firmas salen de sus definiciones). */
-void sample_menu_entry_b(uint8_t *img, uint32_t script);
-uint32_t overlay_menu(uint8_t *img, uint32_t script);
-void sample_menu_entry_a(uint8_t *img, uint32_t script);
-uint32_t object_info_wait(uint8_t *img, uint32_t script);
-uint32_t mode_queue(uint8_t *img, uint32_t script);
-uint32_t clock(uint8_t *img);
-void noop_19312(uint8_t *img);
-uint32_t anim_threshold2(uint8_t *img, uint32_t script);
-uint32_t grid_wait(uint8_t *img, uint32_t script);
-uint32_t obj_action_select(uint8_t *img, uint32_t script);
-uint32_t obj_action(uint8_t *img, uint32_t script);
-uint32_t row_transition(uint8_t *img, uint32_t script);
-uint32_t cursor_anim_wait(uint8_t *img, uint32_t script);
-uint32_t palette_cmd(uint8_t *img, uint32_t script);
-uint32_t name_prompt(uint8_t *img, uint32_t script);
-void obj_wait_cmd(uint8_t *img);
-void portrait_intro(uint8_t *img);
-void sel_timer_a(uint8_t *img);
-uint32_t track_select_a(uint8_t *img, uint32_t script);
-void obj_clear_anim(uint8_t *img);
-uint32_t obj_seal(uint8_t *img, uint32_t script);
-void obj_mark(uint8_t *img);
-uint32_t track_name_print(uint8_t *img, uint32_t script);
-uint32_t track_walk(uint8_t *img, uint32_t script);
-void sel_timer_b(uint8_t *img);
-uint32_t track_select_b(uint8_t *img, uint32_t script);
-uint32_t obj_name_track(uint8_t *img, uint32_t script);
-void obj_wait_cmd_snd(uint8_t *img);
-void obj_wait_cmd_a(uint8_t *img);
-void obj_wait_cmd_b(uint8_t *img);
-uint32_t load_room(uint8_t *img);
-uint32_t save_room(uint8_t *img);
+void sample_menu_entry_b(uint8_t *, uint32_t);
+uint32_t overlay_menu(uint8_t *, uint32_t);
+void sample_menu_entry_a(uint8_t *, uint32_t);
+uint32_t object_info_wait(uint8_t *, uint32_t);
+uint32_t mode_queue(uint8_t *, uint32_t);
+uint32_t clock(uint8_t *);
+void noop_19312(uint8_t *);
+uint32_t anim_threshold2(uint8_t *, uint32_t);
+uint32_t grid_wait(uint8_t *, uint32_t);
+uint32_t obj_action_select(uint8_t *, uint32_t);
+uint32_t obj_action(uint8_t *, uint32_t);
+uint32_t row_transition(uint8_t *, uint32_t);
+uint32_t cursor_anim_wait(uint8_t *, uint32_t);
+uint32_t palette_cmd(uint8_t *, uint32_t);
+uint32_t name_prompt(uint8_t *, uint32_t);
+void obj_wait_cmd(uint8_t *);
+void portrait_intro(uint8_t *);
+void sel_timer_a(uint8_t *);
+uint32_t track_select_a(uint8_t *, uint32_t);
+void obj_clear_anim(uint8_t *);
+uint32_t obj_seal(uint8_t *, uint32_t);
+void obj_mark(uint8_t *);
+uint32_t track_name_print(uint8_t *, uint32_t);
+uint32_t track_walk(uint8_t *, uint32_t);
+void sel_timer_b(uint8_t *);
+uint32_t track_select_b(uint8_t *, uint32_t);
+uint32_t obj_name_track(uint8_t *, uint32_t);
+void obj_wait_cmd_snd(uint8_t *);
+void obj_wait_cmd_a(uint8_t *);
+void obj_wait_cmd_b(uint8_t *);
+uint32_t load_room(uint8_t *);
+uint32_t save_room(uint8_t *);
 
 static uint32_t byte_handler(uint32_t b, uint8_t *img, uint32_t script) {
     uint32_t n;
@@ -301,12 +301,12 @@ uint32_t vm_run(uint8_t *img, uint32_t script) {
 /* FUN_000104f4 @ 0x104f4 (byte 18): the_command = word inline (script[1..2]), walk_entry
  * con (templ, cmd-1) y devuelve A5 (el nuevo stream). */
 uint32_t inline_cmd_walk(uint8_t *img, uint32_t script) {
-    uint32_t d1 = ((uint32_t)img[script + 2] << 8) | img[script + 1];
-    wr16(img + A_THE_COMMAND, d1 & 0xffff);
-    uint32_t a4o, a5o;
-    walk_entry(img, A_TEMPL_DATA, (d1 - 1) & 0xffff, &a4o, &a5o);
-    wr32(img + A_TEMPL_PTR, a4o);
-    return a5o;
+    uint32_t cmd = ((uint32_t)img[script + 2] << 8) | img[script + 1];
+    wr16(img + A_THE_COMMAND, cmd & 0xffff);
+    uint32_t end_out, entry_out;
+    walk_entry(img, A_TEMPL_DATA, (cmd - 1) & 0xffff, &end_out, &entry_out);
+    wr32(img + A_TEMPL_PTR, end_out);
+    return entry_out;
 }
 
 /* Handler de comando de la tabla 0x19eca. Solo los reconstruidos y sin A6
@@ -491,25 +491,25 @@ void run_command_keep_sp(uint8_t *img, uint32_t script) {
     } else if (nibble == 0x9000) {
         draw_text_box_variant(img, cmd);                        /* caja de texto */
     } else {
-        uint32_t a4o, a5o;
-        walk_entry(img, A_TEMPL_DATA, (cmd & 0x3ff) - 1, &a4o, &a5o);
-        wr32(img + A_TEMPL_PTR, a4o);
-        vm_run(img, a5o);
+        uint32_t end_out, entry_out;
+        walk_entry(img, A_TEMPL_DATA, (cmd & 0x3ff) - 1, &end_out, &entry_out);
+        wr32(img + A_TEMPL_PTR, end_out);
+        vm_run(img, entry_out);
     }
 }
 
 /* FUN_00010390 @ 0x10390: handler de byte que lee un word de script[1..2], lo marca con el
  * nibble 0xf000 (comando de plantilla) y salta al despacho. */
 void dispatch_a6(uint8_t *img, uint32_t script) {
-    uint32_t d1 = ((img[script + 2] << 8) | img[script + 1]) | 0xf000;
-    wr16(img + A_THE_COMMAND, d1 & 0xffff);
+    uint32_t cmd = ((img[script + 2] << 8) | img[script + 1]) | 0xf000;
+    wr16(img + A_THE_COMMAND, cmd & 0xffff);
     run_command_keep_sp(img, script);
 }
 
 /* FUN_000186ee @ 0x186ee: reproduce la paleta 0x10, lanza el comando 0x916b (caja de
  * texto) por el despacho y restaura la paleta actual. */
-void set_palette_entry(uint8_t *img, uint32_t d0);
-void set_palette_current(uint8_t *img);
+void set_palette_entry(uint8_t *, uint32_t);
+void set_palette_current(uint8_t *);
 /* 0x186ee — dispatch cmd */
 void dispatch_cmd(uint8_t *img) {
     set_palette_entry(img, 0x10);

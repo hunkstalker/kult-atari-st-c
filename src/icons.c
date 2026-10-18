@@ -9,15 +9,15 @@
 #include "machine.h"
 #include "addrs.h"
 
-void blit_sprite(uint8_t *img, uint32_t a1);
-void mask_row_blit(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7);
-void copy_screen_rev(uint8_t *img);
-void run_text_table(uint8_t *img, uint32_t a6, uint32_t d0, uint32_t d1);
-void box_vline(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
-void box_hline(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
-uint32_t save_rect_body(uint8_t *img, uint32_t a1, uint32_t d2, uint32_t d3, uint32_t a0,
-                     uint32_t d7);
-uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
+void blit_sprite(uint8_t *, uint32_t);
+void mask_row_blit(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void copy_screen_rev(uint8_t *);
+void run_text_table(uint8_t *, uint32_t, uint32_t, uint32_t);
+void box_vline(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void box_hline(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+uint32_t save_rect_body(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                     uint32_t);
+uint32_t screen_address(uint8_t *, uint32_t, uint32_t, uint32_t *);
 
 /* FUN_000164a4 @ 0x164a4: guarda el rect de pantalla del objeto A5 en el descriptor
  * A1, enlaza A1 en la tabla de iconos (slot A2) y devuelve el nuevo A1 (fin del
@@ -143,7 +143,7 @@ void icon_anim_b(uint8_t *img, uint32_t *script) {
 }
 
 /* FUN_00018316 @ 0x18316: lee tres words de 0x16230 y los guarda en A1+4/+6/+8. */
-uint32_t pal_next_word(uint8_t *img);
+uint32_t pal_next_word(uint8_t *);
 /* 0x18316 — y 0x18342 (A5 = 0/0x8000): recorre 256 descriptores de 0xa bytes en 0xd8f0. Borra dos longs de pantalla con la mascara 0x7fff7fff rotada por la fase (word +2... */
 void icon_list_build(uint8_t *img, uint32_t desc) {
     wr16(img + desc + 4, pal_next_word(img) & 0xffff);
@@ -168,8 +168,8 @@ void icon_list_reset(uint8_t *img) {
  * coordenadas de pantalla (resta el back buffer, divide por 0xa0) y dibuja dos
  * segmentos horizontales (0x12ffa) y dos verticales (0x13216) y luego cae en 0x1652e
  * para restaurar/repintar. */
-void box_vline(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
-void box_hline(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
+void box_vline(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void box_hline(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
 /* 0x18d28 — marco del objeto/hint seleccionado (0x1a81e) */
 void draw_selection_frame(uint8_t *img) {
     uint32_t slot = be32(img + A_SELECTED_ICON_PTR);

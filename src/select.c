@@ -11,11 +11,11 @@
 #include "machine.h"
 #include "addrs.h"
 
-uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
-void pattern_fill(uint8_t *img, uint32_t d2w, uint32_t d3w, uint32_t d7w,
-                 uint32_t d6w, uint32_t a0);
-void sound_play_a(uint8_t *img, uint32_t d4);
-void text_blit_ovl_b(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4);
+uint32_t screen_address(uint8_t *, uint32_t, uint32_t, uint32_t *);
+void pattern_fill(uint8_t *, uint32_t, uint32_t, uint32_t,
+                 uint32_t, uint32_t);
+void sound_play_a(uint8_t *, uint32_t);
+void text_blit_ovl_b(uint8_t *, uint32_t, uint32_t, uint32_t);
 
 /* FUN_00015510 @ 0x15510: imprime el registro A2 (nombre en A2[0], fila en A2[2])
  * con 0x11020 y D4; avanza A2 0xa y devuelve D6 incrementado (el original lo hace
@@ -68,18 +68,18 @@ uint32_t sample_select(uint8_t *img, uint32_t mask, uint32_t value) {
  * arranca el Timer A (0x18f98 con D4=0x14) y fija $1ad29 segun el nombre elegido.
  * 0x14d76/0x14d90/0x149da son las entradas que fijan mascara/filtro y despachan. */
 
-uint32_t save_rect(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t a0, uint32_t d7);
-void restore_rect(uint8_t *img);
-void cursor_restore(uint8_t *img);
-void sound_play_b(uint8_t *img, uint32_t d4);
-void wait_frame_cursor(uint8_t *img);
-void wait_frame(uint8_t *img);
-void set_cursor_clip(uint8_t *img, uint32_t a0, uint32_t d0);
-void action_bar_hit_test(uint8_t *img, uint32_t d3);
-void overlay_b_draw(uint8_t *img, uint32_t a6);
-void handle_frame_input(uint8_t *img);
-void text_end(uint8_t *img);
-void run_command_keep_sp(uint8_t *img, uint32_t a6);
+uint32_t save_rect(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void restore_rect(uint8_t *);
+void cursor_restore(uint8_t *);
+void sound_play_b(uint8_t *, uint32_t);
+void wait_frame_cursor(uint8_t *);
+void wait_frame(uint8_t *);
+void set_cursor_clip(uint8_t *, uint32_t, uint32_t);
+void action_bar_hit_test(uint8_t *, uint32_t);
+void overlay_b_draw(uint8_t *, uint32_t);
+void handle_frame_input(uint8_t *);
+void text_end(uint8_t *);
+void run_command_keep_sp(uint8_t *, uint32_t);
 
 /* FUN_00014db2 @ 0x14db2: marco + lista de samples + bucle de espera + Timer A. */
 void sample_menu(uint8_t *img, uint32_t script, uint32_t mask, uint32_t value) {
@@ -182,9 +182,9 @@ stored:
  * 0x1a75e contra 0x1a8f0+(idx-1)*6 fija el comando en 0x1a50e
  * (0xc1bc/0xc1c0/0x9140/c04b/c1ba/c1bb/c1b9/c1bd) y lo despacha (0x103ae); el
  * 0xc1bd repite el bucle. Cierra con 0x14bdc y devuelve A6 = entry+1. */
-void run_command_keep_sp(uint8_t *img, uint32_t a6);
-void fix_sample_flag(uint8_t *img);
-void sample_menu(uint8_t *img, uint32_t a6, uint32_t d2, uint32_t d3);
+void run_command_keep_sp(uint8_t *, uint32_t);
+void fix_sample_flag(uint8_t *);
+void sample_menu(uint8_t *, uint32_t, uint32_t, uint32_t);
 
 /* 0x14ac6 — Un handler de byte de la VM (tabla 0x19f62): recibe a6 y devuelve el a6 nuevo. El avance de A6 es el neto del handler original (los `addq`/push-pop), dato qu... */
 uint32_t sample_menu_a(uint8_t *img, uint32_t script) {

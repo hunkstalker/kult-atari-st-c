@@ -79,7 +79,7 @@ int32_t load_resource_list_b(uint8_t *img) {
     return load_resource_list(img, 0x1a3e4);
 }
 
-void run_command_keep_sp(uint8_t *img, uint32_t a6);
+void run_command_keep_sp(uint8_t *, uint32_t);
 
 /* FUN_00010682 @ 0x10682: si $1a57c != 0xff y el digito (d0 + '0') cambia, lo guarda
  * en la tabla 0x1a404 (char en +4, d1 en +0xa) y repite load_resource_list(0x1a404)
@@ -102,8 +102,8 @@ void load_eche_bank(uint8_t *img, uint32_t digit, uint32_t val) {
 }
 
 /* FUN_0001066e @ 0x1066e: llama a 0x10682 con d1 = 0x64c8e. */
-void load_eche_bank_wrap(uint8_t *img, uint32_t d0) {
-    load_eche_bank(img, d0, 0x64c8e);
+void load_eche_bank_wrap(uint8_t *img, uint32_t digit) {
+    load_eche_bank(img, digit, 0x64c8e);
 }
 
 /* FUN_00010668 @ 0x10668: d0 = a6[1], cae en 0x1066e; devuelve a6 + 2. */
@@ -154,11 +154,11 @@ int32_t gemdos_fclose(uint8_t *img) {
  * y 0x16460 (tabla de iconos). Guardado: al reves, restando 0x101a8 a los punteros
  * de hint y escribiendo los dos buffers. Los dos devuelven por CCR: el original
  * hace `ori.b #$1,ccr` en el error, asi que el C devuelve 1/0. */
-void copy_screen(uint8_t *img);
-void set_palette_current(uint8_t *img);
-void hint_table_relocate(uint8_t *img);
-void icon_table(uint8_t *img);
-void draw_hint_icons(uint8_t *img);
+void copy_screen(uint8_t *);
+void set_palette_current(uint8_t *);
+void hint_table_relocate(uint8_t *);
+void icon_table(uint8_t *);
+void draw_hint_icons(uint8_t *);
 
 /* 0x16ed8 — carga SCENA.BIN (hints + 2 x 32000 B) */
 int32_t load_scena(uint8_t *img) {
@@ -229,8 +229,8 @@ error:
 /* FUN_0001682a @ 0x1682a: repite la carga de A:CLEAR.BIN (0x291c B en 0x1a752) hasta
  * que exista (si falla lanza 0x918e); al exito reinicia la pila (A7 = 0x1d1fe), marca
  * $1ad0f, avanza la tabla 0x2741e y salta a 0x10158 (el test lo corta ahi). */
-void run_command_keep_sp(uint8_t *img, uint32_t a6);
-uint32_t pal_next_byte(uint8_t *img);
+void run_command_keep_sp(uint8_t *, uint32_t);
+uint32_t pal_next_byte(uint8_t *);
 
 /* 0x1682a — ctx: bucle A:CLEAR.BIN + the_command=0x918e */
 void reset_clear(uint8_t *img) {

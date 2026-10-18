@@ -21,9 +21,9 @@
 #include "machine.h"
 #include "addrs.h"
 
-void blit_mask_setup(uint8_t *img, uint32_t d2, uint32_t d7);
-void wait_vbl(uint8_t *img);
-void blit_mask_rows(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d3);
+void blit_mask_setup(uint8_t *, uint32_t, uint32_t);
+void wait_vbl(uint8_t *);
+void blit_mask_rows(uint8_t *, uint32_t, uint32_t, uint32_t);
 
 /* 0x126e0 — grid fill */
 void grid_fill(uint8_t *img, uint32_t cols_in, uint32_t rows_in, uint32_t phase_in, uint32_t src) {
@@ -196,17 +196,17 @@ void elem_bitmap_build(uint8_t *img, uint32_t *stream_io) {
     *stream_io = stream;
 }
 
-uint32_t walk_entry(uint8_t *img, uint32_t a4, uint32_t d1,
-                      uint32_t *a4o, uint32_t *a5o);
-uint32_t advance_text_entry(uint8_t *img, uint32_t a1, uint32_t d4);
-void elem_blit(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
-                 uint32_t a3);
-void elem_blit_rev(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
-                 uint32_t a3);
-void hint_slot_alloc(uint8_t *img, uint32_t d4, uint32_t a0, uint32_t d7,
-                 uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
-uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
-void draw_selection_frame(uint8_t *img);
+uint32_t walk_entry(uint8_t *, uint32_t, uint32_t,
+                      uint32_t *, uint32_t *);
+uint32_t advance_text_entry(uint8_t *, uint32_t, uint32_t);
+void elem_blit(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t);
+void elem_blit_rev(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t);
+void hint_slot_alloc(uint8_t *, uint32_t, uint32_t, uint32_t,
+                 uint32_t, uint32_t, uint32_t, uint32_t);
+uint32_t screen_address(uint8_t *, uint32_t, uint32_t, uint32_t *);
+void draw_selection_frame(uint8_t *);
 
 /* FUN_000129c8 @ 0x129c8: recorre la lista 0x2751e (via walk_entry con D1) y, por cada
  * bloque de 3 bytes [n][b1][b2] tras el indice, compone el bitmap 0x3b1ae con la fuente
@@ -289,11 +289,11 @@ uint32_t elem_command(uint8_t *img, uint32_t script, uint32_t *script_out, uint3
 
     uint32_t x = be16(img + A_ELEM_1A532);
     uint32_t y = be16(img + A_ELEM_1A530);
-    uint32_t d7;
-    uint32_t addr = screen_address(img, x, y, &d7);
+    uint32_t phase;
+    uint32_t addr = screen_address(img, x, y, &phase);
     uint32_t h2 = be16(img + A_ELEM_1A52C);
     uint32_t w2 = be16(img + A_ELEM_1A52E);
-    hint_slot_alloc(img, 2, addr, d7, x, y, w2, h2);
+    hint_slot_alloc(img, 2, addr, phase, x, y, w2, h2);
     return script;
 }
 
@@ -303,13 +303,13 @@ uint32_t elem_command_wrap(uint8_t *img, uint32_t script) {
     return elem_command(img, script, &script_out, &x_out, &y_out);
 }
 
-void reveal_region(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
-void hint_select_off(uint8_t *img, uint32_t d0, uint32_t *o);
-void hint_blit_entry(uint8_t *img, uint32_t a6, uint32_t *a6_out);
-void blit_rect(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
-                 uint32_t d7, uint32_t a3);
-void blit_rect_vbl(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
-                 uint32_t d7);
+void reveal_region(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void hint_select_off(uint8_t *, uint32_t, uint32_t *);
+void hint_blit_entry(uint8_t *, uint32_t, uint32_t *);
+void blit_rect(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t, uint32_t);
+void blit_rect_vbl(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t);
 
 /* FUN_00012a4a @ 0x12a4a: construye un bitmap en 0x3b1ac desde la lista 0x23e9c
  * (walk_entry D1) y la tabla de texto 0x41fb0, bliteando cada bloque de 3 bytes
@@ -402,11 +402,11 @@ uint32_t reveal_box_a(uint8_t *img, uint32_t script) {
  * bloque elige la entrada (byte 0 & 0x7f) de 0x31072 (0x10f8e), lee [filas][cols] y
  * un offset de 14 bits (bytes 2 y 1, mascarado 0x3fff; bit7 de +2 invierte, bit6
  * reblitea hacia atras 0x12b04) y blitea en 0x3b1b0+offset*2 con stride 0x1a534. */
-uint32_t advance_text_entry(uint8_t *img, uint32_t a1, uint32_t d4);
-void elem_blit(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
-                 uint32_t a3);
-void elem_blit_rev(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
-                 uint32_t a3);
+uint32_t advance_text_entry(uint8_t *, uint32_t, uint32_t);
+void elem_blit(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t);
+void elem_blit_rev(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t);
 
 /* 0x129d6 — text block build */
 void text_block_build(uint8_t *img, uint32_t p, uint32_t end) {
@@ -439,30 +439,30 @@ void text_block_build(uint8_t *img, uint32_t p, uint32_t end) {
  * bloques 0x1a82e/0x1a83e (movem.l d0/d2/a0-a1), que los casos 0/2 recargan.
  * Frontera: 0x12ce4..0x12d94/0x12c06/0x12c6c/0x12ce2; el rts de la rama 3 es
  * 0x12d94. Devuelve A6 = entry+1. */
-void sound_play_a(uint8_t *img, uint32_t d4);
-void sound_stop(uint8_t *img);
-uint32_t elem_bitmap_build2(uint8_t *img, uint32_t d1);
-void blit_rect_vbl(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
-                 uint32_t d7);
-void overlay_compose_planes_wrap(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3,
-                 uint32_t a0, uint32_t a1);
-void overlay_compose_planes32_wrap(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3,
-                 uint32_t d6, uint32_t a0, uint32_t a1);
-void overlay_compose_planes(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t d2in,
-                 uint32_t d3in, uint32_t a0in, uint32_t a1in);
-void overlay_compose_planes32(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t d2in,
-                 uint32_t d3in, uint32_t d6in, uint32_t a0in, uint32_t a1in);
-void mask_restore_rows(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7);
-void overlay_compose_masked(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t d2in,
-                 uint32_t d3in, uint32_t a0in, uint32_t a1in);
-void overlay_compose_shift(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t d2in,
-                 uint32_t d3in, uint32_t a0in, uint32_t a1in);
-void scene_mode_load(uint8_t *img, uint32_t *a4_out, uint32_t *a5_out);
-void overlay_compose_masked_wrap(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3,
-                 uint32_t a0);
-void overlay_compose_shift_wrap(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3,
-                 uint32_t a0);
-uint32_t scene_mode_load_wrap(uint8_t *img);
+void sound_play_a(uint8_t *, uint32_t);
+void sound_stop(uint8_t *);
+uint32_t elem_bitmap_build2(uint8_t *, uint32_t);
+void blit_rect_vbl(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t);
+void overlay_compose_planes_wrap(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t, uint32_t);
+void overlay_compose_planes32_wrap(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t, uint32_t, uint32_t);
+void overlay_compose_planes(uint8_t *, uint32_t, uint32_t, uint32_t,
+                 uint32_t, uint32_t, uint32_t);
+void overlay_compose_planes32(uint8_t *, uint32_t, uint32_t, uint32_t,
+                 uint32_t, uint32_t, uint32_t, uint32_t);
+void mask_restore_rows(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void overlay_compose_masked(uint8_t *, uint32_t, uint32_t, uint32_t,
+                 uint32_t, uint32_t, uint32_t);
+void overlay_compose_shift(uint8_t *, uint32_t, uint32_t, uint32_t,
+                 uint32_t, uint32_t, uint32_t);
+void scene_mode_load(uint8_t *, uint32_t *, uint32_t *);
+void overlay_compose_masked_wrap(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t);
+void overlay_compose_shift_wrap(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t);
+uint32_t scene_mode_load_wrap(uint8_t *);
 
 /* 0x12ce4 — ciclo de modo/vista $1acca (overlays del retrato) */
 uint32_t view_mode_cycle(uint8_t *img, uint32_t script) {
@@ -516,11 +516,11 @@ uint32_t view_mode_cycle(uint8_t *img, uint32_t script) {
         }
         bitmap = (bitmap + 2) & 0xffffffffu;
         /* D0=0x45610000|fase2, D2=0xffff0001; D6=0x05010506 (constantes medidas) */
-        uint32_t d0b = 0x45610000u | (phase & 0xffff);
-        uint32_t d2b = 0xffff0001u;
-        overlay_compose_planes32_wrap(img, d0b, 0x0a, d2b, 0x3b, 0x05010506u, addr, bitmap);
+        uint32_t base_d0 = 0x45610000u | (phase & 0xffff);
+        uint32_t base_d2 = 0xffff0001u;
+        overlay_compose_planes32_wrap(img, base_d0, 0x0a, base_d2, 0x3b, 0x05010506u, addr, bitmap);
         {
-            uint32_t lo = d0b & 0xffff, wraps = 0;
+            uint32_t lo = base_d0 & 0xffff, wraps = 0;
             for (uint32_t k = 0; k < 0x28; k++) {
                 if (lo == 0) { lo = 0xf; wraps++; }
                 else lo = (lo - 1) & 0xffff;
@@ -531,8 +531,8 @@ uint32_t view_mode_cycle(uint8_t *img, uint32_t script) {
                 if (k == 0) break;
                 k = (k - 1) & 0xffff;
             }
-            wr32(img + 0x1a83e, (d0b & 0xffff0000u) | lo);
-            wr32(img + 0x1a842, (d2b & 0xffff0000u) | ((5 + 0x28) & 0xffff));
+            wr32(img + 0x1a83e, (base_d0 & 0xffff0000u) | lo);
+            wr32(img + 0x1a842, (base_d2 & 0xffff0000u) | ((5 + 0x28) & 0xffff));
             wr32(img + 0x1a846, (addr - 8 * wraps) & 0xffffffffu);
             wr32(img + 0x1a84a, (bitmap + 2 * c) & 0xffffffffu);
         }
@@ -588,21 +588,21 @@ uint32_t view_mode_cycle(uint8_t *img, uint32_t script) {
         wr32(img + 0x1a534, 0x28);
 
         uint32_t phase;
-        uint32_t a0a = screen_address(img, 0x24, 0x20, &phase);
-        overlay_compose_masked_wrap(img, phase, 0x09, 0x14, 0x3b, a0a);
+        uint32_t addr_a = screen_address(img, 0x24, 0x20, &phase);
+        overlay_compose_masked_wrap(img, phase, 0x09, 0x14, 0x3b, addr_a);
         /* registro final de 117de: D0=(mode&0xf+0x24)&0xf, D2=0x50-0x24,
          * A0/A1 con +8 por cada vuelta del nibble (2), A1 = A0-0x8000 */
         wr32(img + 0x1a83e, (((phase & 0xf) + 0x24) & 0xf) | (phase & 0xffffffF0u));
         wr32(img + 0x1a842, (((0x14 << 2) - 0x24) & 0xffff));
-        wr32(img + 0x1a846, (a0a + 0x10) & 0xffffffffu);
-        wr32(img + 0x1a84a, ((a0a - 0x8000) + 0x10) & 0xffffffffu);
+        wr32(img + 0x1a846, (addr_a + 0x10) & 0xffffffffu);
+        wr32(img + 0x1a84a, ((addr_a - 0x8000) + 0x10) & 0xffffffffu);
 
-        uint32_t a0b = screen_address(img, 0x10, 0x20, &phase);
-        overlay_compose_shift_wrap(img, phase, 0x09, 0x14, 0x3b, a0b);
+        uint32_t addr_b = screen_address(img, 0x10, 0x20, &phase);
+        overlay_compose_shift_wrap(img, phase, 0x09, 0x14, 0x3b, addr_b);
         wr32(img + 0x1a82e, phase & 0xffffffffu);
         wr32(img + 0x1a832, (((0x14 << 2) - 0x24) & 0xffff));
-        wr32(img + 0x1a836, a0b);
-        wr32(img + 0x1a83a, (a0b - 0x8000) & 0xffffffffu);
+        wr32(img + 0x1a836, addr_b);
+        wr32(img + 0x1a83a, (addr_b - 0x8000) & 0xffffffffu);
         sound_stop(img);
         return ret;
     }

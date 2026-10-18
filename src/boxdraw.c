@@ -17,7 +17,7 @@
 #include "machine.h"
 #include "addrs.h"
 
-uint32_t screen_address_raw(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7);
+uint32_t screen_address_raw(uint8_t *, uint32_t, uint32_t, uint32_t *);
 
 /* Pinta (d2 & (1<<plano)) en el bit `bit` de los 4 planos en a0. */
 static void set_planes(uint8_t *img, uint32_t dest, uint32_t bit, uint32_t color) {

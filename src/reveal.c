@@ -17,7 +17,7 @@
 #include "kult_port.h"
 #include "kult_internal.h"
 
-uint32_t screen_address_raw(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
+uint32_t screen_address_raw(uint8_t *, uint32_t, uint32_t, uint32_t *);
 
 /* KULT_REVEAL_GATE: multiplicador (%) del retardo por punto del reveal, que es
  * el que fija la cadencia de los "frames de retrato" (p. ej. el habla del
@@ -94,8 +94,8 @@ void masked_word4(uint8_t *img, uint32_t dest, uint32_t bits, uint32_t phase) {
 /* FUN_00012f28 @ 0x12f28: revelado pixel a pixel del elemento. Tras 128a4 reescala
  * x/ancho <<2, fija el total (alto*ancho) en 0x1a49e y recorre las posiciones en
  * pasos de 0x11 (mod total) pintando el bit (0x12fb6) con retardo entre pasos. */
-uint32_t elem_command_wrap(uint8_t *img, uint32_t a6);
-uint32_t elem_blit_vbl(uint8_t *img, uint32_t a6);
+uint32_t elem_command_wrap(uint8_t *, uint32_t);
+uint32_t elem_blit_vbl(uint8_t *, uint32_t);
 
 /* 0x12f28 — reveal pixelado del elemento (dbf 0x64 / skip $1a570) */
 uint32_t reveal_pixel(uint8_t *img, uint32_t script) {

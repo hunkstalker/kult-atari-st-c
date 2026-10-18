@@ -27,8 +27,8 @@
 #include "addrs.h"
 #include "kult_internal.h"
 
-uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7);
-void mask_restore_rows(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7);
+uint32_t screen_address(uint8_t *, uint32_t, uint32_t, uint32_t *);
+void mask_restore_rows(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
 
 /* 0x10838 — dibuja el glifo de D0. */
 void print_char(uint8_t *img, uint32_t code) {
@@ -122,7 +122,7 @@ uint32_t advance_text_entry(uint8_t *img, uint32_t table, uint32_t count) {
     return table + 2;
 }
 
-uint32_t measure_word(uint8_t *img, uint32_t str, uint32_t *end_out);
+uint32_t measure_word(uint8_t *, uint32_t, uint32_t *);
 
 /* 0x1090e — imprime las palabras que caben en A_TEXT_BOX_W. */
 uint32_t print_words_fit(uint8_t *img, uint32_t str, uint32_t ret,
@@ -144,8 +144,8 @@ uint32_t print_words_fit(uint8_t *img, uint32_t str, uint32_t ret,
     return ret & 0xffff;
 }
 
-void measure_words(uint8_t *img, uint32_t str, uint32_t *count_out, uint32_t *width_out);
-void print_spaces(uint8_t *img, uint32_t count);
+void measure_words(uint8_t *, uint32_t, uint32_t *, uint32_t *);
+void print_spaces(uint8_t *, uint32_t);
 
 /* 0x10b24 — mide la línea, ajusta el ancho y la imprime rellenando. */
 uint32_t print_line(uint8_t *img, uint32_t str) {
@@ -162,46 +162,46 @@ uint32_t print_line(uint8_t *img, uint32_t str) {
 }
 
 /* 0x10b46 — imprime D6+1 espacios. */
-void print_spaces(uint8_t *img, uint32_t d6) {
+void print_spaces(uint8_t *img, uint32_t count) {
     do {
         print_char(img, 0);
-        d6 = (d6 - 1) & 0xffff;
-    } while (d6 != 0xffff);
+        count = (count - 1) & 0xffff;
+    } while (count != 0xffff);
 }
 
 /* 0x10946 — mide una palabra. */
-uint32_t measure_word(uint8_t *img, uint32_t a5, uint32_t *a4_out) {
+uint32_t measure_word(uint8_t *img, uint32_t str, uint32_t *end_out) {
     uint32_t end = be32(img + A_CUR_STR_END);
-    uint32_t a4 = a5;
-    uint32_t d0 = 0;
-    if ((img[a4] & 0x3f) == 0) {
-        d0 = 1;
-        a4 += 1;
-        if (a4 == end) { *a4_out = a4; return 1; }
+    uint32_t p = str;
+    uint32_t count = 0;
+    if ((img[p] & 0x3f) == 0) {
+        count = 1;
+        p += 1;
+        if (p == end) { *end_out = p; return 1; }
     }
     for (;;) {
-        if ((img[a4] & 0x3f) == 0) { *a4_out = a4; return d0; }
-        d0 += 1;
-        uint32_t c0 = img[a4] & 0xc0;
-        if (c0 == 0x40) { a4 += 1; *a4_out = a4; return d0; }
-        if (c0 != 0) d0 += 1;
-        a4 += 1;
-        if (a4 == end) { *a4_out = a4; return d0; }
+        if ((img[p] & 0x3f) == 0) { *end_out = p; return count; }
+        count += 1;
+        uint32_t flags = img[p] & 0xc0;
+        if (flags == 0x40) { p += 1; *end_out = p; return count; }
+        if (flags != 0) count += 1;
+        p += 1;
+        if (p == end) { *end_out = p; return count; }
     }
 }
 
 /* 0x10998 — cuenta palabras (D5) y la más ancha (D6). */
-void measure_words(uint8_t *img, uint32_t a5, uint32_t *d5_out, uint32_t *d6_out) {
+void measure_words(uint8_t *img, uint32_t str, uint32_t *count_out, uint32_t *width_out) {
     uint32_t end = be32(img + A_CUR_STR_END);
-    uint32_t d5 = 0, d6 = 0, a4 = a5;
+    uint32_t count = 0, width = 0, p = str;
     do {
-        uint32_t d0 = measure_word(img, a5, &a4);
-        d5 += 1;
-        if (d6 < d0) d6 = d0;
-        a5 = a4;
-    } while (a4 != end);
-    *d5_out = d5 & 0xffff;
-    *d6_out = d6 & 0xffff;
+        uint32_t w = measure_word(img, str, &p);
+        count += 1;
+        if (width < w) width = w;
+        str = p;
+    } while (p != end);
+    *count_out = count & 0xffff;
+    *width_out = width & 0xffff;
 }
 
 /* 0x109bc — word-wrap greedy al ancho A_TEXT_BOX_W. */

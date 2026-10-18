@@ -9,39 +9,39 @@
 #include "machine.h"
 #include "addrs.h"
 
-uint32_t anim_threshold(uint8_t *img, uint32_t a6, uint32_t d0);
-void run_command_keep_sp(uint8_t *img, uint32_t a6);
-uint32_t obj_wait_a0(uint8_t *img);
-uint32_t text_index_arg(uint8_t *img, uint32_t a5, uint32_t d4, uint32_t *a6);
-void text_window(uint8_t *img, uint32_t a5, uint32_t a6);
-uint32_t prompt_wait_entry(uint8_t *img, uint32_t a6);
-void hint_blit_stroke(uint8_t *img, uint32_t *a6);
-void set_palette_entry(uint8_t *img, uint32_t d0);
-void set_palette_current(uint8_t *img);
-void icon_state_a(uint8_t *img);
-void icon_state_b(uint8_t *img, uint32_t a6, uint32_t d0);
-uint32_t anim_entry_b(uint8_t *img, uint32_t a6, uint32_t d0, uint32_t d1, uint32_t d2);
-void supexec_b(uint8_t *img, uint32_t d1, uint32_t d4);
-void sound_play_a(uint8_t *img, uint32_t d4);
-void sound_stop(uint8_t *img);
-void set_cursor_clip(uint8_t *img, uint32_t a0, uint32_t d0);
-void obj_wait_hit(uint8_t *img, uint32_t d2, uint32_t d3);
-void wait_vbl(uint8_t *img);
-void wait_frame(uint8_t *img);
-uint32_t elem_blit_vbl(uint8_t *img, uint32_t a6);
-void print_char(uint8_t *img, uint32_t d0);
-void hint_blit_2(uint8_t *img, uint32_t *a6);
-void text_blit_ovl_b(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4);
-void masked_save_blit(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
-                 uint32_t d7);
-void mask_rows_handler(uint8_t *img);
-void cursor_restore(uint8_t *img);
-void overlay_b_draw(uint8_t *img, uint32_t a6);
-void wait_frame_cursor(uint8_t *img);
-void handle_frame_input(uint8_t *img);
-int  rect_hit_test_a(uint8_t *img, uint32_t a4);
-void clear_object_flags(uint8_t *img);
-uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
+uint32_t anim_threshold(uint8_t *, uint32_t, uint32_t);
+void run_command_keep_sp(uint8_t *, uint32_t);
+uint32_t obj_wait_a0(uint8_t *);
+uint32_t text_index_arg(uint8_t *, uint32_t, uint32_t, uint32_t *);
+void text_window(uint8_t *, uint32_t, uint32_t);
+uint32_t prompt_wait_entry(uint8_t *, uint32_t);
+void hint_blit_stroke(uint8_t *, uint32_t *);
+void set_palette_entry(uint8_t *, uint32_t);
+void set_palette_current(uint8_t *);
+void icon_state_a(uint8_t *);
+void icon_state_b(uint8_t *, uint32_t, uint32_t);
+uint32_t anim_entry_b(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void supexec_b(uint8_t *, uint32_t, uint32_t);
+void sound_play_a(uint8_t *, uint32_t);
+void sound_stop(uint8_t *);
+void set_cursor_clip(uint8_t *, uint32_t, uint32_t);
+void obj_wait_hit(uint8_t *, uint32_t, uint32_t);
+void wait_vbl(uint8_t *);
+void wait_frame(uint8_t *);
+uint32_t elem_blit_vbl(uint8_t *, uint32_t);
+void print_char(uint8_t *, uint32_t);
+void hint_blit_2(uint8_t *, uint32_t *);
+void text_blit_ovl_b(uint8_t *, uint32_t, uint32_t, uint32_t);
+void masked_save_blit(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t);
+void mask_rows_handler(uint8_t *);
+void cursor_restore(uint8_t *);
+void overlay_b_draw(uint8_t *, uint32_t);
+void wait_frame_cursor(uint8_t *);
+void handle_frame_input(uint8_t *);
+int  rect_hit_test_a(uint8_t *, uint32_t);
+void clear_object_flags(uint8_t *);
+uint32_t screen_address(uint8_t *, uint32_t, uint32_t, uint32_t *);
 
 /* FUN_00015052 @ 0x15052: comando de seleccion (tabla 0x1ab62). */
 uint32_t obj_action_select(uint8_t *img, uint32_t script) {
@@ -69,8 +69,8 @@ uint32_t obj_action_select(uint8_t *img, uint32_t script) {
 /* FUN_00014f74 @ 0x14f74 (cmd idx 10): rejilla de texto 0x16abe + espera de clic
  * (0x167be) + repintados, y despacho por la tabla de objetos o por el umbral
  * (0x9005) en la cola 0x15022. */
-uint32_t grid_bands(uint8_t *img, uint32_t a6);
-void copy_screen(uint8_t *img);
+uint32_t grid_bands(uint8_t *, uint32_t);
+void copy_screen(uint8_t *);
 static void tail_15022(uint8_t *img);
 
 /* 0x14f74 — grid wait */
@@ -114,7 +114,7 @@ uint32_t grid_wait(uint8_t *img, uint32_t script) {
 
 /* FUN_00014f5e @ 0x14f5e (cmd idx 9): umbral 2, ciclo de paleta 0x16310 y flag
  * $1ad0f. */
-void palette_cycle(uint8_t *img);
+void palette_cycle(uint8_t *);
 
 /* 0x14f5e — anim threshold2 */
 uint32_t anim_threshold2(uint8_t *img, uint32_t script) {
@@ -128,16 +128,16 @@ uint32_t anim_threshold2(uint8_t *img, uint32_t script) {
  * blitea el icono (0x11020 con d4=3) y gira esperando frame (0x13698) + hit-test de
  * acciones (0x147c2) + frame (0x1031c) hasta el clic; restaura cursor y rect
  * (0x1060a/0x124f2) y despacha (the_command queda a 0). */
-void overlay_b_draw(uint8_t *img, uint32_t a6);
-uint32_t save_rect(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t a0, uint32_t d7);
-void cursor_restore(uint8_t *img);
-void restore_rect(uint8_t *img);
-void wait_frame_cursor(uint8_t *img);
-uint32_t cursor_select_a(uint8_t *img);
-void wait_frame(uint8_t *img);
-void set_cursor_clip(uint8_t *img, uint32_t a0, uint32_t d0);
-void handle_frame_input(uint8_t *img);
-uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
+void overlay_b_draw(uint8_t *, uint32_t);
+uint32_t save_rect(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void cursor_restore(uint8_t *);
+void restore_rect(uint8_t *);
+void wait_frame_cursor(uint8_t *);
+uint32_t cursor_select_a(uint8_t *);
+void wait_frame(uint8_t *);
+void set_cursor_clip(uint8_t *, uint32_t, uint32_t);
+void handle_frame_input(uint8_t *);
+uint32_t screen_address(uint8_t *, uint32_t, uint32_t, uint32_t *);
 
 /* 0x14e66 — overlay menu */
 uint32_t overlay_menu(uint8_t *img, uint32_t script) {

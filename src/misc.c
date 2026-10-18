@@ -11,14 +11,14 @@
 #include "os.h"
 #include "addrs.h"
 
-void text_blit_fwd(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t a3,
-                     uint32_t d2w, uint32_t d3w, uint32_t d7w);
-void masked_save_row(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7);
-void hint_icons(uint8_t *img);
-void draw_hint_icons(uint8_t *img);
-void update_icon_list(uint8_t *img);
-void draw_selection_frame(uint8_t *img);
-void hint_blit_entry(uint8_t *img, uint32_t a6, uint32_t *a6_out);
+void text_blit_fwd(uint8_t *, uint32_t, uint32_t, uint32_t,
+                     uint32_t, uint32_t, uint32_t);
+void masked_save_row(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void hint_icons(uint8_t *);
+void draw_hint_icons(uint8_t *);
+void update_icon_list(uint8_t *);
+void draw_selection_frame(uint8_t *);
+void hint_blit_entry(uint8_t *, uint32_t, uint32_t *);
 
 /* FUN_0001104a @ 0x1104a: fija a3 = *(0x1a534) y cae en el blit de texto (0x11050). */
 void text_blit_fwd_a3(uint8_t *img, uint32_t dest, uint32_t src, uint32_t cols, uint32_t rows,
@@ -43,9 +43,9 @@ uint32_t gemdos_cnecin(uint8_t *img) {
 
 /* FUN_00012fea @ 0x12fea: cae en 0x1222e (icono A6[1]). */
 uint32_t hint_blit_entry_b(uint8_t *img, uint32_t script) {
-    uint32_t a6o;
-    hint_blit_entry(img, script, &a6o);
-    return a6o;
+    uint32_t script_out;
+    hint_blit_entry(img, script, &script_out);
+    return script_out;
 }
 
 /* Avanzan A6 y caen en el cuerpo real. */

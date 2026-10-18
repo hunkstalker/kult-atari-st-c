@@ -24,8 +24,8 @@
 #define MUSIC_SHADOW 0x3ae7c
 #define MUSIC_STATE  0x3ae8c
 
-void psg_trap3(uint8_t *img, uint32_t value, uint32_t base, uint32_t off,
-                 uint32_t *value_out);
+void psg_trap3(uint8_t *, uint32_t, uint32_t, uint32_t,
+                 uint32_t *);
 
 /* FUN_0003aa7c @ 0x3aa7c: escribe el registro D6 con D0 y verifica releyendo $ff8800.
  * En el modelo el chip devuelve lo escrito, asi que la verificacion pasa a la primera;
@@ -41,29 +41,29 @@ void psg_write_verify(uint8_t *img, uint32_t reg, uint32_t value) {
  * RMW del mixer: lee el registro, conserva D0[0..5] y los bits 6-7 leidos.
  *
  * D0 se restaura al final (el original lo salva en la pila); D5/D6/A5 son scratch. */
-void psg_trap3(uint8_t *img, uint32_t d0, uint32_t d2, uint32_t d7,
-                 uint32_t *d0_out) {
-    uint32_t d0_in = d0;
-    uint32_t d6;
-    if (d2 & 0x8000) {
-        d6 = d7;
-        d6 = (d6 & 0xffff0000u) | ((d6 << 1) & 0xffffu);          /* lsl.w #1,d6 */
-        d6 = (d6 & 0xffffff00u) | ((d6 + (d2 & 0xffu)) & 0xffu);  /* add.b d2,d6 */
-        psg_write_verify(img, d6, d0);                                 /* low byte */
-        d0 = (d0 & 0xffff0000u) | (((d0 & 0xffffu) >> 8) & 0xffffu); /* lsr.w #8,d0 */
-        d6 = (d6 & 0xffff0000u) | ((d6 + 1) & 0xffffu);           /* addq.w #1,d6 */
-        psg_write_verify(img, d6, d0);                                 /* high byte */
+void psg_trap3(uint8_t *img, uint32_t value, uint32_t base, uint32_t off,
+                 uint32_t *value_out) {
+    uint32_t value_in = value;
+    uint32_t reg;
+    if (base & 0x8000) {
+        reg = off;
+        reg = (reg & 0xffff0000u) | ((reg << 1) & 0xffffu);          /* lsl.w #1,reg */
+        reg = (reg & 0xffffff00u) | ((reg + (base & 0xffu)) & 0xffu);  /* add.b base,reg */
+        psg_write_verify(img, reg, value);                                 /* low byte */
+        value = (value & 0xffff0000u) | (((value & 0xffffu) >> 8) & 0xffffu); /* lsr.w #8,value */
+        reg = (reg & 0xffff0000u) | ((reg + 1) & 0xffffu);           /* addq.w #1,reg */
+        psg_write_verify(img, reg, value);                                 /* high byte */
     } else {
-        d6 = d2;
-        d6 = (d6 & 0xffffff00u) | ((d6 + (d7 & 0xffu)) & 0xffu);  /* add.b d7,d6 */
-        if ((d2 & 0xffu) == 7) {
-            uint8_t old = psg_port_read(d6 & 0xff);
-            d0 = (d0 & 0xffffff00u)
-               | (((d0 & 0x3fu) | (old & 0xc0u)) & 0xffu);
+        reg = base;
+        reg = (reg & 0xffffff00u) | ((reg + (off & 0xffu)) & 0xffu);  /* add.b off,reg */
+        if ((base & 0xffu) == 7) {
+            uint8_t old = psg_port_read(reg & 0xff);
+            value = (value & 0xffffff00u)
+               | (((value & 0x3fu) | (old & 0xc0u)) & 0xffu);
         }
-        psg_write_verify(img, d6, d0);
+        psg_write_verify(img, reg, value);
     }
-    if (d0_out) *d0_out = d0_in;
+    if (value_out) *value_out = value_in;
 }
 
 /* FUN_0003aa8a @ 0x3aa8a: gemelo del handler que escribe la tabla sombra $3ae7c en vez
@@ -173,7 +173,7 @@ uint32_t music_cmd_table(uint8_t *img, uint32_t table, uint32_t key, uint32_t va
  * (0x3b1ac): word de offset al bloque; de ahi salen la duracion, las tablas del estado
  * (4/8/0xc/0x10), el puntero de cancion (canal[0]) y los flags/volumenes iniciales.
  * Termina silenciando (0x3a85e) y limpiando el contador de estado. D2 entra sin tocar. */
-void music_load(uint8_t *img, uint32_t selector, uint32_t base, uint32_t d2) {
+void music_load(uint8_t *img, uint32_t selector, uint32_t base, uint32_t carry) {
     uint32_t state = MUSIC_STATE;
     uint32_t off = selector & 0xffffu;
     img[state + 0x1a] = 0;
@@ -204,7 +204,7 @@ void music_load(uint8_t *img, uint32_t selector, uint32_t base, uint32_t d2) {
         img[chan + 0x2b] = 0x0f;
         img[chan + 0x2f] = 0x0f;
     }
-    music_silence(img, d2, 0, 0, 0);
+    music_silence(img, carry, 0, 0, 0);
     wr16(img + state + 0x18, 0);
 }
 
@@ -271,9 +271,9 @@ uint32_t music_cmd(uint8_t *img, uint32_t value, uint32_t cmd) {
 }
 
 /* FUN_0003a556 @ 0x3a556: init_hardware. D2 entra sin tocar y llega hasta 0x3a85e. */
-uint32_t init_hardware(uint8_t *img, uint32_t d2) {
+uint32_t init_hardware(uint8_t *img, uint32_t carry) {
     music_install(img, 0);
-    music_load(img, 0, 0x3b1ac, d2);
+    music_load(img, 0, 0x3b1ac, carry);
     return music_cmd(img, 0, 0x00a7);
 }
 
@@ -288,9 +288,9 @@ void music_stop2(uint8_t *img) {
 }
 
 /* FUN_0003a6f4 @ 0x3a6f4: Supexec(0x3a712) + silenciar. D2 entra sin tocar. */
-void music_stop(uint8_t *img, uint32_t d2) {
+void music_stop(uint8_t *img, uint32_t carry) {
     music_stop2(img);
-    music_silence(img, d2, 0, 0, 0);
+    music_silence(img, carry, 0, 0, 0);
 }
 
 /* ================= generador de notas y tick del tracker (0x3a992/0x3aab6) ============ */

@@ -13,7 +13,7 @@
 #include "addrs.h"
 #include "kult_internal.h"
 
-uint32_t screen_address_raw(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7);
+uint32_t screen_address_raw(uint8_t *, uint32_t, uint32_t, uint32_t *);
 
 /* 0x10526 — guarda las 16 filas de 16 B bajo el cursor en A_CURSOR_SAVE_BUF+8 y
  * pinta el sprite. El 4º word de cada media fila se OR-ea solo si el flag

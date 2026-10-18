@@ -62,7 +62,7 @@ void obj_find_setup(uint8_t *img, uint32_t obj, uint32_t idx) {
     wr32(img + A_SELECTED_ICON_PTR, A_COMMAND_HINTS_LIST + (off << 2));
 }
 
-void class_find(uint8_t *img);
+void class_find(uint8_t *);
 
 /* 0x177bc — obj find class */
 uint32_t obj_find_class(uint8_t *img, uint32_t index, uint32_t idx_in, uint32_t *class_out) {
@@ -83,7 +83,7 @@ uint32_t obj_find_class(uint8_t *img, uint32_t index, uint32_t idx_in, uint32_t 
 /* FUN_000188ce @ 0x188ce: si el byte de script (A6[1]) esta en 0x3b..0x3e y
  * $1aaf9 == $1acd2, lanza las animaciones 0x87 (y 0x96 si $1ab08) con 0x177bc +
  * 0x17856 sobre los datos 0x19d24/0x19d2a. Conserva A6 y restaura $1acc9. */
-void obj_anim(uint8_t *img, uint32_t script);
+void obj_anim(uint8_t *, uint32_t);
 
 /* 0x188ce — ---- cluster 0x14602/0x1460a/0x146d0 (modo de escena) ---- 0x1460a: con $1a570 == 0 y ($1ad0f & 0x38) == 8 corre el formulario 0x141fa; guarda $1ad0f & 7 en ... */
 uint32_t anim_mode(uint8_t *img, uint32_t script) {
@@ -111,7 +111,7 @@ uint32_t anim_mode(uint8_t *img, uint32_t script) {
  * 0x37/0x32 y sale; si $1acec >= 0x3f o $1acd2 >= 0x2c sale tras limpiar. Busca el
  * objeto de clase 0x11 (0x1778e), indexa por $1ad00 y, con la tabla 0x2741e
  * (0x16210), decide el comando pendiente a018/a019 (o lo limpia). */
-uint32_t pal_next_byte(uint8_t *img);
+uint32_t pal_next_byte(uint8_t *);
 
 /* 0x17480 — rot action */
 void rot_action(uint8_t *img) {
@@ -187,8 +187,8 @@ cmd_a018:
 /* FUN_0001857c @ 0x1857c: busca en la tabla 0x1a8f0 la entrada [0x40][$1acd2] y
  * blitea los dos iconos (0x11020 + 0x11016) en (0x4a,0xe) con d4 = 0xad (0xac si
  * no la encuentra), y cuenta las entradas 0x80 de la tabla 0x1a9d4 en $1acf7. */
-void text_blit_ovl_b(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4);
-void text_blit_ovl_a(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4);
+void text_blit_ovl_b(uint8_t *, uint32_t, uint32_t, uint32_t);
+void text_blit_ovl_a(uint8_t *, uint32_t, uint32_t, uint32_t);
 
 /* 0x1857c — sample find body */
 void sample_find_body(uint8_t *img) {
@@ -222,7 +222,7 @@ void sample_find_body(uint8_t *img) {
 /* FUN_00018944 @ 0x18944: si $1ad1d esta puesto, repite las animaciones 0x87/0x96
  * de 0x188ce sobre los datos 0x19d21/0x19d27 (guardando $1aaf9/$1ab08), restaura
  * $1acc9 y actualiza la lista de iconos (0x16582). */
-void update_icon_list(uint8_t *img);
+void update_icon_list(uint8_t *);
 
 /* 0x18944 — icon repeat */
 void icon_repeat(uint8_t *img) {
@@ -243,11 +243,11 @@ void icon_repeat(uint8_t *img) {
 }
 
 /* FUN_0001857a @ 0x1857a: `addq.l #1,script` y cae en 0x1857c. */
-void anim_entry_a(uint8_t *img, uint32_t script);
-void walk_entry(uint8_t *img, uint32_t a4, uint32_t d1, uint32_t *a4o, uint32_t *a5o);
-void icon_state_a(uint8_t *img);
-void icon_state_b(uint8_t *img, uint32_t script, uint32_t d0);
-uint32_t anim_entry_b(uint8_t *img, uint32_t script, uint32_t d0, uint32_t d1, uint32_t d2);
+void anim_entry_a(uint8_t *, uint32_t);
+void walk_entry(uint8_t *, uint32_t, uint32_t, uint32_t *, uint32_t *);
+void icon_state_a(uint8_t *);
+void icon_state_b(uint8_t *, uint32_t, uint32_t);
+uint32_t anim_entry_b(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
 
 /* 0x1857a — sample find wrap */
 uint32_t sample_find_wrap(uint8_t *img, uint32_t script) {
@@ -306,18 +306,18 @@ uint32_t sample_mark_b(uint8_t *img, uint32_t script) {
     return body_184de(img, script, 0x40, 0x2b);
 }
 
-void draw_hint_icons(uint8_t *img);
-void icon_table(uint8_t *img);
-void copy_screen(uint8_t *img);
+void draw_hint_icons(uint8_t *);
+void icon_table(uint8_t *);
+void copy_screen(uint8_t *);
 
 /* FUN_000171b4 @ 0x171b4 y FUN_000173ae @ 0x173ae: fijan el byte de seleccion en
  * la tabla 0x1aa72/0x1aa8b, buscan el objeto (0x177bc/0x17856 con el puntero de
  * 0x1a80a/0x1a80e + 1), programan el temporizador ($1acaa/$1acac o $1acae/$1acb0)
  * y repintan (0x16556/0x16582/copy_screen). */
-void obj_anim(uint8_t *img, uint32_t a1);
-void sound_stop(uint8_t *img);
-void hint_blit_2(uint8_t *img, uint32_t *script);
-void hint_blit_3(uint8_t *img, uint32_t *script);
+void obj_anim(uint8_t *, uint32_t);
+void sound_stop(uint8_t *);
+void hint_blit_2(uint8_t *, uint32_t *);
+void hint_blit_3(uint8_t *, uint32_t *);
 
 /* 0x171b4 — sel timer a */
 void sel_timer_a(uint8_t *img) {
@@ -351,7 +351,7 @@ void sel_timer_b(uint8_t *img) {
 /* FUN_00017678 @ 0x17678: restaura los iconos 1 y 3, limpia la entrada $1a812 y
  * $1abf8; si +1 no lleva el bit 6, limpia el bit 7 de $1a816[4], busca con $1ad00
  * y anima 0x19cfa. */
-void obj_anim(uint8_t *img, uint32_t a1);
+void obj_anim(uint8_t *, uint32_t);
 
 /* 0x17678 — obj clear anim */
 void obj_clear_anim(uint8_t *img) {
@@ -388,7 +388,7 @@ uint32_t class30_dispatch(uint8_t *img, uint32_t script) {
 /* FUN_000178cc @ 0x178cc: consume la entrada $1a812[4]: elige la entrada de 0x1a8f0
  * en $1a75e, sella 0x1ad33 y corre 0x184cc + despacho 0x90aa; si estaba a 0,
  * despacha 0x9140. A6 += 1. */
-void run_command_keep_sp(uint8_t *img, uint32_t script);
+void run_command_keep_sp(uint8_t *, uint32_t);
 
 /* 0x178cc — obj consume */
 uint32_t obj_consume(uint8_t *img, uint32_t script) {
@@ -436,31 +436,31 @@ uint32_t class30_apply(uint8_t *img, uint32_t script) {
     return script + 1;
 }
 
-void load_eche_bank_wrap(uint8_t *img, uint32_t d0);
-void blit_sprite(uint8_t *img, uint32_t a1);
-void mask_restore_rows(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7);
-void sound_play_a(uint8_t *img, uint32_t d4);
-void text_window(uint8_t *img, uint32_t a5, uint32_t script);
-uint32_t text_index_arg(uint8_t *img, uint32_t a5, uint32_t d4, uint32_t *script);
-uint32_t prompt_wait_entry(uint8_t *img, uint32_t script);
-void hint_blit_stroke(uint8_t *img, uint32_t *script);
-uint32_t anim_entry_b(uint8_t *img, uint32_t script, uint32_t d0, uint32_t d1, uint32_t d2);
-void sample_list(uint8_t *img, uint32_t sel);
+void load_eche_bank_wrap(uint8_t *, uint32_t);
+void blit_sprite(uint8_t *, uint32_t);
+void mask_restore_rows(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void sound_play_a(uint8_t *, uint32_t);
+void text_window(uint8_t *, uint32_t, uint32_t);
+uint32_t text_index_arg(uint8_t *, uint32_t, uint32_t, uint32_t *);
+uint32_t prompt_wait_entry(uint8_t *, uint32_t);
+void hint_blit_stroke(uint8_t *, uint32_t *);
+uint32_t anim_entry_b(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void sample_list(uint8_t *, uint32_t);
 
-int elem_class_find(uint8_t *img, uint32_t v, uint32_t sel, uint32_t mask, uint32_t base,
-                uint32_t *out);
-uint32_t elem_list_build(uint8_t *img, uint32_t sel);
-void text_block_build(uint8_t *img, uint32_t a5, uint32_t a4);
-void hint_select_on(uint8_t *img, uint32_t v, uint32_t *o);
-void blit_rect_vbl(uint8_t *img, uint32_t p, uint32_t out, uint32_t mask, uint32_t base,
-                 uint32_t i);
-void hint_color(uint8_t *img);
-void screen_clean(uint8_t *img);
-void hint_blit_2(uint8_t *img, uint32_t *script);
-void hint_blit_stroke(uint8_t *img, uint32_t *script);
-uint32_t elem_blit_vbl(uint8_t *img, uint32_t script);
-void wait_frame(uint8_t *img);
-void sound_play_b(uint8_t *img, uint32_t vol);
+int elem_class_find(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                uint32_t *);
+uint32_t elem_list_build(uint8_t *, uint32_t);
+void text_block_build(uint8_t *, uint32_t, uint32_t);
+void hint_select_on(uint8_t *, uint32_t, uint32_t *);
+void blit_rect_vbl(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t);
+void hint_color(uint8_t *);
+void screen_clean(uint8_t *);
+void hint_blit_2(uint8_t *, uint32_t *);
+void hint_blit_stroke(uint8_t *, uint32_t *);
+uint32_t elem_blit_vbl(uint8_t *, uint32_t);
+void wait_frame(uint8_t *);
+void sound_play_b(uint8_t *, uint32_t);
 
 /* FUN_00016dec @ 0x16dec: ficha/descripcion del objeto. Resuelve la clase (0x1285a),
  * toma selector D1=A6[2] (0xff/0xfe -> defaults 0x1ab4c/0x1ab4d) y arranca el sonido
@@ -556,11 +556,11 @@ uint32_t object_info_wait(uint8_t *img, uint32_t script) {
  * Monta el descriptor 0x19968 y corre 11f98 + 18a30; repinta el icono 1 (120e4/
  * 1215e) y elige la accion d1 de 0x1a69d (con 0x1acf7/0x1ad2c, 0x18f8e y 16210)
  * para publicarla en $1ad02. A6 = entry+1. */
-uint32_t overlay_dispatch_2(uint8_t *img, uint32_t script);
-void hint_select_off(uint8_t *img, uint32_t d0, uint32_t *o);
-uint32_t obj_find_class(uint8_t *img, uint32_t d0, uint32_t d2_in, uint32_t *d0o);
-uint32_t pal_next_byte(uint8_t *img);
-void noop_160c0(uint8_t *img);
+uint32_t overlay_dispatch_2(uint8_t *, uint32_t);
+void hint_select_off(uint8_t *, uint32_t, uint32_t *);
+uint32_t obj_find_class(uint8_t *, uint32_t, uint32_t, uint32_t *);
+uint32_t pal_next_byte(uint8_t *);
+void noop_160c0(uint8_t *);
 
 /* 0x17a1a — view change */
 uint32_t view_change(uint8_t *img, uint32_t script) {
@@ -575,8 +575,8 @@ uint32_t view_change(uint8_t *img, uint32_t script) {
             wr16(img + A_THE_COMMAND, v & 0xffff);
             uint32_t idx = (obj - 0x1aa72) & 0xffffffffu;
             run_command_keep_sp(img, script);
-            uint32_t d0o;
-            obj_find_class(img, idx, x, &d0o);
+            uint32_t class_out;
+            obj_find_class(img, idx, x, &class_out);
             obj = be32(img + A_ELEM_CLASS);
         }
         if (be16(img + A_DAT_1ABF8) == 0xc357) {
@@ -650,9 +650,9 @@ uint32_t view_change(uint8_t *img, uint32_t script) {
  * a0[2] busca $1acc7 en 0x19d2d..0x19d55 (d0=0x2f/0x42) o en 0x19d55..0x19dbd,
  * ajusta script[1], suena (0x18f8e 0x96/0x97/0xb1 con $192d0) y corre la animacion
  * 0x159d2; si $192d0 sigue a 0, cuelga el driver (0x18fa4). A6 = entry+1. */
-void anim_entry_a(uint8_t *img, uint32_t script);
-void obj_anim(uint8_t *img, uint32_t a1);
-void run_command_keep_sp(uint8_t *img, uint32_t script);
+void anim_entry_a(uint8_t *, uint32_t);
+void obj_anim(uint8_t *, uint32_t);
+void run_command_keep_sp(uint8_t *, uint32_t);
 
 /* 0x17ca4 — use object */
 uint32_t use_object(uint8_t *img, uint32_t script) {
@@ -744,7 +744,7 @@ L_end:
  * objeto seleccionado (0x124f8 + 0x1215e); si $1ad03/$1ad26/$1acf7/$1a57b lo piden,
  * anima el objeto (0x18f8e 0x95 + 0x159e2 d1=0x28). Cierra copiando $1ad03 a $1a57a
  * y limpiandolo. A6 += 1. */
-void set_palette_current(uint8_t *img);
+void set_palette_current(uint8_t *);
 /* 0x176c0 — dibuja los iconos de pista, busca el objeto 0xbe (0x177bc), fija $1ad26 y corre 0x176c0; luego busca el objeto $1aa70, marca la entrada (0x53), activa el bit... */
 uint32_t track_icon_anim(uint8_t *img, uint32_t script) {
     if (img[0x1a57b] != 0) {
@@ -787,11 +787,11 @@ uint32_t track_icon_anim(uint8_t *img, uint32_t script) {
  * par [indice][vol] de 0x1998a a 0xd8f0 y arma la lista con 0x16ab6 (a3=0x1998c,
  * d7=2, $192be=0x64c8e). Repite 0xb veces 14138(0x1997e)/VBL/copy + 14138(0x19981)/
  * VBL/copy, y cierra con 14138(0x19984), 14138(0x19987), copy y 0x18fa4. */
-void load_eche_bank_wrap(uint8_t *img, uint32_t d0);
-void wait_vbl(uint8_t *img);
-void sample_entry(uint8_t *img, uint32_t p, uint32_t n);
-void run_text_entry(uint8_t *img, uint32_t script);
-void sound_stop(uint8_t *img);
+void load_eche_bank_wrap(uint8_t *, uint32_t);
+void wait_vbl(uint8_t *);
+void sample_entry(uint8_t *, uint32_t, uint32_t);
+void run_text_entry(uint8_t *, uint32_t);
+void sound_stop(uint8_t *);
 
 /* 0x16a20 — portrait intro */
 void portrait_intro(uint8_t *img) {
@@ -929,8 +929,8 @@ uint32_t track_select_b(uint8_t *img, uint32_t script) {
  * (0x177bc), fija $1ad26 y corre 0x176c0; luego busca el objeto $1aa70, marca la
  * entrada (0x53), activa el bit7 del seleccionado, limpia el bit6 de su clase y
  * copia $1acd2; repinta la lista de iconos y la pantalla. */
-uint32_t track_icon_anim(uint8_t *img, uint32_t script);
-uint32_t obj_find_class(uint8_t *img, uint32_t d0, uint32_t d2_in, uint32_t *d0o);
+uint32_t track_icon_anim(uint8_t *, uint32_t);
+uint32_t obj_find_class(uint8_t *, uint32_t, uint32_t, uint32_t *);
 
 /* 0x17c42 — obj refresh */
 uint32_t obj_refresh(uint8_t *img, uint32_t script) {
@@ -1038,7 +1038,7 @@ uint32_t obj_seal(uint8_t *img, uint32_t script) {
 
 /* FUN_0001817a @ 0x1817a: marca la entrada del objeto (byte 44 = 0x53), limpia
  * $1ad0b/$1abf8 y cae en 0x18192. */
-void track5_body(uint8_t *img);
+void track5_body(uint8_t *);
 
 /* 0x1817a — obj mark */
 void obj_mark(uint8_t *img) {
@@ -1055,9 +1055,9 @@ void obj_mark(uint8_t *img) {
  * con la escala 0xcffff/(v-0x138)) y OR-ea la mascara 0x8000 rotada en (0,2,4,6)
  * segun el tramo; si +8 < 0x148 y D5 >= 0x1e reinicia la entrada (0x18316) con el
  * bit 0x1800. Cierra con una VBL. */
-void icon_list_build(uint8_t *img, uint32_t a1);
-void wait_vbl(uint8_t *img);
-uint32_t screen_address_raw(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
+void icon_list_build(uint8_t *, uint32_t);
+void wait_vbl(uint8_t *);
+uint32_t screen_address_raw(uint8_t *, uint32_t, uint32_t, uint32_t *);
 
 /* 0x1834a — icon scale loop */
 void icon_scale_loop(uint8_t *img, uint32_t base, uint32_t pass) {
@@ -1142,8 +1142,8 @@ void icon_scale(uint8_t *img) {
  * 0x258/0x190 (marcando en D2). Si algo topo, sale; si no, dibuja los 16 segmentos
  * con 0x13d0e (leyendo x/y del long y del siguiente, con vuelta al primero) y
  * repite. */
-void reveal_line(uint8_t *img);
-uint32_t pal_next_word(uint8_t *img);
+void reveal_line(uint8_t *);
+uint32_t pal_next_word(uint8_t *);
 
 /* 0x181f0 — room reset */
 void room_reset(uint8_t *img) {
@@ -1217,13 +1217,13 @@ void room_reset(uint8_t *img) {
  * (0x182f0) y las 0x65 pasadas de 0x18334, anima (0x159e2), fuerza $1acc6 = 0x87,
  * carga FOND.PI1 (0x13568 reintentando con 0x918e), fija la paleta, repite 0x181f0,
  * copia y encadena con 0x1682a. */
-void icon_list_reset(uint8_t *img);
-void load_fond(uint8_t *img);
-void set_palette(uint8_t *img);
-void reset_clear(uint8_t *img);
-void sound_play_a(uint8_t *img, uint32_t d4);
-uint32_t anim_entry_b(uint8_t *img, uint32_t script, uint32_t d0, uint32_t d1, uint32_t d2);
-void run_command_keep_sp(uint8_t *img, uint32_t script);
+void icon_list_reset(uint8_t *);
+void load_fond(uint8_t *);
+void set_palette(uint8_t *);
+void reset_clear(uint8_t *);
+void sound_play_a(uint8_t *, uint32_t);
+uint32_t anim_entry_b(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void run_command_keep_sp(uint8_t *, uint32_t);
 
 /* 0x1842c — prepara sala: fondos, reveal, FOND.PI1, paleta, CLEAR */
 uint32_t prepare_room(uint8_t *img, uint32_t script) {
@@ -1267,11 +1267,11 @@ uint32_t prepare_room(uint8_t *img, uint32_t script) {
  * filas de 0x28 longs desde screen_ptr_b+0x5500 a screen_ptr_a+0x5500 (VBL por
  * fila, retrocediendo 0x140), guarda el icono del objeto +0x18 en 0x1a782
  * (0x164a4), para el sonido y avanza A6. */
-void run_text_table(uint8_t *img, uint32_t script, uint32_t d0, uint32_t d1);
-uint32_t icon_table_entry(uint8_t *img, uint32_t a1, uint32_t a2, uint32_t a5);
-void wait_vbl(uint8_t *img);
-void sound_play_a(uint8_t *img, uint32_t d4);
-void sound_stop(uint8_t *img);
+void run_text_table(uint8_t *, uint32_t, uint32_t, uint32_t);
+uint32_t icon_table_entry(uint8_t *, uint32_t, uint32_t, uint32_t);
+void wait_vbl(uint8_t *);
+void sound_play_a(uint8_t *, uint32_t);
+void sound_stop(uint8_t *);
 
 /* 0x1881e — copy rows vbl */
 uint32_t copy_rows_vbl(uint8_t *img, uint32_t script) {
@@ -1342,41 +1342,41 @@ uint32_t sample_find(uint8_t *img, uint32_t script) {
  * (dedup contra el par anterior, +4/+2 al cerrar) y arma la lista de samples en
  * 0x192d2.. desde el banco 0x55b0a (0x10f8e) apuntando $192be a 0x55b0a; termina
  * arrancando el driver (0x18f7a) con el primer par. */
-uint32_t advance_text_entry(uint8_t *img, uint32_t a1, uint32_t d4);
-void supexec_b(uint8_t *img, uint32_t d1, uint32_t d4);
+uint32_t advance_text_entry(uint8_t *, uint32_t, uint32_t);
+void supexec_b(uint8_t *, uint32_t, uint32_t);
 
 static void tail_18e12(uint8_t *img, uint32_t p, uint32_t n);
 
 /* 0x18e12 — sample list */
-void sample_list(uint8_t *img, uint32_t d1) {
+void sample_list(uint8_t *img, uint32_t sel) {
     if (be16(img + A_DAT_1A484) == 0)
         return;
-    d1 = img[0x19994 + (((d1 & 0xff) - 1) & 0xff)];
-    if (d1 == 0)
+    sel = img[0x19994 + (((sel & 0xff) - 1) & 0xff)];
+    if (sel == 0)
         return;
 
-    uint32_t d2 = 7, d3 = 0, d4 = 0x29;
-    d1 = (d1 - 1) & 0xff;
-    if (d1 != 0) {
-        d3 = 5;
-        d1 = (d1 - 1) & 0xff;
-        if (d1 != 0) {
-            d3 = 0xa; d4 = 0x23; d2 = 3;
-            d1 = (d1 - 1) & 0xff;
-            if (d1 != 0) {
-                d3 = 0xe; d4 = 0x1d;
-                d1 = (d1 - 1) & 0xff;
-                if (d1 != 0) {
-                    d3 = 5; d2 = 7;
-                    d1 = (d1 - 1) & 0xff;
-                    if (d1 != 0) {
-                        d2 = 3; d3 = 0xa; d4 = 0x29;
-                        d1 = (d1 - 1) & 0xff;
-                        if (d1 != 0) {
-                            d2 = 7; d3 = 0; d4 = 0x3d;
-                            d1 = (d1 - 1) & 0xff;
-                            if (d1 != 0) {
-                                d2 = 3; d3 = 0xe; d4 = 0x18;
+    uint32_t mask = 7, base = 0, vol = 0x29;
+    sel = (sel - 1) & 0xff;
+    if (sel != 0) {
+        base = 5;
+        sel = (sel - 1) & 0xff;
+        if (sel != 0) {
+            base = 0xa; vol = 0x23; mask = 3;
+            sel = (sel - 1) & 0xff;
+            if (sel != 0) {
+                base = 0xe; vol = 0x1d;
+                sel = (sel - 1) & 0xff;
+                if (sel != 0) {
+                    base = 5; mask = 7;
+                    sel = (sel - 1) & 0xff;
+                    if (sel != 0) {
+                        mask = 3; base = 0xa; vol = 0x29;
+                        sel = (sel - 1) & 0xff;
+                        if (sel != 0) {
+                            mask = 7; base = 0; vol = 0x3d;
+                            sel = (sel - 1) & 0xff;
+                            if (sel != 0) {
+                                mask = 3; base = 0xe; vol = 0x18;
                             }
                         }
                     }
@@ -1385,26 +1385,26 @@ void sample_list(uint8_t *img, uint32_t d1) {
         }
     }
 
-    uint32_t a0 = 0x1d402 + be16(img + A_DAT_1A484);
-    uint32_t a1 = 0xd8f0;
+    uint32_t p = 0x1d402 + be16(img + A_DAT_1A484);
+    uint32_t out = 0xd8f0;
     uint32_t n = 9;
     for (;;) {
-        uint32_t d0 = img[a0++];
-        d0 &= 7;
-        d0 &= d2;
-        if (d0 & 4)
-            d0 &= 4;
-        d0 = (d0 + d3) & 0xff;
-        if (d0 == img[a1 - 2])
+        uint32_t v = img[p++];
+        v &= 7;
+        v &= mask;
+        if (v & 4)
+            v &= 4;
+        v = (v + base) & 0xff;
+        if (v == img[out - 2])
             continue;                        /* dedup: no avanza ni cuenta */
-        img[a1++] = (uint8_t)d0;
-        img[a1++] = (uint8_t)d4;
+        img[out++] = (uint8_t)v;
+        img[out++] = (uint8_t)vol;
         if (n == 0)
             break;
         n = (n - 1) & 0xffff;
     }
-    img[a1 - 1] = (uint8_t)(img[a1 - 1] + 4);
-    img[a1 - 3] = (uint8_t)(img[a1 - 3] + 2);
+    img[out - 1] = (uint8_t)(img[out - 1] + 4);
+    img[out - 3] = (uint8_t)(img[out - 3] + 2);
 
     wr32(img + 0x192be, 0x55b0a);
     tail_18e12(img, 0xd8f2, 8);
@@ -1413,23 +1413,23 @@ void sample_list(uint8_t *img, uint32_t d1) {
 /* Cola de 0x18e12 desde 0x18f0c: arma la lista de samples en 0x192d2 leyendo D7 pares
  * [indice][vol] en A3 (banco 0x55b0a via 0x10f8e; los offsets son relativos a $192be) y
  * arranca el driver con el primer par de 0xd8f0. Entrada propia 0x18f0c (desde 0x16ab6). */
-static void tail_18e12(uint8_t *img, uint32_t a3, uint32_t d7) {
+static void tail_18e12(uint8_t *img, uint32_t p, uint32_t n) {
     img[0x192cf] = 1;
-    uint32_t a0b = 0x192d2;
-    wr32(img + 0x1930e, a0b);
+    uint32_t out = 0x192d2;
+    wr32(img + 0x1930e, out);
     for (;;) {
-        uint32_t d4b = img[a3];
-        img[a0b + 1] = img[a3 + 1];
-        uint32_t a1b = advance_text_entry(img, 0x55b0a, d4b);
-        uint32_t a2 = be32(img + A_CUR_STR_END);
+        uint32_t idx = img[p];
+        img[out + 1] = img[p + 1];
+        uint32_t bank = advance_text_entry(img, 0x55b0a, idx);
+        uint32_t end = be32(img + A_CUR_STR_END);
         uint32_t base = be32(img + 0x192be);
-        wr16(img + a0b + 2, (uint16_t)((a1b - base) + 2));
-        wr16(img + a0b + 4, (uint16_t)(a2 - base));
-        a3 += 2;
-        a0b += 6;
-        if (d7 == 0)
+        wr16(img + out + 2, (uint16_t)((bank - base) + 2));
+        wr16(img + out + 4, (uint16_t)(end - base));
+        p += 2;
+        out += 6;
+        if (n == 0)
             break;
-        d7 = (d7 - 1) & 0xffff;
+        n = (n - 1) & 0xffff;
     }
     supexec_b(img, img[0xd8f1], img[0xd8f0]);
 }
@@ -1452,8 +1452,8 @@ uint32_t text_table_paint(uint8_t *img, uint32_t script) {
 
 /* FUN_00016250 @ 0x16250: avanza la pista (0x18a10), pinta el color 7 a 0x777,
  * espera una VBL (0x13594) y lo devuelve a 0. */
-void track_advance(uint8_t *img);
-uint32_t obj_wait_a0(uint8_t *img);
+void track_advance(uint8_t *);
+uint32_t obj_wait_a0(uint8_t *);
 
 /* 0x16250 — hint color */
 void hint_color(uint8_t *img) {
@@ -1502,8 +1502,8 @@ void obj_wait_cmd(uint8_t *img) { body_169b4(img, 0x1ac0a); }
 
 /* FUN_00016ab6 @ 0x16ab6: guarda todos los registros y salta a la cola 0x18f0c con el
  * A3/D7 del llamante (0x16a20 fija $192be = 0x64c8e antes). */
-void sample_entry(uint8_t *img, uint32_t a3, uint32_t d7) {
-    tail_18e12(img, a3, d7);
+void sample_entry(uint8_t *img, uint32_t p, uint32_t n) {
+    tail_18e12(img, p, n);
 }
 
 /* FUN_00018e06 @ 0x18e06: D1 = A6[1], cuerpo 0x18e12 y A6 += 2. */
@@ -1515,11 +1515,11 @@ uint32_t sample_pair_a(uint8_t *img, uint32_t script) {
 /* FUN_00016902 @ 0x16902: imprime el nombre del objeto seleccionado con la pista
  * segun $1acd7 (6/7/0x23), publica $1a484 = $1a482, limpia el bit 6 del color,
  * arma el banco de samples (0x18e12) y espera (0x1228a -> 0x1232e). Devuelve A6. */
-void obj_name_table(uint8_t *img);
-void text_window(uint8_t *img, uint32_t a5, uint32_t script);
-uint32_t text_index_arg(uint8_t *img, uint32_t a5, uint32_t d4, uint32_t *script);
-uint32_t prompt_wait_entry(uint8_t *img, uint32_t script);
-void hint_blit_stroke(uint8_t *img, uint32_t *script);
+void obj_name_table(uint8_t *);
+void text_window(uint8_t *, uint32_t, uint32_t);
+uint32_t text_index_arg(uint8_t *, uint32_t, uint32_t, uint32_t *);
+uint32_t prompt_wait_entry(uint8_t *, uint32_t);
+void hint_blit_stroke(uint8_t *, uint32_t *);
 
 /* 0x16902 — obj name track */
 uint32_t obj_name_track(uint8_t *img, uint32_t script) {
@@ -1545,10 +1545,10 @@ uint32_t obj_name_track(uint8_t *img, uint32_t script) {
 /* FUN_0001870a @ 0x1870a: avanza la tabla 0x2741e (0x16210) hasta que (byte&7)
  * != 7, imprime la entrada del banco 0x3c534 correspondiente (0x10fb4/0x10b6c con
  * A6 = 0x19974), espera tecla (0x1228a) y blitea los iconos 0x1232e. */
-uint32_t text_index_arg(uint8_t *img, uint32_t a5, uint32_t d4, uint32_t *script);
-void text_window(uint8_t *img, uint32_t a5, uint32_t script);
-void hint_blit_stroke(uint8_t *img, uint32_t *script);
-uint32_t prompt_wait_entry(uint8_t *img, uint32_t script);
+uint32_t text_index_arg(uint8_t *, uint32_t, uint32_t, uint32_t *);
+void text_window(uint8_t *, uint32_t, uint32_t);
+void hint_blit_stroke(uint8_t *, uint32_t *);
+uint32_t prompt_wait_entry(uint8_t *, uint32_t);
 
 /* 0x1870a — track walk */
 uint32_t track_walk(uint8_t *img, uint32_t script) {
@@ -1580,8 +1580,8 @@ uint32_t sample_mark_c(uint8_t *img, uint32_t script) {
 /* FUN_00018888 @ 0x18888 y FUN_00018890 @ 0x18890: fijan A4 = 0x8000/0 y caen en
  * el cuerpo 0x18896: carga el banco de animacion A6[1] (0x15ac8), intercambia los
  * bytes del stride en 0xd8f0 y blitea con 0x11030. A6 += 4. */
-void anim_bank(uint8_t *img, uint32_t index);
-void text_blit_body_a(uint8_t *img, uint32_t p, uint32_t index, uint32_t d1, uint32_t a4off);
+void anim_bank(uint8_t *, uint32_t);
+void text_blit_body_a(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
 
 static void body_18896(uint8_t *img, uint32_t script, uint32_t base) {
     wr32(img + 0x1a4c6, 0xd8f0);
@@ -1609,15 +1609,15 @@ uint32_t bank_blit_b(uint8_t *img, uint32_t script) {
 
 /* FUN_00018a10 @ 0x18a10: avanza la tabla 0x2741e (0x16210) y llama al driver de
  * sonido (0x18f7a) con D4 = ((byte>>3)&3)+0x90 y D1 = (byte&7)+0x23. */
-void supexec_b(uint8_t *img, uint32_t d1, uint32_t d4);
+void supexec_b(uint8_t *, uint32_t, uint32_t);
 
 /* 0x18a10 — avanza la pista (0x18a10), pinta el color 7 a 0x777, espera una VBL (0x13594) y lo devuelve a 0. */
 void track_advance(uint8_t *img) {
     pal_next_byte(img);
-    uint32_t d0 = img[A_DAT_1ACD7];
-    uint32_t d4 = (((d0 >> 3) & 3) + 0x90) & 0xff;
-    uint32_t d1 = ((d0 & 7) + 0x23) & 0xff;
-    supexec_b(img, d1, d4);
+    uint32_t v = img[A_DAT_1ACD7];
+    uint32_t bank = (((v >> 3) & 3) + 0x90) & 0xff;
+    uint32_t idx = ((v & 7) + 0x23) & 0xff;
+    supexec_b(img, idx, bank);
 }
 
 /* FUN_00018192 @ 0x18192: si $1acc7 == 8 avanza la pista 5 (0x1066e); busca el
@@ -1625,23 +1625,23 @@ void track_advance(uint8_t *img) {
  * icono (0x124f8); luego busca en la tabla 0x19dbd..0x19e19 el byte $1acc7 y anima
  * esa entrada (0x159d2). FUN_0001816e @ 0x1816e es el envoltorio: conserva A6, llama
  * a 0x18192 y avanza A6. */
-void load_eche_bank_wrap(uint8_t *img, uint32_t d0);
-void blit_sprite(uint8_t *img, uint32_t a1);
+void load_eche_bank_wrap(uint8_t *, uint32_t);
+void blit_sprite(uint8_t *, uint32_t);
 
 /* 0x18192 — marca la entrada del objeto (byte 44 = 0x53), limpia $1ad0b/$1abf8 y cae en 0x18192. */
 void track5_body(uint8_t *img) {
     if (img[A_DAT_1ACC7] == 8)
         load_eche_bank_wrap(img, 5);
-    uint32_t d0o;
-    if (obj_find_class(img, 0xbe, 0, &d0o)) {
-        uint32_t a0 = be32(img + A_SELECTED_OBJECT);
-        img[a0 + 4] &= 0x7f;
-        uint32_t a2 = be32(img + A_SELECTED_ICON_PTR);
-        blit_sprite(img, be32(img + a2));
+    uint32_t class_out;
+    if (obj_find_class(img, 0xbe, 0, &class_out)) {
+        uint32_t obj = be32(img + A_SELECTED_OBJECT);
+        img[obj + 4] &= 0x7f;
+        uint32_t slot = be32(img + A_SELECTED_ICON_PTR);
+        blit_sprite(img, be32(img + slot));
     }
-    for (uint32_t a6l = 0x19dbd; a6l != 0x19e19; a6l += 4) {
-        if (img[a6l] == img[A_DAT_1ACC7]) {
-            anim_entry_a(img, a6l);
+    for (uint32_t p = 0x19dbd; p != 0x19e19; p += 4) {
+        if (img[p] == img[A_DAT_1ACC7]) {
+            anim_entry_a(img, p);
             return;
         }
     }
@@ -1679,13 +1679,13 @@ uint32_t obj_find_or_exit(uint8_t *img, uint32_t script) {
 
 /* ---- banco de animacion (0x15ac8) y blit de texto (0x1103e) ---- */
 
-uint32_t advance_text_entry(uint8_t *img, uint32_t a1, uint32_t d4);
-void elem_blit(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
-                 uint32_t a3);
-void elem_blit_rev(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
-                 uint32_t a3);
-void text_blit_fwd(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t a3,
-                     uint32_t d2w, uint32_t d3w, uint32_t d7w);
+uint32_t advance_text_entry(uint8_t *, uint32_t, uint32_t);
+void elem_blit(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t);
+void elem_blit_rev(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t);
+void text_blit_fwd(uint8_t *, uint32_t, uint32_t, uint32_t,
+                     uint32_t, uint32_t, uint32_t);
 
 /* FUN_0001103e @ 0x1103e: fija 0x1a534 = D2*2 y cae en el blit de texto (0x1104a). */
 void text_blit_setup(uint8_t *img, uint32_t dest, uint32_t src, uint32_t cols, uint32_t rows,
@@ -1699,55 +1699,55 @@ void text_blit_setup(uint8_t *img, uint32_t dest, uint32_t src, uint32_t cols, u
  * cero), recorre la entrada D0 de la tabla 0x27fe2 (walk), copia sus 2 primeros bytes
  * como cabecera, toma el bitmap de 0x28ad2 (0x10f8e) y blitea cada bloque de 3 bytes
  * [n][b1][b2] con 0x12ad6/0x12b04 (bit7), stride = cabecera[0]*2. */
-void anim_bank(uint8_t *img, uint32_t d0) {
+void anim_bank(uint8_t *img, uint32_t index) {
     frame_gate_delay(img);
-    uint32_t a1 = be32(img + 0x1a4c6);
+    uint32_t p = be32(img + 0x1a4c6);
     for (int i = 0; i < 0x190; i++)
-        wr32(img + a1 + (uint32_t)i * 4, 0);
+        wr32(img + p + (uint32_t)i * 4, 0);
 
-    uint32_t a4 = 0x27fe2;
-    if (d0 != 0) {
-        uint32_t n = (d0 - 1) & 0xffff;
+    uint32_t end = 0x27fe2;
+    if (index != 0) {
+        uint32_t n = (index - 1) & 0xffff;
         for (;;) {
-            a4 += img[a4];
+            end += img[end];
             if (n == 0)
                 break;
             n = (n - 1) & 0xffff;
         }
     }
-    uint32_t a5 = a4;
-    a4 += img[a4];
-    a5 += 1;
-    a1 = be32(img + 0x1a4c6);
-    img[a1++] = img[a5++];
-    img[a1++] = img[a5++];
+    uint32_t s = end;
+    end += img[end];
+    s += 1;
+    p = be32(img + 0x1a4c6);
+    img[p++] = img[s++];
+    img[p++] = img[s++];
 
     /* Cada bloque recalcula su bitmap (0x10f8e), tamano y offset: el original
      * hace TODO esto dentro del bucle (0x15b02). Calcularlo una sola vez fuera
      * solo pintaba el primer bloque repetido -> sprites animados truncados. */
     for (;;) {
-        uint32_t d4 = img[a5];
-        uint32_t a1b = advance_text_entry(img, 0x28ad2, d4);
-        uint32_t d3v = img[a1b++];
-        uint32_t d2v = img[a1b++];
-        uint32_t d0v = (((uint32_t)(img[a5 + 2] & 0x7f) << 8) | img[a5 + 1]) & 0xffff;
-        uint32_t a0 = be32(img + 0x1a4c6);
-        uint32_t a3 = ((uint32_t)img[a0] << 1) & 0xffffffffu;
-        a0 += 2;
-        a0 += (d0v << 1);
-        if (img[a5 + 2] & 0x80)
-            elem_blit_rev(img, a0, a1b, d2v, d3v, a3);
+        uint32_t n2 = img[s];
+        uint32_t bank = advance_text_entry(img, 0x28ad2, n2);
+        uint32_t h = img[bank++];
+        uint32_t w = img[bank++];
+        uint32_t off = (((uint32_t)(img[s + 2] & 0x7f) << 8) | img[s + 1]) & 0xffff;
+        uint32_t addr = be32(img + 0x1a4c6);
+        uint32_t stride = ((uint32_t)img[addr] << 1) & 0xffffffffu;
+        addr += 2;
+        addr += (off << 1);
+        if (img[s + 2] & 0x80)
+            elem_blit_rev(img, addr, bank, w, h, stride);
         else
-            elem_blit(img, a0, a1b, d2v, d3v, a3);
-        a5 += 3;
-        if (a5 == a4) break;
+            elem_blit(img, addr, bank, w, h, stride);
+        s += 3;
+        if (s == end) break;
     }
 }
 
-void anim_bank(uint8_t *img, uint32_t d0);
-void text_blit_setup(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
-                 uint32_t d7);
-uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
+void anim_bank(uint8_t *, uint32_t);
+void text_blit_setup(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
+                 uint32_t);
+uint32_t screen_address(uint8_t *, uint32_t, uint32_t, uint32_t *);
 
 /* FUN_00016636 @ 0x16636: el objeto A2 (byte0=x, byte2=y) pide la clase D3. Busca la
  * clase en la tabla 0x1aa72 (0x29 entradas de 5 B) por byte1&0xf; con el indice
@@ -1799,11 +1799,11 @@ uint32_t obj_list_iter(uint8_t *img, uint32_t cls, uint32_t obj, uint32_t *out) 
  * entradas con byte4 bit6 y clase 0xd0. Para la primera que ademas 0x16636 resuelva,
  * espera VBL, restaura el cursor, blitea el sprite del banco y el icono del objeto.
  * FUN_000166da @ 0x166da: solo si (0x1acd4 & 0x1f) == 0x1e. */
-void mask_restore_rows(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7);
-void cursor_draw(uint8_t *img);
-void cursor_restore(uint8_t *img);
-void blit_sprite(uint8_t *img, uint32_t a1);
-void wait_vbl(uint8_t *img);
+void mask_restore_rows(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void cursor_draw(uint8_t *);
+void cursor_restore(uint8_t *);
+void blit_sprite(uint8_t *, uint32_t);
+void wait_vbl(uint8_t *);
 
 /* 0x166ec — obj list b */
 uint32_t obj_list_b(uint8_t *img) {
@@ -1849,9 +1849,9 @@ uint32_t obj_list_a(uint8_t *img) {
 
 /* ---- hit-test de objetos y cursor ---- */
 
-int rect_hit_test(uint8_t *img, uint32_t a4, uint32_t d0, uint32_t d1);
-void wait_frame(uint8_t *img);
-void cursor_draw(uint8_t *img);
+int rect_hit_test(uint8_t *, uint32_t, uint32_t, uint32_t);
+void wait_frame(uint8_t *);
+void cursor_draw(uint8_t *);
 
 /* FUN_00010522 @ 0x10522: espera un frame y cae en el dibujo del cursor (0x10526). */
 void wait_frame_cursor(uint8_t *img) {
@@ -1934,73 +1934,73 @@ void hit_test(uint8_t *img) {
  * 0x10; recorre la tabla 0x1aa72 y, para las entradas activas de la clase actual
  * (0x1acd2), marca el objeto correspondiente (bit7 + selector) y lo anima (0x16636). */
 void update_icon_list(uint8_t *img) {
-    for (uint32_t a2 = be32(img + A_OBJECT_LIST_BEGIN); a2 != be32(img + A_OBJECT_LIST_END); a2 += 8) {
-        if ((img[a2 + 4] & 0x38) == 0x10)
-            img[a2 + 4] &= 0x7f;
+    for (uint32_t p = be32(img + A_OBJECT_LIST_BEGIN); p != be32(img + A_OBJECT_LIST_END); p += 8) {
+        if ((img[p + 4] & 0x38) == 0x10)
+            img[p + 4] &= 0x7f;
     }
 
-    uint32_t a1 = A_OBJ_TBL;
-    for (uint32_t d6 = 0x28;; d6 = (d6 - 1) & 0xffff) {
-        img[a1 + 1] &= 0xf0;
-        if (img[0x1acd2] == img[a1] && !(img[a1 + 1] & 0x40)) {
-            uint32_t a2 = be32(img + A_OBJECT_LIST_BEGIN);
-            uint32_t d1 = (img[a1 + 3] & 7) | 0x10;
-            uint32_t d3 = 1;
+    uint32_t cls_tbl = A_OBJ_TBL;
+    for (uint32_t n = 0x28;; n = (n - 1) & 0xffff) {
+        img[cls_tbl + 1] &= 0xf0;
+        if (img[0x1acd2] == img[cls_tbl] && !(img[cls_tbl + 1] & 0x40)) {
+            uint32_t p = be32(img + A_OBJECT_LIST_BEGIN);
+            uint32_t cls = (img[cls_tbl + 3] & 7) | 0x10;
+            uint32_t idx = 1;
             int found = 0;
             for (;;) {
-                uint32_t d2 = img[a2 + 4] & 0xbf;
-                if (d2 == d1) {
+                uint32_t b = img[p + 4] & 0xbf;
+                if (b == cls) {
                     found = 1;
                     break;
                 }
-                a2 += 8;
-                d3 = (d3 + 1) & 0xff;
-                if (a2 == be32(img + A_OBJECT_LIST_END))
+                p += 8;
+                idx = (idx + 1) & 0xff;
+                if (p == be32(img + A_OBJECT_LIST_END))
                     break;
             }
             if (found) {
-                img[a2 + 4] |= 0x80;
-                img[a2 + 5] = img[a1 + 2];
-                img[a1 + 1] |= (uint8_t)d3;
-                if (img[a2 + 4] & 0x40) {
-                    uint32_t o[4];
-                    obj_list_iter(img, d3, a2, o);
+                img[p + 4] |= 0x80;
+                img[p + 5] = img[cls_tbl + 2];
+                img[cls_tbl + 1] |= (uint8_t)idx;
+                if (img[p + 4] & 0x40) {
+                    uint32_t out[4];
+                    obj_list_iter(img, idx, p, out);
                 }
             }
         }
-        a1 += 5;
-        if (d6 == 0)
+        cls_tbl += 5;
+        if (n == 0)
             break;
     }
 }
 
 /* ---- animacion del objeto seleccionado (0x17856) ---- */
 
-void blit_sprite(uint8_t *img, uint32_t a1);
-uint32_t draw_text_box(uint8_t *img, uint32_t script);
-void anim_entry_a(uint8_t *img, uint32_t script);
+void blit_sprite(uint8_t *, uint32_t);
+uint32_t draw_text_box(uint8_t *, uint32_t);
+void anim_entry_a(uint8_t *, uint32_t);
 
 /* FUN_00017856 @ 0x17856: blitea el icono seleccionado (*(0x1a81e)), y si el byte0
  * del script (A1, que el original salva y recupera como A6) tiene el bit7, fija el
  * cursor con la posicion del objeto (*(0x1a81a)), dibuja la caja de texto (0x1042c)
  * y prepara el "script" de 3 bytes en 0x55b02 [indice|x|y]. Cierra con el
  * interprete de animacion (0x159d2) sobre A1-1. */
-void obj_anim(uint8_t *img, uint32_t a1) {
-    uint32_t a2 = be32(img + A_SELECTED_ICON_PTR);
-    blit_sprite(img, be32(img + a2));
-    uint32_t a0 = be32(img + A_SELECTED_OBJECT);
-    uint32_t script = a1;
+void obj_anim(uint8_t *img, uint32_t entry) {
+    uint32_t slot = be32(img + A_SELECTED_ICON_PTR);
+    blit_sprite(img, be32(img + slot));
+    uint32_t obj = be32(img + A_SELECTED_OBJECT);
+    uint32_t script = entry;
     if (img[script] & 0x80) {
-        uint32_t d0 = ((uint32_t)img[a0] << 2) & 0xffff;
-        wr16(img + A_CURSOR_X, d0);
-        wr16(img + A_CURSOR_Y, img[a0 + 2]);
+        uint32_t v = ((uint32_t)img[obj] << 2) & 0xffff;
+        wr16(img + A_CURSOR_X, v);
+        wr16(img + A_CURSOR_Y, img[obj + 2]);
         if (img[script + 1] != 0 || img[script + 2] != 0)
             draw_text_box(img, script);
-        d0 = img[script] & 0x7f;
+        v = img[script] & 0x7f;
         script = 0x55b02;
-        img[script] = (uint8_t)d0;
-        img[script + 1] = img[a0];
-        img[script + 2] = img[a0 + 2];
+        img[script] = (uint8_t)v;
+        img[script + 1] = img[obj];
+        img[script + 2] = img[obj + 2];
     }
     anim_entry_a(img, script - 1);
 }
@@ -2052,12 +2052,12 @@ void anim_step(uint8_t *img) {
 
 /* ---- actualizacion de pista / sonido (0x18dc0) ---- */
 
-uint32_t pal_next_byte(uint8_t *img);
+uint32_t pal_next_byte(uint8_t *);
 
 /* FUN_00018dc0 @ 0x18dc0: si la pista es 8 o 0x32 y 0x1acd7 < 0x32, avanza la tabla
  * 0x2741e (0x16210) y llama al driver de musica (0x18f7a) con D4/D1 derivados de la
  * posicion. */
-void supexec_b(uint8_t *img, uint32_t d1, uint32_t d4);
+void supexec_b(uint8_t *, uint32_t, uint32_t);
 /* 0x18dc0 — ---- bucle principal (game_loop @ 0x101be) ---- */
 void sound_path(uint8_t *img) {
     uint8_t track = img[A_DAT_1ACD2];
@@ -2074,24 +2074,24 @@ void sound_path(uint8_t *img) {
 
 /* ---- bucle principal (game_loop @ 0x101be) ---- */
 
-void sound_path(uint8_t *img);
-void script_step(uint8_t *img);
-void anim_step(uint8_t *img);
-void pal_threshold(uint8_t *img);
-void wait_frame(uint8_t *img);
-int  rect_hit_test_a(uint8_t *img, uint32_t a4);
-void set_cursor_clip(uint8_t *img, uint32_t p, uint32_t v);
-void hit_test(uint8_t *img);
-uint32_t cursor_select_b(uint8_t *img, uint32_t a4);
-void overlay_a_draw(uint8_t *img, uint32_t script);
-void overlay_b_draw(uint8_t *img, uint32_t script);
-void handle_frame_input(uint8_t *img);
-void run_command_keep_sp(uint8_t *img, uint32_t script);
-void run_command(uint8_t *img, uint32_t a7);
-void clear_object_flags(uint8_t *img);
-void draw_hint_icons(uint8_t *img);
-void hint_icons(uint8_t *img);
-void wait_frame_cursor(uint8_t *img);
+void sound_path(uint8_t *);
+void script_step(uint8_t *);
+void anim_step(uint8_t *);
+void pal_threshold(uint8_t *);
+void wait_frame(uint8_t *);
+int  rect_hit_test_a(uint8_t *, uint32_t);
+void set_cursor_clip(uint8_t *, uint32_t, uint32_t);
+void hit_test(uint8_t *);
+uint32_t cursor_select_b(uint8_t *, uint32_t);
+void overlay_a_draw(uint8_t *, uint32_t);
+void overlay_b_draw(uint8_t *, uint32_t);
+void handle_frame_input(uint8_t *);
+void run_command_keep_sp(uint8_t *, uint32_t);
+void run_command(uint8_t *, uint32_t);
+void clear_object_flags(uint8_t *);
+void draw_hint_icons(uint8_t *);
+void hint_icons(uint8_t *);
+void wait_frame_cursor(uint8_t *);
 
 /* Hook opcional al inicio de cada iteracion del bucle. Lo usa el motor nativo
  * para aplicar guardado/carga de sala en un punto de control conocido (entre
@@ -2174,10 +2174,10 @@ void game_loop(uint8_t *img, uint32_t stack) {
 
 /* ---- intérprete de guion del bucle (script_step @ 0x17e3c) ---- */
 
-void update_icon_list(uint8_t *img);
-void copy_screen(uint8_t *img);
-uint32_t obj_find_class(uint8_t *img, uint32_t d0, uint32_t d2_in, uint32_t *d0o);
-void obj_anim(uint8_t *img, uint32_t a1);
+void update_icon_list(uint8_t *);
+void copy_screen(uint8_t *);
+uint32_t obj_find_class(uint8_t *, uint32_t, uint32_t, uint32_t *);
+void obj_anim(uint8_t *, uint32_t);
 
 static void clear_selected_object(uint8_t *img) {
     uint32_t p = be32(img + A_SELECTED_OBJECT);
@@ -2202,17 +2202,17 @@ void script_step(uint8_t *img) {
         return;
     wr16(img + A_DAT_1ACB2, (be16(img + A_DAT_1AB60) + 0x1e) & 0xffff);
 
-    uint32_t a0 = be32(img + A_SCRIPT_PTR);
-    uint32_t a1e = A_OVL_ENTRY;
-    img[A_DAT_1AD05] = img[a0++];
-    if (a0 == 0x19d0f)
-        a0 = 0x19d03;
-    img[A_DAT_1AD06] = img[a0];
-    wr32(img + A_SCRIPT_PTR, a0);
+    uint32_t p = be32(img + A_SCRIPT_PTR);
+    uint32_t entry = A_OVL_ENTRY;
+    img[A_DAT_1AD05] = img[p++];
+    if (p == 0x19d0f)
+        p = 0x19d03;
+    img[A_DAT_1AD06] = img[p];
+    wr32(img + A_SCRIPT_PTR, p);
     if (img[A_DAT_1AD05] == 0x38) {
         img[A_DAT_1ACF6] &= 0xfb;
-        img[a1e + 1] &= 0x1f;
-        img[a1e + 3] = 0x37;
+        img[entry + 1] &= 0x1f;
+        img[entry + 3] = 0x37;
         if (img[A_1AAB3] == 0x38) {
             img[A_1AAB4] &= 0x1f;
             img[A_DAT_1AD07] = 1;
@@ -2225,38 +2225,38 @@ void script_step(uint8_t *img) {
             wr32(img + A_SCRIPT_PTR, 0x19d07);
         }
     }
-    img[a1e] = img[A_DAT_1AD06];
+    img[entry] = img[A_DAT_1AD06];
 
-    uint32_t d0o;
-    uint32_t a1;
+    uint32_t class_out;
+    uint32_t script;
     if (img[A_DAT_1AD07] != 0) {
-        uint32_t d0 = img[A_DAT_1AD06];
-        img[A_1AAB3] = (uint8_t)d0;
-        img[A_1AAD6] = (uint8_t)d0;
-        img[A_1AADB] = (uint8_t)d0;
+        uint32_t v = img[A_DAT_1AD06];
+        img[A_1AAB3] = (uint8_t)v;
+        img[A_1AAD6] = (uint8_t)v;
+        img[A_1AADB] = (uint8_t)v;
         if (img[A_DAT_1ACD2] == img[A_DAT_1AD05])
             goto lab_180aa;
         if (img[A_DAT_1ACD2] != img[A_DAT_1AD06])
             return;
         cursor_restore(img);
         hint_icons(img);
-        a1 = 0x19d12;
-        obj_find_class(img, 0x6e, 0, &d0o);
-        obj_anim(img, a1);
-        a1 = 0x19d15;
-        if (obj_find_class(img, 0x64, 0, &d0o)) {
-            obj_anim(img, a1);
-            a1 = 0x19d15;
-            obj_find_class(img, 0x41, 0, &d0o);
-            obj_anim(img, a1);
-            a1 = 0x19d15;
-            obj_find_class(img, 0x69, 0, &d0o);
-            obj_anim(img, a1);
+        script = 0x19d12;
+        obj_find_class(img, 0x6e, 0, &class_out);
+        obj_anim(img, script);
+        script = 0x19d15;
+        if (obj_find_class(img, 0x64, 0, &class_out)) {
+            obj_anim(img, script);
+            script = 0x19d15;
+            obj_find_class(img, 0x41, 0, &class_out);
+            obj_anim(img, script);
+            script = 0x19d15;
+            obj_find_class(img, 0x69, 0, &class_out);
+            obj_anim(img, script);
         }
         goto lab_17fec;
     }
 
-    if (img[a1e + 1] & 0x40)
+    if (img[entry + 1] & 0x40)
         return;
     if (img[A_DAT_1ACD2] == img[A_DAT_1AD05])
         goto lab_1807a;
@@ -2264,14 +2264,14 @@ void script_step(uint8_t *img) {
         return;
     cursor_restore(img);
     hint_icons(img);
-    obj_find_class(img, 0x6e, 0, &d0o);
+    obj_find_class(img, 0x6e, 0, &class_out);
     obj_anim(img, 0x19d0f);
     goto lab_17fec;
 
 lab_1807a:
     cursor_restore(img);
     hint_icons(img);
-    obj_find_class(img, 0x6e, 0, &d0o);
+    obj_find_class(img, 0x6e, 0, &class_out);
     clear_selected_object(img);
     obj_anim(img, 0x19d18);
     draw_hint_icons(img);
@@ -2281,13 +2281,13 @@ lab_1807a:
 lab_180aa:
     cursor_restore(img);
     hint_icons(img);
-    obj_find_class(img, 0x6e, 0, &d0o);
+    obj_find_class(img, 0x6e, 0, &class_out);
     clear_selected_object(img);
-    obj_find_class(img, 0x41, 0, &d0o);
+    obj_find_class(img, 0x41, 0, &class_out);
     clear_selected_object(img);
-    obj_find_class(img, 0x64, 0, &d0o);
+    obj_find_class(img, 0x64, 0, &class_out);
     clear_selected_object(img);
-    obj_find_class(img, 0x69, 0, &d0o);
+    obj_find_class(img, 0x69, 0, &class_out);
     clear_selected_object(img);
     obj_anim(img, 0x19d1e);
     draw_hint_icons(img);
@@ -2426,8 +2426,8 @@ emit_a01f:
     wr16(img + 0x1acb0, (be16(img + 0x1ab60) + 5) & 0xffff);
 }
 
-uint32_t text_box_icon(uint8_t *img, uint32_t script);
-void text_blit_ovl_b(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4);
+uint32_t text_box_icon(uint8_t *, uint32_t);
+void text_blit_ovl_b(uint8_t *, uint32_t, uint32_t, uint32_t);
 
 /* FUN_00017930 @ 0x17930: monta la entrada 0x19978 (x=0x1a858, y=0x1a85a+0x46,
  * ancho=a1[3]+0x12), la dibuja (0x10dfa) y termina rellenando con 0x11020;

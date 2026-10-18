@@ -10,13 +10,13 @@
 #include "machine.h"
 #include "addrs.h"
 
-void box_hline(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
-void box_vline(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
-uint32_t print_line(uint8_t *img, uint32_t a5);
-void print_char(uint8_t *img, uint32_t d0);
+void box_hline(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void box_vline(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+uint32_t print_line(uint8_t *, uint32_t);
+void print_char(uint8_t *, uint32_t);
 
 /* 0x10e66 — marco + palabras + borde inferior de la caja de texto */
-void text_box_body(uint8_t *img, uint32_t a5) {
+void text_box_body(uint8_t *img, uint32_t str) {
     wr32(img + A_COLOR_TABLE, 0x1d3a2);
     wr32(img + A_SCREEN_DRAW_BASE, 0);
 
@@ -67,7 +67,7 @@ void text_box_body(uint8_t *img, uint32_t a5) {
 
     do {
         print_char(img, 0x3b);                      /* ';' */
-        a5 = print_line(img, a5);
+        str = print_line(img, str);
         print_char(img, 0x3c);                      /* '<' */
         y = (y + 6) & 0xffff;
         wr16(img + A_CURSOR_TEXT_Y, y);
@@ -100,26 +100,26 @@ void text_box_body(uint8_t *img, uint32_t a5) {
  * el ancho (max 0x14 si hay >= 5 palabras), justifica (0x109bc), calcula la geometría a
  * partir del cursor (0x1a450/0x1a452), salva el rect (0x1258a), dibuja el cuerpo
  * (0x10e66), espera (0x12292) y restaura (0x124f2). */
-uint32_t position_text(uint8_t *img, uint32_t a5, uint32_t d4);
-void measure_words(uint8_t *img, uint32_t a5, uint32_t *d5_out, uint32_t *d6_out);
-void wrap_line(uint8_t *img, uint32_t a5, uint32_t *d5_out, uint32_t *d6_out);
-uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
-uint32_t save_rect(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t a0, uint32_t d7);
-void text_box_body(uint8_t *img, uint32_t a5);
-void prompt_wait(uint8_t *img);
-void restore_rect(uint8_t *img);
+uint32_t position_text(uint8_t *, uint32_t, uint32_t);
+void measure_words(uint8_t *, uint32_t, uint32_t *, uint32_t *);
+void wrap_line(uint8_t *, uint32_t, uint32_t *, uint32_t *);
+uint32_t screen_address(uint8_t *, uint32_t, uint32_t, uint32_t *);
+uint32_t save_rect(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void text_box_body(uint8_t *, uint32_t);
+void prompt_wait(uint8_t *);
+void restore_rect(uint8_t *);
 
 /* Cola comun de 0x1042c/0x10440: mide la caja (0x10998/0x109bc), fija 0x1a512/0x1a514,
  * calcula la posicion y dibuja (0x1258a + 0x10e66 + 0x12292 + 0x124f2). */
-static void textbox_tail(uint8_t *img, uint32_t a5) {
+static void textbox_tail(uint8_t *img, uint32_t str) {
     uint32_t nwords, width;
-    measure_words(img, a5, &nwords, &width);
+    measure_words(img, str, &nwords, &width);
     width = (width + 2) & 0xffff;
     if ((nwords & 0xff) >= 5)                /* cmpi.b #$5,nwords */
         width = 0x14;
     wr16(img + A_TEXT_BOX_W, width);
 
-    wrap_line(img, a5, &nwords, &width);
+    wrap_line(img, str, &nwords, &width);
     uint32_t h = (nwords * 6 + 7) & 0xffff;    /* lsl #2 + 2x add + 7 = nwords*6+7 */
     wr16(img + A_TEXT_BOX_H, h);
 
@@ -142,7 +142,7 @@ static void textbox_tail(uint8_t *img, uint32_t a5) {
     uint32_t h2 = be16(img + A_TEXT_BOX_H);
     save_rect(img, w, h2, addr, phase);
 
-    text_box_body(img, a5);
+    text_box_body(img, str);
     prompt_wait(img);
     restore_rect(img);
 }
@@ -156,7 +156,7 @@ void draw_text_box_variant(uint8_t *img, uint32_t the_command) {
 
 /* FUN_0001042c @ 0x1042c: variante que lee el indice de texto de A6[1] (via 0x10fb4,
  * que puede consumir un byte extra) y cae en la misma cola. Devuelve A6 avanzado. */
-uint32_t text_index_arg(uint8_t *img, uint32_t a5, uint32_t d4, uint32_t *a6);
+uint32_t text_index_arg(uint8_t *, uint32_t, uint32_t, uint32_t *);
 /* 0x1042c — calcula geometria de caja de texto y la dibuja */
 uint32_t draw_text_box(uint8_t *img, uint32_t script) {
     uint32_t index = img[script + 1];
@@ -170,8 +170,8 @@ uint32_t draw_text_box(uint8_t *img, uint32_t script) {
 /* FUN_00010dfa @ 0x10dfa (cmd idx 92): caja de texto con argumentos inline
  * [idx][x][y][ancho]: 0x10fb4 (posiciona el texto), 0x10e66 (dibuja el marco),
  * direccion de pantalla de (x,y) y entrada de icono en 0x120a8. Devuelve A6 + 4. */
-void hint_slot_alloc(uint8_t *img, uint32_t d4, uint32_t a0, uint32_t d7,
-                 uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
+void hint_slot_alloc(uint8_t *, uint32_t, uint32_t, uint32_t,
+                 uint32_t, uint32_t, uint32_t, uint32_t);
 /* 0x10dfa — text box icon */
 uint32_t text_box_icon(uint8_t *img, uint32_t script) {
     script += 1;
@@ -198,15 +198,15 @@ uint32_t text_box_icon(uint8_t *img, uint32_t script) {
 /* FUN_00010b6c @ 0x10b6c: dibuja un marco/ventana de texto (bordes segun los bits
  * 0xe0 de A6[3]) e imprime la cadena A5 con 0x10b24, y crea la entrada de icono.
  * A5 = puntero de la cadena; el envoltorio 0x10b52 devuelve A6 + 4. */
-uint32_t advance_text_entry(uint8_t *img, uint32_t a5, uint32_t d4);
-void print_char(uint8_t *img, uint32_t d0);
-uint32_t print_line(uint8_t *img, uint32_t a5);
-void box_hline(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
-void box_vline(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
-void text_blit_ovl_b(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4);
-void text_blit_rev_entry(uint8_t *img, uint32_t d4, uint32_t d0, uint32_t d1);
-void hint_slot_alloc(uint8_t *img, uint32_t d4, uint32_t a0, uint32_t d7,
-                 uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
+uint32_t advance_text_entry(uint8_t *, uint32_t, uint32_t);
+void print_char(uint8_t *, uint32_t);
+uint32_t print_line(uint8_t *, uint32_t);
+void box_hline(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void box_vline(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void text_blit_ovl_b(uint8_t *, uint32_t, uint32_t, uint32_t);
+void text_blit_rev_entry(uint8_t *, uint32_t, uint32_t, uint32_t);
+void hint_slot_alloc(uint8_t *, uint32_t, uint32_t, uint32_t,
+                 uint32_t, uint32_t, uint32_t, uint32_t);
 
 /* 0x10b6c — ventana de texto con adorno/flecha (bits 0xe0) */
 void text_window(uint8_t *img, uint32_t str, uint32_t script) {
@@ -353,15 +353,15 @@ uint32_t text_window_entry(uint8_t *img, uint32_t script) {
  * el resto se blitea (0x14138) y actualiza la caja 0x1ab40..43 con comparaciones de
  * byte (x = a6[1], y*2 = a6[2]<<1, + d2/d3). Cierra con cursores, print_char y los
  * bordes 0x12fee/0x1320a. */
-void copy_rows(uint8_t *img);
-void walk_entry(uint8_t *img, uint32_t a4, uint32_t d1, uint32_t *a4o,
-                  uint32_t *a5o);
-void run_text_entry_ex(uint8_t *img, uint32_t a6, uint32_t *a0o, uint32_t *d2o,
-                    uint32_t *d3o, uint32_t *d7o);
-void print_char(uint8_t *img, uint32_t d0);
-void overlay_a_draw(uint8_t *img, uint32_t a6);
-void box_hline_back(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
-void box_vline_back(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
+void copy_rows(uint8_t *);
+void walk_entry(uint8_t *, uint32_t, uint32_t, uint32_t *,
+                  uint32_t *);
+void run_text_entry_ex(uint8_t *, uint32_t, uint32_t *, uint32_t *,
+                    uint32_t *, uint32_t *);
+void print_char(uint8_t *, uint32_t);
+void overlay_a_draw(uint8_t *, uint32_t);
+void box_hline_back(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void box_vline_back(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
 
 /* 0x13f86 — caja/overlay autodimensionado de la escena */
 void scene_text_box(uint8_t *img) {

@@ -14,16 +14,16 @@
 #include "machine.h"
 #include "addrs.h"
 
-uint32_t advance_text_entry(uint8_t *img, uint32_t a1, uint32_t d4);
-uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
-void supexec_b(uint8_t *img, uint32_t d1, uint32_t d4);
-void sound_play_a(uint8_t *img, uint32_t d4);
-void text_blit_fwd(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t a3,
-                     uint32_t d2w, uint32_t d3w, uint32_t d7w);
-void text_blit_rev(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t a3,
-                     uint32_t d2w, uint32_t d3w, uint32_t d7w);
-void wait_vbl(uint8_t *img);
-void mask_restore_rows(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7);
+uint32_t advance_text_entry(uint8_t *, uint32_t, uint32_t);
+uint32_t screen_address(uint8_t *, uint32_t, uint32_t, uint32_t *);
+void supexec_b(uint8_t *, uint32_t, uint32_t);
+void sound_play_a(uint8_t *, uint32_t);
+void text_blit_fwd(uint8_t *, uint32_t, uint32_t, uint32_t,
+                     uint32_t, uint32_t, uint32_t);
+void text_blit_rev(uint8_t *, uint32_t, uint32_t, uint32_t,
+                     uint32_t, uint32_t, uint32_t);
+void wait_vbl(uint8_t *);
+void mask_restore_rows(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
 
 /* FUN_000142cc @ 0x142cc: prepara la lista de blits del formulario. D0 = indice
  * (1..16) del registro en la tabla 0x1a7b6; A6 = *(tabla + ((D0-1)&0xf)*4). */

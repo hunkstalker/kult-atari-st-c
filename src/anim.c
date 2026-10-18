@@ -21,20 +21,20 @@
 #include "addrs.h"
 #include "kult_port.h"
 
-void walk_entry(uint8_t *img, uint32_t a4, uint32_t d1, uint32_t *a4o, uint32_t *a5o);
-uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
-void mask_restore_rows(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7);
-void text_blit_fwd(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t a3,
-                     uint32_t d2w, uint32_t d3w, uint32_t d7w);
-void wait_vbl(uint8_t *img);
+void walk_entry(uint8_t *, uint32_t, uint32_t, uint32_t *, uint32_t *);
+uint32_t screen_address(uint8_t *, uint32_t, uint32_t, uint32_t *);
+void mask_restore_rows(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+void text_blit_fwd(uint8_t *, uint32_t, uint32_t, uint32_t,
+                     uint32_t, uint32_t, uint32_t);
+void wait_vbl(uint8_t *);
 
-void sound_play_a(uint8_t *img, uint32_t d4);
-void sound_play_b(uint8_t *img, uint32_t d4);
-void sound_stop(uint8_t *img);
-void reveal_region(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
-uint32_t advance_text_entry(uint8_t *img, uint32_t a1, uint32_t d4);
-void elem_blit(uint8_t *img, uint32_t dest, uint32_t src, uint32_t cols, uint32_t rows, uint32_t stride);
-void elem_blit_rev(uint8_t *img, uint32_t dest, uint32_t src, uint32_t cols, uint32_t rows, uint32_t stride);
+void sound_play_a(uint8_t *, uint32_t);
+void sound_play_b(uint8_t *, uint32_t);
+void sound_stop(uint8_t *);
+void reveal_region(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+uint32_t advance_text_entry(uint8_t *, uint32_t, uint32_t);
+void elem_blit(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
+void elem_blit_rev(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
 
 /* FUN_00015a90 @ 0x15a90: elige el banco de sprites activo. A0 = 0xd8f0 + (bit7 ?
  * 0xc80 : 0) + (bit6 ? 0x640 : 0) y lo guarda en $1a4c6; devuelve A0. */
@@ -290,53 +290,53 @@ uint32_t bit_permute_byte(uint32_t byte) {
 }
 
 /* FUN_00012ad6 @ 0x12ad6: blitter de bytes directo (D2+1 columnas x D3+1 filas). */
-void elem_blit(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3, uint32_t a3) {
+void elem_blit(uint8_t *img, uint32_t dest, uint32_t src, uint32_t cols_in, uint32_t rows_in, uint32_t stride) {
     { FILE *fl = kult_dbgfile();
-      if (fl) { fprintf(fl, "12ad6 a0=%x d2=%u d3=%u a3=%x\n", a0, d2, d3, a3); fflush(fl); } }
-    uint32_t cols = (d2 - 1) & 0xffff, rows = (d3 - 1) & 0xffff;
+      if (fl) { fprintf(fl, "12ad6 dest=%x cols_in=%u rows_in=%u stride=%x\n", dest, cols_in, rows_in, stride); fflush(fl); } }
+    uint32_t cols = (cols_in - 1) & 0xffff, rows = (rows_in - 1) & 0xffff;
     do {
-        uint32_t a2 = a0, c = cols;
+        uint32_t p = dest, c = cols;
         do {
-            uint8_t d0 = img[a1++], d1 = img[a1++];
-            uint8_t d5 = d0, d6 = d1;
-            d0 |= d1;
-            d1 = d0;
-            d1 = (uint8_t)((d1 >> 4) | (d1 << 4));   /* ror.b #4 */
-            d0 |= d1;
-            d0 = (uint8_t)~d0;
-            img[a2] = (uint8_t)(img[a2] & d0); img[a2] = (uint8_t)(img[a2] | d5); a2++;
-            img[a2] = (uint8_t)(img[a2] & d0); img[a2] = (uint8_t)(img[a2] | d6); a2++;
+            uint8_t b0 = img[src++], b1 = img[src++];
+            uint8_t s0 = b0, s1 = b1;
+            b0 |= b1;
+            b1 = b0;
+            b1 = (uint8_t)((b1 >> 4) | (b1 << 4));   /* ror.b #4 */
+            b0 |= b1;
+            b0 = (uint8_t)~b0;
+            img[p] = (uint8_t)(img[p] & b0); img[p] = (uint8_t)(img[p] | s0); p++;
+            img[p] = (uint8_t)(img[p] & b0); img[p] = (uint8_t)(img[p] | s1); p++;
             c = (c - 1) & 0xffff;
         } while (c != 0xffff);
-        a0 = addr_add(a0, a3);
+        dest = addr_add(dest, stride);
         rows = (rows - 1) & 0xffff;
     } while (rows != 0xffff);
 }
 
 /* FUN_00012b04 @ 0x12b04: variante invertida (permuta el byte con 0x12b40 y escribe
  * hacia atrás desde A0+2*D2). */
-void elem_blit_rev(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3, uint32_t a3) {
+void elem_blit_rev(uint8_t *img, uint32_t dest, uint32_t src, uint32_t cols_in, uint32_t rows_in, uint32_t stride) {
     { FILE *fl = kult_dbgfile();
-      if (fl) { fprintf(fl, "12b04 a0=%x d2=%u d3=%u a3=%x\n", a0, d2, d3, a3); fflush(fl); } }
-    a0 = addr_add(a0, d2);
-    a0 = addr_add(a0, d2);
-    uint32_t cols = (d2 - 1) & 0xffff, rows = (d3 - 1) & 0xffff;
+      if (fl) { fprintf(fl, "12b04 dest=%x cols_in=%u rows_in=%u stride=%x\n", dest, cols_in, rows_in, stride); fflush(fl); } }
+    dest = addr_add(dest, cols_in);
+    dest = addr_add(dest, cols_in);
+    uint32_t cols = (cols_in - 1) & 0xffff, rows = (rows_in - 1) & 0xffff;
     do {
-        uint32_t a2 = a0, c = cols;
+        uint32_t p = dest, c = cols;
         do {
-            uint8_t d5 = (uint8_t)bit_permute_byte(img[a1++]);
-            uint8_t d6 = (uint8_t)bit_permute_byte(img[a1++]);
-            uint8_t d0 = d5, d1 = d6;
-            d0 |= d1;
-            d1 = d0;
-            d1 = (uint8_t)((d1 >> 4) | (d1 << 4));
-            d0 |= d1;
-            d0 = (uint8_t)~d0;
-            a2 = a2 - 1; img[a2] = (uint8_t)(img[a2] & d0); img[a2] = (uint8_t)(img[a2] | d6);
-            a2 = a2 - 1; img[a2] = (uint8_t)(img[a2] & d0); img[a2] = (uint8_t)(img[a2] | d5);
+            uint8_t s0 = (uint8_t)bit_permute_byte(img[src++]);
+            uint8_t s1 = (uint8_t)bit_permute_byte(img[src++]);
+            uint8_t b0 = s0, b1 = s1;
+            b0 |= b1;
+            b1 = b0;
+            b1 = (uint8_t)((b1 >> 4) | (b1 << 4));
+            b0 |= b1;
+            b0 = (uint8_t)~b0;
+            p = p - 1; img[p] = (uint8_t)(img[p] & b0); img[p] = (uint8_t)(img[p] | s1);
+            p = p - 1; img[p] = (uint8_t)(img[p] & b0); img[p] = (uint8_t)(img[p] | s0);
             c = (c - 1) & 0xffff;
         } while (c != 0xffff);
-        a0 = addr_add(a0, a3);
+        dest = addr_add(dest, stride);
         rows = (rows - 1) & 0xffff;
     } while (rows != 0xffff);
 }
@@ -388,12 +388,12 @@ uint32_t anim_h2(uint8_t *img, uint32_t script) { wr16(img + A_ANIM_1A46E, 1); i
 /* 0x15bbc — anim h4 */
 uint32_t anim_h4(uint8_t *img, uint32_t script) { wr16(img + A_ANIM_1A46E, (uint16_t)(be16(img + A_ANIM_1A476) - 1)); img[A_ANIM_1A578] = 0; return anim_engine(img, script); }
 
-uint32_t anim_bank_build(uint8_t *img, uint32_t a6);
-uint32_t anim_h7(uint8_t *img, uint32_t a6);
-uint32_t anim_h1(uint8_t *img, uint32_t a6);
-uint32_t anim_h6(uint8_t *img, uint32_t a6);
-uint32_t anim_h2(uint8_t *img, uint32_t a6);
-uint32_t anim_h4(uint8_t *img, uint32_t a6);
+uint32_t anim_bank_build(uint8_t *, uint32_t);
+uint32_t anim_h7(uint8_t *, uint32_t);
+uint32_t anim_h1(uint8_t *, uint32_t);
+uint32_t anim_h6(uint8_t *, uint32_t);
+uint32_t anim_h2(uint8_t *, uint32_t);
+uint32_t anim_h4(uint8_t *, uint32_t);
 
 /* Cuerpo compartido por 0x159d2 y 0x159e2 (entradas gemelas, como 0x11016/0x11020).
  * D1 = índice 1-based de la tabla 0x23ee8, D0/D2 van a 0x1a472/0x1a474. El A6
@@ -483,7 +483,7 @@ uint32_t anim_threshold(uint8_t *img, uint32_t script, uint32_t amount) {
 /* FUN_00015f6c @ 0x15f6c: lee un argumento del script. Devuelve D0 y el puntero A0
  * (0 en la vía corta). D1 = primer byte: bit7 = indirecto por tabla 0x1a752 (índice
  * bits0-4), bit6 = saltar D4 entradas de texto (0x10f8e), bit5 = word (2 bytes). */
-uint32_t advance_text_entry(uint8_t *img, uint32_t a1, uint32_t d4);
+uint32_t advance_text_entry(uint8_t *, uint32_t, uint32_t);
 /* 0x15f6c — lee un argumento del script (directo/indirecto/texto) */
 uint32_t script_arg(uint8_t *img, uint32_t *script, uint32_t *ptr_out) {
     uint32_t p = *script;
@@ -581,7 +581,7 @@ void script_store(uint8_t *img, uint32_t *script) {
 
 /* FUN_000160aa @ 0x160aa: evalúa una expresión; si D6 == 0 vuelve una posición y salta a
  * 0x1350c (a6 = TEMPL + word), si no avanza 2. */
-void script_push(uint8_t *img, uint32_t *a6);
+void script_push(uint8_t *, uint32_t *);
 /* 0x160aa — salta a plantilla (0x1350c) o avanza 2 si D6 != 0 */
 void script_jump_zero(uint8_t *img, uint32_t *script) {
     uint32_t p = *script + 1;
