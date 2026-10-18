@@ -58,8 +58,8 @@ def test_blit_sprite():
     data = bytes(range(0x10, 0x40))
     for outer in (1, 2, 3, 5):
         for inner in (1, 3):
-            for flags in (0, 4, 8, 12, 3, 15):
-                for stride in (2, 6):
+            for flags in (0, 4, 8, 12, 3, 15, 1, 2, 5, 7, 0x10, 0xff):
+                for stride in (0, 2, 6, 8):
                     desc = _desc(outer, inner, DEST, flags, stride, data)
                     diffs, _ = differential(BLIT_SPRITE, {"a1": DESC, "_pokes": {DESC: desc}},
                                             lambda lib, buf: lib.blit_sprite(buf, DESC))
