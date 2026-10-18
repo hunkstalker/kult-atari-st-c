@@ -90,8 +90,9 @@ mapa (el harness necesita `dlsym`). Detalle en `docs/VISIBILIDAD.md`.
    la cobertura H-M1), 5 *intencional* con justificación (H-V2/H-L5 busy-waits
    sin efecto, H-C4, H-D5, H-S2, H-SC1 retorno doble de `0x128a4`, H-SC2 divu
    por 0 = trap) y **0 ALTA/MEDIA abiertos**. 492 pruebas.
-2. **Revisión P1/P2** (siguiente): `anim`, `element`, `icons`, `music`, `sound`,
-   `fileio`, `textblit`, `textform`, `reveal`, `misc`, `vm` y los módulos P2.
+2. **Revisión P1** (siguiente; plan en `docs/REVISION.md` §8): `vm`, `misc`,
+   `reveal`, `textform`, `icons`, `fileio`, `sound`, `textblit`, `anim`, `music`,
+   `element` (de menor a mayor). Después **P2**.
 3. **Futuro (fase 3 del PLAN):** re-aplicar sobre este C limpio las mejoras de
    kult-port (guardado por ranuras, textos ES, overlay F1, etc.), **solo tras
    cerrar la revisión**.

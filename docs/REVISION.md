@@ -295,3 +295,65 @@ formulario de texto, `$1ad0f=0x08`, 3 VBLs) y contraste con la rama `==0`.
   sesión (el alcance pedido era P0).
 - Sin hallazgos ALTA abiertos: H-C1, H-C3, H-D1 y H-M1 quedaron con prueba;
   H-S2 se marca *intencional* (inobservable en las rutas ejercitables).
+
+---
+
+## 8. Plan de revisión P1
+
+Alcance: los 11 módulos importados del C viejo (origen **B**, riesgo medio).
+Mismo método y ejes que P0 (§3–§5); un commit por módulo `revision(<módulo>)`.
+
+Censo (líneas / funciones-definición / pruebas `def test_`):
+
+| orden | módulo | líneas | funcs | tests | foco principal |
+|---|---|---|---|---|---|
+| 1 | `vm` | 47 | 4 | 3 | `walk_entry` 0x12950, `run_text_table` 0x13f56, `text_table_entry` 0x13f4c |
+| 2 | `misc` | 65 | 16 | 8 | wrappers (`*_wrap`) y avance +1; dirección de las llamadas |
+| 3 | `reveal` | 134 | 8 | 4 | `reveal_line`/`0x12f28` (paso de píxel mod total) |
+| 4 | `textform` | 171 | 14 | 7 | 0x142cc/0x143e2/0x141f4..0x1424c; **sound_play_a (0x1d)** y D5/`-8` |
+| 5 | `icons` | 199 | 22 | 10 | `icon_table` 0x16460, 0x164a4, `draw_hint_icons` 0x16556, 0x164d4/0x164f6; `pal_next_word` y encadenado de A1 |
+| 6 | `fileio` | 252 | 24 | 20 | GEMDOS (D0 de trap), `load_resource`/`load_fond`/`load_named_screen`, `SCENA.BIN` (retorno por CCR) |
+| 7 | `sound` | 257 | 23 | 18 | `ym_write`/`ym_reset`, Timer A, wrappers **0x18f7a/8e/98/a2/a4**, ISR `movep` (tabla de pares) |
+| 8 | `textblit` | 546 | 37 | 25 | `text_blit_fwd/rev` (planar, fase), `run_text_entry_ex` (nuevo out `yflags`), `mask_restore_rows`, `text_transition` |
+| 9 | `anim` | 597 | 34 | 24 | motor, `anim_run`, gemelas 0x159d2/0x159e2, `advance_text_entry`; **sound_play_a/b** |
+| 10 | `music` | 602 | 22 | 28 | tracker 0x3aab6, handlers `trap #3/#4`; las **tres máscaras de bit de canal** |
+| 11 | `element` | 610 | 44 | 17 | `elem_command` 0x128a4 (retorno doble `l_01294c`), blit de elemento, `class_find` |
+
+Orden: de menor a mayor para calibrar (igual que P0). `element` va último por el
+`elem_command`/double-pop, que arrastra a `scale` (H-SC1) y a `handlers`.
+
+### 8.1 Riesgos heredados de P0 (buscar explícitamente)
+
+- **Función hermana equivocada**: `sound_play_a` 0x18f8e vs `sound_play_b`
+  0x18f98 (H-V1); wrappers `0x162d8/0x162ce/0x121c4/0x18f7a/8e/98/a2/a4`.
+- **Condiciones invertidas** (`bcs`/`bcc`, `bge`/`blt`): H-C2, H-L1, H-L2, H-L3.
+- **Campo/offset de tabla equivocado** (H-C1: +0 vs +8).
+- **A6 no propagado** (H-D1, H-H2): handlers `void` con avance fijo `+1/+2`.
+- **Firmas desalineadas** `void`/aridad vs definición (H-D2..H-D4).
+- **Anchos/signo**: `lsl.b` vs `lsl.w`, `muls.w` con signo, `subq.b` vs `-1`.
+- **Colas compartidas / `rts` / fall-through** y **efectos off-image** (paleta,
+  PSG, IKBD) al ledger.
+
+### 8.2 Procedimiento por módulo
+
+1. `make regscan` y `make mapa`; abrir `docs/mapa/<módulo>.md`.
+2. Por cada función definida: abrir su `auto_*.s` y comparar instrucción a
+   instrucción (anchos, signo, banderas, pre/post-inc, bucles, orden, A6, rts).
+3. Registrar divergencias con la plantilla §5.
+4. Arreglar ALTA/MEDIA **con prueba diferencial**; si no es construible,
+   justificar *intencional* (como H-S2/H-SC1).
+5. `make test` verde, `make regscan` `ids_reg=0`, `make core` OK.
+6. Commit `revision(<módulo>): …` y `make mapa`.
+
+Herramienta: agentes de exploración (solo lectura) para una primera pasada por
+módulo; **cada hallazgo se verifica a mano** contra el `auto_*.s` antes de tocar
+nada (una hipótesis, un cambio), igual que en P0.
+
+### 8.3 Criterio de cierre P1
+
+- Los 11 módulos revisados con la checklist completa (§3).
+- ALTA/MEDIA arreglados **con prueba** o *intencional* justificado.
+- `make test` verde (492+), `make regscan` `ids_reg=0`, `make core` OK.
+- Registro §7 ampliado y `docs/ESTADO.md` actualizado.
+
+Solo al cerrar P1 (y P2) se abre la **fase 3** (re-aplicar kult-port).
