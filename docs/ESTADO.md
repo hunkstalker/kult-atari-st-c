@@ -11,9 +11,9 @@ La reimplementación en C cubre **todo el juego**. El decomp canónico en ASM
 este repo (`/app/kult-atari-st-c`) es la versión en C, fiel en **comportamiento**
 y verificada con el **diferencial** contra el oráculo (Musashi).
 
-- `src/`: **33 módulos**, ~12.450 líneas.
+- `src/`: **33 módulos**, ~12.460 líneas.
 - Nombres: **417 funciones** + **221 globales** en `work/names.txt` (registro único).
-- Pruebas: **488** diferenciales en verde, **0 warnings**.
+- Pruebas: **492** diferenciales en verde, **0 warnings**.
 - Legibilidad: **0** identificadores de registro/decompilador en código.
 - API pública del core + visibilidad on-target cerradas.
 
@@ -83,15 +83,13 @@ mapa (el harness necesita `dlsym`). Detalle en `docs/VISIBILIDAD.md`.
 
 ## Pendiente / siguiente
 
-1. **Revisión del C (P0 HECHO):** los nueve módulos P0 (`commands`, `video`,
-   `dispatch`, `handlers`, `loop`, `scale`, `textbox`, `select`, `mode`) están
-   auditados contra el ASM y el registro de hallazgos está en
-   **`docs/REVISION.md` §7**. Se arreglaron y dejaron prueba:
-   H-V1, H-S1, H-T1, H-T2, H-C2, H-H1, H-H2, H-D2..H-D4, H-L1..H-L4 (12
-   commits `revision(<módulo>)`). Marcados *intencional* con justificación:
-   H-V2/H-L5 (busy-waits sin efecto), H-C4, H-D5, H-SC1 (retorno doble de
-   `0x128a4`, no modelable), H-SC2 (divu por 0 = trap). Abiertos: H-D1
-   (plumbing de A6 en `dispatch_a6`) y huecos de cobertura H-C1/H-C3/H-S2/H-M1.
+1. **Revisión del C (P0 HECHO y cerrado):** los nueve módulos P0 (`commands`,
+   `video`, `dispatch`, `handlers`, `loop`, `scale`, `textbox`, `select`, `mode`)
+   están auditados contra el ASM y el registro está en **`docs/REVISION.md` §7**.
+   20 hallazgos: 17 arreglados, **16 con prueba** (incluidos H-D1, H-C1, H-C3 y
+   la cobertura H-M1), 5 *intencional* con justificación (H-V2/H-L5 busy-waits
+   sin efecto, H-C4, H-D5, H-S2, H-SC1 retorno doble de `0x128a4`, H-SC2 divu
+   por 0 = trap) y **0 ALTA/MEDIA abiertos**. 492 pruebas.
 2. **Revisión P1/P2** (siguiente): `anim`, `element`, `icons`, `music`, `sound`,
    `fileio`, `textblit`, `textform`, `reveal`, `misc`, `vm` y los módulos P2.
 3. **Futuro (fase 3 del PLAN):** re-aplicar sobre este C limpio las mejoras de
@@ -109,5 +107,5 @@ mapa (el harness necesita `dlsym`). Detalle en `docs/VISIBILIDAD.md`.
 3. Escalado por subsistemas (pantalla, texto, escena, bucle/VM, sonido/música).
 4. `docs/mapa/` (fichas) y visibilidad on-target.
 5. Limpieza (warnings, helpers duplicados) y **legibilidad** (tandas 1–4).
-6. **Revisión P0 del C** vs ASM (`docs/REVISION.md`): 20 hallazgos, 16
-   arreglados con prueba; 486 → 488 pruebas.
+6. **Revisión P0 del C** vs ASM (`docs/REVISION.md`): 20 hallazgos, 17
+   arreglados (16 con prueba), 5 intencionales; 478 → 492 pruebas.

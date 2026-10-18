@@ -148,8 +148,10 @@ rutas no probadas / riesgo de UB; **BAJA** = nombre/comentario/estilo.
 ## 7. Registro de hallazgos
 
 Revisión P0 completada (commands, video, dispatch, handlers, loop, scale,
-textbox, select, mode) con los cuatro ejes. `make test` 488 verde,
-`make regscan` `ids_reg=0`. Commits `revision(<módulo>)`.
+textbox, select, mode) con los cuatro ejes, incluidos los cierres de H-D1 y los
+huecos de cobertura. `make test` 492 verde, `make regscan` `ids_reg=0`. Commits
+`revision(<módulo>)` (+ cierre de hallazgos). Ningún ALTA/MEDIA sin resolver o
+marcado intencional con justificación.
 
 ### Tabla resumen
 
@@ -160,13 +162,13 @@ textbox, select, mode) con los cuatro ejes. `make test` 488 verde,
 | H-S2 | MEDIA | select | `sample_menu_a/b` (0x14ac6/0x14bfa) | arreglado (f6ea85b) |
 | H-T1 | ALTA | textbox | `text_window` (0x10b6c) | arreglado (2d39743) |
 | H-T2 | MEDIA | textbox | `scene_text_box` (0x13f86) | arreglado (2d39743) |
-| H-C1 | ALTA | commands | `grid_wait` (0x14f74) | arreglado (2569fa5) |
+| H-C1 | ALTA | commands | `grid_wait` (0x14f74) | arreglado + test |
 | H-C2 | ALTA | commands | `tail_15022` (0x15022) | arreglado (2569fa5) |
-| H-C3 | ALTA | commands | `anim_threshold2` (0x14f5e) | arreglado (2569fa5) |
+| H-C3 | ALTA | commands | `anim_threshold2` (0x14f5e) | arreglado + test |
 | H-C4 | MEDIA | commands | `grid_wait` (0x14f74) | intencional (no observable) |
 | H-H1 | ALTA | handlers | `overlay_dispatch_4` (0x1200a) | arreglado (3a2a708) |
 | H-H2 | MEDIA | handlers | `obj_name*` (0x1687e/0x168a0/0x168d4) | arreglado (3a2a708) |
-| H-D1 | ALTA | dispatch | `dispatch_a6` (0x10390) | abierto (plumbing A6) |
+| H-D1 | ALTA | dispatch | `dispatch_a6` (0x10390) | arreglado + test |
 | H-D2 | MEDIA | dispatch | `copy_screen_a6` (0x121c4) | arreglado (3a2a708) |
 | H-D3 | MEDIA | dispatch | `set_palette_advance` (0x162d8) | arreglado (3a2a708) |
 | H-D4 | MEDIA | dispatch | `set_palette_from_entry` (0x162ce) | arreglado (3a2a708) |
@@ -180,7 +182,7 @@ textbox, select, mode) con los cuatro ejes. `make test` 488 verde,
 | H-SC1 | ALTA | scale | `scale_prep`/`scale_loop` (0x13702/0x13740) | intencional (retorno doble 0x128a4) |
 | H-SC2 | MEDIA | scale | `scale_setup`/`scale_loop` (0x13a18/0x13740) | intencional (divu por 0 = trap) |
 | H-SC3 | BAJA | scale | `scale_16_16`/`scale_blit` (0x13a18/0x13bc2) | pendiente (out `phase_start` muerto) |
-| H-M1 | MEDIA | mode | `scene_mode_apply` (0x1460a) | cobertura: rama `(clase&0x38)==8` |
+| H-M1 | MEDIA | mode | `scene_mode_apply` (0x1460a) | arreglado + test (cobertura) |
 | H-V2 | BAJA | video | `palette_cycle` (0x16310) | intencional (busy-wait 65536) |
 
 ### Detalle
@@ -198,8 +200,12 @@ reconstruye (sin efecto observable); se documenta en el comentario.
 l_014ce6`) los manda a `l_014ce6`. Con el bug el candidato re-buclea. Test:
 `test_fun_14bfa_cur3_especial` (alcanza `l_014c94` con un hit-test válido).
 `[H-S2]` MEDIA: `0x14ac6`/`0x14bfa` re-fijan `mask/value` y `$1a488` al inicio
-de cada pasada (`l_014ad0`/`l_014c10`); el C solo una vez. Arreglado; sin test
-dedicado (nada ejercita el cambio de `$1a488` dentro del bucle).
+de cada pasada (`l_014ad0`/`l_014c10`); el C solo una vez. Arreglado
+(alineación de fidelidad); ***intencional*** sin test: el único modo de observar
+la diferencia es que el comando despachado dentro del bucle (`0xc1bd` → byte de
+plantilla `0x1bc`) reescriba `$1a488`, y el camino de byte de la VM no invoca las
+entradas de menú de samples (son comandos `0xa0xx`, no bytes). Inobservable en
+las rutas ejercitables.
 
 **[H-T1] ALTA · textbox · `text_window` (0x10b6c)**
 Para `b6 = A6[3]&0xe0 ∈ {0x40,0x60}` (sin rama) el original pasa a `0x120a8`
@@ -212,15 +218,16 @@ antes de la cadena. Test: `test_fun_10b52` con flags 0x40/0x60.
 
 **[H-C1] ALTA · commands · `grid_wait` (0x14f74)**
 Despachaba la entrada `+8` de `0x1ab62`; el ASM lee `+0` (`move.w (a0,d0.l)`).
-Arreglado. Sin test dedicado: la rama `A_SEL_1ACC9 != 0` no se alcanza con el
-`obj_wait_hit` del arnés (verificado por ASM y por el binario).
+Arreglado. Test: `test_fun_14f74_dispatch_sel` (objeto en `0x68000`, que
+`grid_bands` no pisa, deja `$1acc9 != 0`; campo `+0`=0 y `+8`=0xa035, que era lo
+que leía el C viejo).
 **[H-C2] ALTA · commands · `tail_15022` (0x15022)**
 La condición de `$1acec` estaba invertida (`bcs` → `$1acec < 0x3f` despacha sin
 `0x9005`). Regresión: caso `(0x10,0x05)` en `test_fun_14f74`.
 **[H-C3] ALTA · commands · `anim_threshold2` (0x14f5e)**
 Ignoraba el retorno 2 de `0x14f24` (que hace `addq.l #4,a7` y salta al
-llamante); ejecutaba `0x16310` y el flag. Arreglado. Sin test dedicado (la rama
-se verifica con `stop_pc=0x14f5c`).
+llamante); ejecutaba `0x16310` y el flag. Arreglado. Test:
+`test_fun_14f5e_retorno2` (`$1ad20=1`, `stop_pc=0x14f5c`).
 **[H-C4] MEDIA · commands · `grid_wait`**
 `icon_state_b(img,script,0)` usa `D0=0`; en el original `D0` lo deja `0x121c6`
 (0xffff) en la vía de overlay (`$1acc7 ∈ [0x16,0x19)`). Intencional: ruta no
@@ -237,9 +244,12 @@ Test: `test_nameprint` con `byte<4` comparando el retorno con `a6`.
 **[H-D1] ALTA · dispatch · `dispatch_a6` (0x10390)**
 El byte handler 0x4d hace `movea.l a5,a6` (nueva corriente de `walk_entry`) y
 corre la VM anidada; al volver A6 queda en el fin del sub-guion y el bucle
-exterior termina. El C devuelve `script+1` y no propaga ese A6. Abierto: el
-plumbing de A6 entre `run_command_keep_sp` y sus llamantes es arquitectónico;
-requiere un estudio aparte de los ~48 handlers (ver §3.1, `rts`/fall-through).
+exterior `f_010630` continúa ahí. El C devolvía `script+1` (el byte bajo del word
+inline) y no propagaba ese A6. Arreglo LOCAL (no toca los demás handlers):
+`dispatch_a6` hace el `walk_entry + vm_run` de la rama `0xf000` y devuelve el A6
+resultante; el `case 77` propaga ese valor. Test:
+`test_vm_byte_4d_nested_a6` (guion `[0x4d,0x80,0x00,0]`, plantilla de 0x100
+entradas; compara `ret` con `a6` del oráculo).
 **[H-D2..H-D4] MEDIA · dispatch** (`copy_screen_a6` 0x121c4,
 `set_palette_advance` 0x162d8, `set_palette_from_entry` 0x162ce): declaradas
 `void`/1 arg en `dispatch.c` pero definidas `uint32_t`/2 args (UB de firma). Se
@@ -274,14 +284,14 @@ continúa el cuerpo. Intencional y documentado en `docs/REFERENCIA_F4.md`
 juego no alcanza esos valores. **[H-SC3] BAJA**: `phase_start`/`phase` muertos.
 
 **[H-M1] MEDIA · mode · `scene_mode_apply` (0x1460a)**: la rama
-`(A_DAT_1AD0F & 0x38) == 8` (formulario hacia delante + `$1a572=1`) no tiene
-caso en `test_mode.py` (se probaron `&0x38 ∈ {0,0x10}`). Código revisado fiel;
-queda como hueco de cobertura.
+`(A_DAT_1AD0F & 0x38) == 8` (formulario hacia delante + `$1a572=1` + `idx =
+&7`) no tenía caso. Cubierta con `test_fun_1460a_formulario` (fixture de mode +
+formulario de texto, `$1ad0f=0x08`, 3 VBLs) y contraste con la rama `==0`.
 
 ### Cobertura restante (no bloqueante)
 
 - Módulos **P1** (`anim`, `element`, `icons`, `music`, `sound`, `fileio`,
   `textblit`, `textform`, `reveal`, `misc`, `vm`) y **P2** sin revisar en esta
   sesión (el alcance pedido era P0).
-- Rutas señaladas arriba sin test directo (`H-C1`, `H-C3`, `H-S2`, `H-D1`,
-  `H-M1`); el código se contrastó línea a línea con el ASM.
+- Sin hallazgos ALTA abiertos: H-C1, H-C3, H-D1 y H-M1 quedaron con prueba;
+  H-S2 se marca *intencional* (inobservable en las rutas ejercitables).
