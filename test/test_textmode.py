@@ -62,7 +62,7 @@ def _chain_pokes():
 
 
 def test_fun_10fb4():
-    for d4 in (4, 5, 6, 0):
+    for d4 in (4, 5, 6, 0, 1, 2, 3):
         a6 = ctypes.c_uint32(SCRIPT)
         diffs, info = differential(
             FUN_10FB4, {"a5": TABLE, "d4": d4, "a6": SCRIPT, "_pokes": _chain_pokes()},
@@ -109,6 +109,20 @@ def test_fun_109fe():
         diffs, _ = differential(FUN_109FE, {"a6": SCRIPT, "_pokes": _overlay_pokes(sel, 0x10, 0x18)},
                                 lambda lib, buf: lib.overlay_a_draw(buf, SCRIPT))
         assert not diffs, f"sel={sel}\n{report(diffs)}"
+
+
+def test_fun_109fe_sel_bajo():
+    """Selector < 4: text_index_arg toma el índice de A6[1] (rol16 del selector) y
+    avanza A6; el texto dibujado sale de la entrada resuelta."""
+    for sel in (0,):
+        pokes = _overlay_pokes(sel, 0x10, 0x18)
+        pokes[SCRIPT + 1] = bytes([0x05])
+        diffs, _ = differential(FUN_109FE, {"a6": SCRIPT, "_pokes": pokes},
+                                lambda lib, buf: lib.overlay_a_draw(buf, SCRIPT))
+        assert not diffs, f"sel={sel}\n{report(diffs)}"
+        diffs, _ = differential(FUN_10A88, {"a6": SCRIPT, "_pokes": pokes},
+                                lambda lib, buf: lib.overlay_b_draw(buf, SCRIPT))
+        assert not diffs, f"sel={sel} (B)\n{report(diffs)}"
 
 
 def test_fun_109fe_mode87():
