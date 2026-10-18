@@ -28,6 +28,18 @@ void copy_scratch_rows(uint8_t *, uint32_t, uint32_t, uint32_t);
 static uint16_t r16l(uint16_t v, uint32_t n) { return rotate_left16(v, n); }
 static uint16_t r16r(uint16_t v, uint32_t n) { return rotate_right16(v, n); }
 
+/* `lsr.l`/`lsl.l` del 68000: el count es mod 64 y, para 32..63, todos los bits
+ * salen (resultado 0). El desplazamiento nativo de C solo usa mod 32 (y es UB
+ * para counts >= 32), así que se modela aquí. */
+static uint32_t lsr_l(uint32_t v, uint32_t n) {
+    n &= 63;
+    return n >= 32 ? 0 : (n ? (v >> n) : v);
+}
+static uint32_t lsl_l(uint32_t v, uint32_t n) {
+    n &= 63;
+    return n >= 32 ? 0 : (n ? (v << n) : v);
+}
+
 /* Registro final del ultimo blitter de 0x11xxx (D0,D1,D2,D3,A0,A1). Lo usan
  * 0x12ce4/0x12d16 para guardar los bloques 0x1a82e/0x1a83e (movem d0/d2/a0-a1). */
 uint32_t overlay_blit_regs[6];
@@ -41,7 +53,7 @@ void overlay_compose_planes(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t
     for (;;) {
         uint32_t s_pix = pix, s_sub = sub, s_width = width, s_height = height, s_dest = dest, s_src = src;
 
-        uint32_t hi_mask = 0xffffffffu >> (pix & 0x3f);
+        uint32_t hi_mask = lsr_l(0xffffffffu, pix);
         uint32_t lo_mask = ~hi_mask;
         uint32_t first_bits = (0x10 - pix) & 0xffff;
         uint32_t planes = 1;
@@ -58,7 +70,7 @@ void overlay_compose_planes(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t
             }
         }
         uint32_t neg = (uint32_t)(-(int32_t)data);
-        uint32_t end_mask = (~(0xffffffffu << (neg & 0x3f))) & 0xffffffffu;
+        uint32_t end_mask = ~lsl_l(0xffffffffu, neg);
         planes = (planes >> 1) & 0xffff;
         if (carry) {
             planes = (planes + 1) & 0xffff;
@@ -255,7 +267,7 @@ void overlay_compose_planes32(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32
     for (;;) {
         uint32_t s_pix = pix, s_sub = sub, s_width = width, s_height = height, s_dest = dest, s_src = src;
 
-        uint32_t hi_mask = 0xffffffffu >> (pix & 0x3f);
+        uint32_t hi_mask = lsr_l(0xffffffffu, pix);
         uint32_t lo_mask = ~hi_mask;
         uint32_t shift = (0x10 - pix) & 0xffff;
         uint32_t planes = 1;
@@ -271,8 +283,7 @@ void overlay_compose_planes32(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32
                     break;
             }
         }
-        uint32_t end_mask = (~(0xffffffffu << ((uint32_t)(-(int32_t)rest) & 0x3f))) &
-                          0xffffffffu;
+        uint32_t end_mask = ~lsl_l(0xffffffffu, (uint32_t)(-(int32_t)rest));
         shift = (rest + 0x1f) & 0xffff;
         planes = (planes >> 1) & 0xffff;
         if (bit) {
@@ -470,7 +481,7 @@ void overlay_compose_masked(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t
     for (;;) {
         uint32_t s_pix = pix, s_sub = sub, s_width = width, s_height = height, s_dest = dest, s_src = src;
         uint32_t pix_mask = rotate_right32(0x80000000u, pix);
-        uint32_t hi_mask = 0xffffffffu >> (pix & 0x3f);
+        uint32_t hi_mask = lsr_l(0xffffffffu, pix);
         uint32_t lo_mask = ~(hi_mask >> 1);
         uint32_t planes = 1;
         int carry = 1;
@@ -486,8 +497,7 @@ void overlay_compose_masked(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t
                     break;
             }
         }
-        uint32_t end_mask = (~(0xffffffffu << ((uint32_t)(-(int32_t)rest) & 0x3f))) &
-                          0xffffffffu;
+        uint32_t end_mask = ~lsl_l(0xffffffffu, (uint32_t)(-(int32_t)rest));
         planes = (planes >> 1) & 0xffff;
         if (carry) {
             planes = (planes + 1) & 0xffff;
@@ -645,7 +655,7 @@ void overlay_compose_shift(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t 
 
     for (;;) {
         uint32_t s_height = height;
-        uint32_t hi_mask = 0xffffffffu >> (pix & 0x3f);
+        uint32_t hi_mask = lsr_l(0xffffffffu, pix);
         uint32_t lo_mask = ~hi_mask;
         uint32_t planes = 1;
         int carry = 1;
@@ -662,7 +672,7 @@ void overlay_compose_shift(uint8_t *img, uint32_t d0in, uint32_t d1in, uint32_t 
             }
         }
         uint32_t neg = (0 - rest) & 0xffff;
-        uint32_t end_mask = ~(0xffffffffu << (neg & 0x3f));
+        uint32_t end_mask = ~lsl_l(0xffffffffu, neg);
         uint32_t rotm = (rest + 0x1f) & 0xffff;
         planes = (planes >> 1) & 0xffff;
         if (carry) {

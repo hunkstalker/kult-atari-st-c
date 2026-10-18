@@ -191,3 +191,42 @@ def test_fun_11ada():
                     lib.overlay_compose_shift_wrap(buf, a, b, 5, e, DEST),
                     schedule=_vbl_k((d1 << 2)), wait_sites=[VBL_SITE])
                 assert not diffs, f"d0={d0} d1={d1} d3={d3}\n{report(diffs)}"
+
+
+def test_fun_phase_ge_32():
+    """El `lsr.l`/`asl.l` del 68000 usa count mod 64 (0 si >= 32); el
+    desplazamiento nativo de C usa mod 32. Cubre d0 >= 32 en las cuatro familias
+    (fuera del nibble documentado, pero el ASM lo define)."""
+    for d0 in (32, 33, 40, 63):
+        pokes = _pokes()
+        diffs, _ = differential(
+            0x111B6, {"d0": d0, "d1": 0, "d2": 5, "d3": 0, "a0": DEST, "a1": SRC,
+                      "_pokes": pokes},
+            lambda lib, buf, a=d0: lib.overlay_compose_planes(buf, a, 0, 5, 0, DEST, SRC),
+            schedule=_vbl_k(1), wait_sites=[VBL_SITE])
+        assert not diffs, f"planes d0={d0}\n{report(diffs)}"
+
+        pokes = _pokes()
+        diffs, _ = differential(
+            0x114BA, {"d0": d0, "d1": 0, "d2": 5, "d3": 0, "d6": 0,
+                      "a0": DEST, "a1": SRC, "_pokes": pokes},
+            lambda lib, buf, a=d0:
+            lib.overlay_compose_planes32(buf, a, 0, 5, 0, 0, DEST, SRC),
+            schedule=_vbl_k(1), wait_sites=[VBL_SITE])
+        assert not diffs, f"planes32 d0={d0}\n{report(diffs)}"
+
+        pokes = _pokes2()
+        diffs, _ = differential(
+            0x117FE, {"d0": d0, "d1": 0, "d2": 5, "d3": 0, "a0": DEST, "a1": SRC2,
+                      "_pokes": pokes},
+            lambda lib, buf, a=d0: lib.overlay_compose_masked(buf, a, 0, 5, 0, DEST, SRC2),
+            schedule=_vbl_k(1), wait_sites=[VBL_SITE])
+        assert not diffs, f"masked d0={d0}\n{report(diffs)}"
+
+        pokes = _pokes2()
+        diffs, _ = differential(
+            0x11AFA, {"d0": d0, "d1": 0, "d2": 5, "d3": 0, "a0": DEST, "a1": SRC2,
+                      "_pokes": pokes},
+            lambda lib, buf, a=d0: lib.overlay_compose_shift(buf, a, 0, 5, 0, DEST, SRC2),
+            schedule=_vbl_k(1), wait_sites=[VBL_SITE])
+        assert not diffs, f"shift d0={d0}\n{report(diffs)}"
