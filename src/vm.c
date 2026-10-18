@@ -29,7 +29,10 @@ void walk_entry(uint8_t *img, uint32_t table, uint32_t index, uint32_t *end_out,
     *end_out = table + img[table];
 }
 
-/* 0x13f56 — suena 0xf2, repinta el texto 0x13f56 y copia 0x3c filas de 0x28 longs desde screen_ptr_b+0x5500 a screen_ptr_a+0x5500 (VBL por fila, retrocediendo 0x140), gu... */
+/* 0x13f56 — fija 0x1a49e = D0, camina la tabla ARPLA (0x24982) a la entrada D1 y
+ * corre 0x14138 sobre sus bloques de 3 bytes hasta el fin (A_DAT_1A4B2). El A6
+ * se salva/restaura: no lo toca. (La copia de filas/0x12f2a es 0x13f2a, otra
+ * funcion.) */
 void run_text_table(uint8_t *img, uint32_t script, uint32_t color, uint32_t index) {
     (void)script;
     wr16(img + A_DAT_1A49E, color & 0xffff);

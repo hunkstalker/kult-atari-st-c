@@ -7,7 +7,7 @@ vm.c — core script-VM helpers.  FUN_00012950 @ 0x12950: skip D1 byte-length en
 | dir | nombre | qué hace | pruebas |
 |---|---|---|---|
 | `0x12950` | `walk_entry` | walk entry | test_anim, test_dispatch, test_vm |
-| `0x13f56` | `run_text_table` | suena 0xf2, repinta el texto 0x13f56 y copia 0x3c filas de 0x28 longs desde screen_ptr_b+0x5500 a screen_ptr_a+0x5500 (VBL por fila, retrocediendo 0x140), gu... | test_vm |
+| `0x13f56` | `run_text_table` | fija 0x1a49e = D0, camina la tabla ARPLA (0x24982) a la entrada D1 y corre 0x14138 sobre sus bloques de 3 bytes hasta el fin (A_DAT_1A4B2). El A6 se salva/restaura: no lo toca. (La copia de filas/0x12f2a es 0x13f2a, otra funcion.) | test_vm |
 | `0x13f4c` | `text_table_entry` | D0=0, D1=A6[1] -> FUN_00013f56 | test_vm |
 
 ## Estado (globales A_* usadas)
