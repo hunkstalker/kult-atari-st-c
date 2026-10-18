@@ -24,136 +24,136 @@ uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out)
 /* the 0x55b02 scratch is read back with `move.l (a5)`, four consecutive bytes */
 /* movep: bytes alternos (alto en +0, bajo en +2, ...) */
 /* 0x11196 — permutacion de palabra (resultado en D0/D1) */
-void bit_reverse_word(uint32_t d0, uint32_t d1, uint32_t *d0o, uint32_t *d1o) {
-    d0 &= 0xffff;
-    d1 &= 0xffff;
+void bit_reverse_word(uint32_t w0, uint32_t w1, uint32_t *d0o, uint32_t *d1o) {
+    w0 &= 0xffff;
+    w1 &= 0xffff;
     uint32_t x;
-    uint32_t b = d0 & 0xff;
-    x = (b >> 3) & 1;
-    d0 = (d0 & 0xff00) | (((b >> 4) | (b << 4)) & 0xff);
-    x = (d0 >> 7) & 1;
-    d0 = ((d0 >> 8) | (d0 << 8)) & 0xffff;
-    b = d0 & 0xff;
-    x = (b >> 3) & 1;
-    d0 = (d0 & 0xff00) | (((b >> 4) | (b << 4)) & 0xff);
+    uint32_t byte = w0 & 0xff;
+    x = (byte >> 3) & 1;
+    w0 = (w0 & 0xff00) | (((byte >> 4) | (byte << 4)) & 0xff);
+    x = (w0 >> 7) & 1;
+    w0 = ((w0 >> 8) | (w0 << 8)) & 0xffff;
+    byte = w0 & 0xff;
+    x = (byte >> 3) & 1;
+    w0 = (w0 & 0xff00) | (((byte >> 4) | (byte << 4)) & 0xff);
     for (int i = 0; i < 16; i++) {
-        uint32_t nd = ((x << 15) | (d0 >> 1)) & 0xffff;
-        x = d0 & 1;
-        d0 = nd;
-        uint32_t nd1 = ((d1 << 1) | x) & 0xffff;
-        x = (d1 >> 15) & 1;
-        d1 = nd1;
+        uint32_t n0 = ((x << 15) | (w0 >> 1)) & 0xffff;
+        x = w0 & 1;
+        w0 = n0;
+        uint32_t n1 = ((w1 << 1) | x) & 0xffff;
+        x = (w1 >> 15) & 1;
+        w1 = n1;
     }
-    *d0o = d1;
-    *d1o = d1;
+    *d0o = w1;
+    *d1o = w1;
 }
 
 /* 0x11050 — blit de texto directo (A0/A1/A3/D2/D3/D7) */
-void text_blit_fwd(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t a3,
-                     uint32_t d2w, uint32_t d3w, uint32_t d7w) {
-    uint32_t a5 = A_BLIT_SCRATCH;
-    uint32_t outer = (d2w - 1) & 0xffff;
-    uint32_t inner = (d3w - 1) & 0xffff;
-    uint32_t d7 = d7w & 0xffff;
+void text_blit_fwd(uint8_t *img, uint32_t dest, uint32_t src, uint32_t stride,
+                     uint32_t cols, uint32_t rows, uint32_t phase_in) {
+    uint32_t scratch = A_BLIT_SCRATCH;
+    uint32_t col = (cols - 1) & 0xffff;
+    uint32_t row = (rows - 1) & 0xffff;
+    uint32_t phase = phase_in & 0xffff;
     for (;;) {
-        uint32_t a2 = a0, a4 = a1, d5 = 0;
-        if (d7 & 8)
-            a2 += 1;
-        if (d7 & 4)
-            d5 = 4;
-        uint32_t ic = inner;
+        uint32_t dst = dest, s = src, shift = 0;
+        if (phase & 8)
+            dst += 1;
+        if (phase & 4)
+            shift = 4;
+        uint32_t n = row;
         for (;;) {
-            uint32_t d6 = be16(img + a4);
-            movep_write_w(img, a5, d6);
-            d6 = ((d6 << 4) | (d6 >> 12)) & 0xffff;   /* rol.w #4 */
-            movep_write_w(img, a5 + 1, d6);
-            d6 = read_long(img, a5);
-            d6 = ror32(d6, d5);
-            uint32_t d4 = d6, d1 = d6;
-            d1 = swap_words(d1);
-            d4 |= d1;
-            d1 = rol32(d1, 8);
-            d4 |= d1;
-            d1 = swap_words(d1);
-            d4 |= d1;
-            d4 &= 0xf0f0f0f0u;
-            d4 = ror32(d4, d5);
-            d1 = ~d4;
-            d6 &= d4;
-            uint32_t d0 = movep_read_l(img, a2);
-            d0 &= d1;
-            d0 |= d6;
-            movep_write_l(img, a2, d0);
-            a2 += 0xa0;
-            a4 += a3;
-            ic = (ic - 1) & 0xffff;
-            if (ic == 0xffff)
+            uint32_t word = be16(img + s);
+            movep_write_w(img, scratch, word);
+            word = ((word << 4) | (word >> 12)) & 0xffff;   /* rol.w #4 */
+            movep_write_w(img, scratch + 1, word);
+            word = read_long(img, scratch);
+            word = ror32(word, shift);
+            uint32_t mask = word, inv = word;
+            inv = swap_words(inv);
+            mask |= inv;
+            inv = rol32(inv, 8);
+            mask |= inv;
+            inv = swap_words(inv);
+            mask |= inv;
+            mask &= 0xf0f0f0f0u;
+            mask = ror32(mask, shift);
+            inv = ~mask;
+            word &= mask;
+            uint32_t out = movep_read_l(img, dst);
+            out &= inv;
+            out |= word;
+            movep_write_l(img, dst, out);
+            dst += 0xa0;
+            s += stride;
+            n = (n - 1) & 0xffff;
+            if (n == 0xffff)
                 break;
         }
-        a1 += 2;
-        d7 = (d7 + 4) & 0xf;
-        if (d7 == 0)
-            a0 += 8;
-        outer = (outer - 1) & 0xffff;
-        if (outer == 0xffff)
+        src += 2;
+        phase = (phase + 4) & 0xf;
+        if (phase == 0)
+            dest += 8;
+        col = (col - 1) & 0xffff;
+        if (col == 0xffff)
             break;
     }
 }
 
 /* 0x11102 — idem con palabra invertida por FUN_00011196 */
-void text_blit_rev(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t a3,
-                     uint32_t d2w, uint32_t d3w, uint32_t d7w) {
-    uint32_t a5 = A_BLIT_SCRATCH;
-    uint32_t outer = (d2w - 1) & 0xffff;
-    uint32_t inner = (d3w - 1) & 0xffff;
-    uint32_t d7 = d7w & 0xffff;
-    uint32_t d1 = 0;   /* only feeds FUN_00011196, whose result is independent of it */
+void text_blit_rev(uint8_t *img, uint32_t dest, uint32_t src, uint32_t stride,
+                     uint32_t cols, uint32_t rows, uint32_t phase_in) {
+    uint32_t scratch = A_BLIT_SCRATCH;
+    uint32_t col = (cols - 1) & 0xffff;
+    uint32_t row = (rows - 1) & 0xffff;
+    uint32_t phase = phase_in & 0xffff;
+    uint32_t rev_state = 0;   /* only feeds FUN_00011196, whose result is independent of it */
     for (;;) {
-        uint32_t a2 = a0, a4 = a1, d5 = 0;
-        if (d7 & 8)
-            a2 += 1;
-        if (d7 & 4)
-            d5 = 4;
-        uint32_t ic = inner;
+        uint32_t dst = dest, s = src, shift = 0;
+        if (phase & 8)
+            dst += 1;
+        if (phase & 4)
+            shift = 4;
+        uint32_t n = row;
         for (;;) {
-            uint32_t d0, t1;
-            bit_reverse_word(be16(img + a4), d1, &d0, &t1);
-            d1 = t1;
-            movep_write_w(img, a5, d0);
-            d0 = ((d0 << 4) | (d0 >> 12)) & 0xffff;   /* rol.w #4 */
-            movep_write_w(img, a5 + 1, d0);
-            uint32_t d2 = read_long(img, a5);
-            d2 = ror32(d2, d5);
-            uint32_t d4 = d2, d1m = d2;
-            d1m = swap_words(d1m);
-            d4 |= d1m;
-            d1m = rol32(d1m, 8);
-            d4 |= d1m;
-            d1m = swap_words(d1m);
-            d4 |= d1m;
-            d4 &= 0xf0f0f0f0u;
-            d4 = ror32(d4, d5);
-            d1m = ~d4;
-            d2 &= d4;
-            uint32_t d0b = movep_read_l(img, a2);
-            d0b &= d1m;
-            d0b |= d2;
-            movep_write_l(img, a2, d0b);
-            a2 += 0xa0;
-            a4 += a3;
-            ic = (ic - 1) & 0xffff;
-            if (ic == 0xffff)
+            uint32_t rev, rev_next;
+            bit_reverse_word(be16(img + s), rev_state, &rev, &rev_next);
+            rev_state = rev_next;
+            movep_write_w(img, scratch, rev);
+            rev = ((rev << 4) | (rev >> 12)) & 0xffff;   /* rol.w #4 */
+            movep_write_w(img, scratch + 1, rev);
+            uint32_t word = read_long(img, scratch);
+            word = ror32(word, shift);
+            uint32_t mask = word, inv = word;
+            inv = swap_words(inv);
+            mask |= inv;
+            inv = rol32(inv, 8);
+            mask |= inv;
+            inv = swap_words(inv);
+            mask |= inv;
+            mask &= 0xf0f0f0f0u;
+            mask = ror32(mask, shift);
+            inv = ~mask;
+            word &= mask;
+            uint32_t out = movep_read_l(img, dst);
+            out &= inv;
+            out |= word;
+            movep_write_l(img, dst, out);
+            dst += 0xa0;
+            s += stride;
+            n = (n - 1) & 0xffff;
+            if (n == 0xffff)
                 break;
         }
-        a1 += 2;
-        if (d7 < 4) {
-            a0 -= 8;
-            d7 = 0xc;
+        src += 2;
+        if (phase < 4) {
+            dest -= 8;
+            phase = 0xc;
         } else {
-            d7 -= 4;
+            phase -= 4;
         }
-        outer = (outer - 1) & 0xffff;
-        if (outer == 0xffff)
+        col = (col - 1) & 0xffff;
+        if (col == 0xffff)
             break;
     }
 }
