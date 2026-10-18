@@ -439,3 +439,62 @@ Los hooks `cpu_delay`/`KULT_REVEAL_GATE` (reveal) y `frame_gate_delay`/
 - Falta **P2** (`palette`, `cursor`, `input`, `delay`, `boxdraw`, `line`,
   `maskblit`, `sprite`, `text`, `overlay`, `screens`, `state`, `stubs`) para
   cerrar la revisión y abrir la fase 3.
+
+---
+
+## 10. Plan de revisión P2
+
+Alcance: los 13 módulos restantes (origen mixto: portados a mano o ya auditados;
+repaso ligero). Mismo método y ejes que P0/P1 (§3–§5); un commit por módulo
+`revision(<módulo>)`.
+
+Censo (líneas / funciones-definición / pruebas `def test_`):
+
+| orden | módulo | líneas | funcs | tests | foco principal |
+|---|---|---|---|---|---|
+| 1 | `stubs` | 12 | 4 | 1 | `rts` pelados (0x135e0, 0x160c0, …) |
+| 2 | `delay` | 32 | 2 | 2 | espera/`vsync` |
+| 3 | `input` | 42 | 2 | 4 | `ikbd_handler` 0x13686, paquete IKBD (0x1a459) |
+| 4 | `state` | 56 | 4 | 4 | estado/parámetros globales |
+| 5 | `palette` | 71 | 6 | 6 | piloto ya auditado: `set_palette_entry` 0x162e2, `xbios_setpalette` 0x16300 |
+| 6 | `cursor` | 71 | 3 | 2 | cursor (`cursor_draw`, clip, `cursor_restore`) |
+| 7 | `boxdraw` | 149 | 9 | 5 | marcos/rects (`box_hline/vline`, 0x12ffa/0x13216) |
+| 8 | `line` | 185 | 5 | 3 | `0x13d0e` (Bresenham, **ya tuvo un bug de paridad corregido**) |
+| 9 | `sprite` | 189 | 8 | 7 | `blit_sprite` 0x124f8 |
+| 10 | `maskblit` | 282 | 18 | 9 | `mask_restore_rows` 0x1215e, `blit_mask_rows` 0x12466 (degenerado `groups==1`) |
+| 11 | `text` | 303 | 18 | 17 | `advance_text_entry` 0x10f8e, `print_char`/`print_word`, `measure_word` |
+| 12 | `screens` | 528 | 32 | 6 | `screen_address` 0x10fec/0x10fee (fase d7), `copy_screen`, `swap_screens`, `row_blit` 0x16b76 |
+| 13 | `overlay` | 809 | 12 | 8 | blitters de overlay (0x111b6/0x114ba/0x117fe/0x11afa): mapeo de longs por plano 1→3/2→7/3→0xb/4→0xf, `roxl`, avance de A0/A1/A2 |
+
+Orden: de menor a mayor. `overlay` va último (blitters con muchas trampas).
+
+### 10.1 Riesgos heredados de P0/P1 (buscar explícitamente)
+
+- **Función hermana equivocada** y wrappers (H-V1, H-mus1).
+- **Condiciones invertidas** (`bcs`/`bcc`, `bge`/`blt`): H-C2, H-L1..L3.
+- **Campo/offset de tabla equivocado**: H-C1.
+- **A6 no propagado** en handlers `void`: H-D1, H-H2.
+- **Firmas/declaraciones desalineadas** (`void`/aridad): H-D2..D4, H-el2.
+- **Anchos/signo**: `.b`/`.w`, `lsl.b` vs `lsl.w`, `muls.w`/`mulu.w`, `subq.b` vs `-1`.
+- **Bucles `dbra` do-while** (0 ⇒ 65536) y **retornos dobles** (`addq.l #4,a7`): H-an2, H-SC1.
+- **Palabra alta** en out-params (`move.w` preserva la alta): H-tb1, H-tb2.
+- **Registros de salida / `movem`** que restaura D0: H-mus2.
+- **Colas compartidas `rts`/fall-through** y **ledger off-image** (paleta, PSG, IKBD, `Setcolor`, `Vsync`).
+
+### 10.2 Trampas del kit ya conocidas (para P2)
+
+- `0x13d0e` (line): el `beq`/`bne` de paridad ya se corrigió una vez; cubrir
+  `d0&0xf == 0`.
+- Blitters de overlay: el mapeo de longs por pasada es **1 plano→3, 2→7, 3→0xb,
+  4→0xf** (no al revés); el tail de `0x117fe` hace `andi.w #$f,d0` (fase 0–15);
+  el avance persistente de A0/A1/A2 incluye los `+8` internos.
+- `0x128a4`/`0x134da` y `0x15944` A2 fuera de ventana, etc. (ver
+  `docs/REFERENCIA_F4.md`, sección final).
+
+### 10.3 Criterio de cierre P2 (y de la revisión)
+
+- Los 13 módulos con checklist completa (§3).
+- ALTA/MEDIA arreglados **con prueba** o *intencional* justificado.
+- `make test` verde (494+), `make regscan` `ids_reg=0`, `make core` OK.
+- Registro §7/§9/§11 ampliado y `docs/ESTADO.md` actualizado.
+- **Entonces** se abre la **fase 3** (re-aplicar kult-port).

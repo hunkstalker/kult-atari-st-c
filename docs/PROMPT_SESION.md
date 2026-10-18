@@ -5,56 +5,58 @@ Copia y pega esto al empezar la próxima sesión:
 ---
 
 Trabajamos en la reimplementación de **Kult: The Temple of Flying Saucers**
-(Atari ST, 1989) en **C moderno, legible y documentado**.
+(Atari ST, 1989) en **C moderno, legible y documentado**, en
+`/app/kult-atari-st-c`. La verdad/especificación es el decomp **ASM** congelado en
+`/app/kult-atari-st-decomp` (`matching/auto_*.s`, byte a byte al original): **no se
+toca**. Hay además `/app/kult-port`, el proyecto predecesor de modding (SDL2,
+textos ES, overlay F1…) cuyas mejoras se re-aplicarán en la **fase 3**, solo tras
+cerrar la revisión.
 
-**Hay dos repos, no los confundas:**
-- `/app/kult-atari-st-decomp` — el **decomp canónico en ensamblador (ASM)**. Es la
-  **especificación/verdad**: ensambla al original **byte a byte**
-  (sha256 `2e85f223167439425ab2096bd21716de135f9b472bde90f4d40e8b0e03132fe6`). **NO
-  se toca.** Su código está en `matching/` (`auto_*.s` por función, `*.s` manuales,
-  `data_*.s`).
-- `/app/kult-atari-st-c` — **este es donde trabajamos**: la **reimplementación en
-  C**, fiel en **comportamiento** (no byte a byte, porque el original era ASM).
-  Tiene su propio git.
+## Tarea: cerrar la **revisión P2** (última tanda)
 
-**Antes de tocar nada, lee:**
-1. `/app/kult-atari-st-c/docs/ESTADO.md` (estado exacto, censo, cómo continuar).
-2. `/app/kult-atari-st-c/docs/PLAN.md` (plan maestro: método, convenciones, fases).
-3. `/app/kult-atari-st-c/README.md`.
-4. Para el análisis del original y trampas: `docs/REFERENCIA_F4.md`.
+Estado: **P0 y P1 revisados** (ver el registro en `docs/REVISION.md` §7 y §9).
+La reimplementación cubre todo el juego: 33 módulos, 494 pruebas diferenciales
+verdes, 0 warnings, `regscan ids_reg=0`. Falta **P2** (13 módulos) para poder
+abrir la fase 3.
 
-**Estado:** la reimplementación cubre **todo el juego** (33 módulos, 417 funciones,
-478 pruebas diferenciales verdes, 0 warnings, 0 identificadores de registro en
-código). Convenciones, `docs/mapa/`, visibilidad on-target y legibilidad están
-cerradas.
+**Antes de tocar nada, lee, por este orden:**
+1. `docs/ESTADO.md` — estado exacto, censo, cómo continuar.
+2. `docs/REVISION.md` — plan y método. **El plan de P2 está en §10** (orden,
+   foco por módulo, riesgos heredados, criterio de cierre). El registro de
+   hallazgos de P0/P1 en §7/§9 sirve de ejemplo de la plantilla §5.
+3. `docs/PLAN.md` (convenciones §4.1), `docs/REFERENCIA_F4.md` (trampas del
+   oráculo/kit), `AGENTS.md` (reglas de trabajo).
+4. `README.md`.
 
-**Método (para cualquier pieza nueva):** mírala en el ASM de
-`/app/kult-atari-st-decomp/matching/`, escribe C legible en `src/` (nombre = el de
-`work/names.txt` + comentario con la dirección original, p. ej.
-`/* 0x162e2 — ... */`), su **prueba diferencial** en `test/`, y deja `make test`
-en verde. Si añades un global, edítalo en `work/names.txt` y corre `make addrs`;
-si tocas `src/`/`test/`, corre `make mapa`.
+**Método por módulo (los 13 de §10, de menor a mayor):** para cada función,
+abrir su `auto_*.s` en `/app/kult-atari-st-decomp/matching/` y comparar el cuerpo
+C con el ASM instrucción a instrucción (anchos `.b`/`.w`/`.l`, signo, banderas
+C/Z/N/V, pre/post-incremento de punteros y del guion `a6`, límites de bucle
+`dbra` —ojo do-while—, orden de escritura, colas `rts`/fall-through, registros de
+salida/`movem`, out-params y efectos off-image en el ledger). Registrar cada
+hallazgo con la plantilla §5; si es un fallo real, arreglarlo **con su prueba
+diferencial** y dejar `make test` verde. Un commit por módulo
+(`revision(<módulo>): …`). Al terminar P2: rellenar el registro (§11) y
+`docs/ESTADO.md`, y `make mapa`.
 
-**Siguiente:** **revisar el C ya escrito y renombrado** antes de re-aplicar nada
-de kult-port. El plan y el prompt de arranque están en **`docs/REVISION.md`**
-(cuatro ejes: fidelidad vs ASM, nombres/comentarios, legibilidad, cobertura de
-tests; prioridad P0 primero). Solo tras cerrar esa revisión se abre la fase 3
-(mejoras de kult-port). No hay deuda conocida de comportamiento ni de
-legibilidad.
+**Reglas:** reproducir/medir antes de tocar, una hipótesis un cambio, toda
+corrección deja test, `make regscan` debe seguir en `ids_reg=0`. Empieza por
+`stubs`/`delay`/`input`/`state`, termina por `screens`/`overlay`. Todo en español.
+No toques `/app/kult-port` ni el decomp ASM.
 
-Reglas de trabajo (ver `/app/kult-port/AGENTS.md`): reproducir/medir antes de
-tocar, una hipótesis un cambio, toda corrección deja test, commit al completar
-una tarea con éxito. Todo en español.
+Comandos: `make test` (diferencial), `make test PYTEST_ARGS=-n0` (serial),
+`make regscan`, `make core`, `make mapa`. El oráculo necesita
+`work/disk_a/KULT.PRG` (gitignored; si falta, cópialo de
+`/app/kult-port/work/disk_a/KULT.PRG`).
 
 ---
 
 ## Nota (para quien prepare un repo así)
 
 - El repo se montó copiando el **arnés** (`tools/recreate_kit` + `Makefile` +
-  `project.toml` + `include/` + `test/harness.py`) del intento anterior, dejando
-  `src/` y `test/test_*.py` vacíos. Las pruebas viejas quedan en
-  `reference/test_f4/` solo como referencia (usan nombres antiguos).
-- `work/disk_a/KULT.PRG` (copia del usuario) debe existir para el oráculo; está
-  gitignored. Si falta, copiarlo desde `/app/kult-port/work/disk_a/KULT.PRG`.
-- El `.venv` es un symlink al de kult-port (`projects/kult/recreate/.venv`); si no
-  está, crear uno con `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`.
+  `project.toml` + `include/` + `test/harness.py`) del intento anterior; las
+  pruebas viejas quedan en `reference/test_f4/` solo como referencia.
+- El `.venv` es un symlink al de kult-port; si no está, crear uno con
+  `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`.
+- Al cerrar P2 se abre la **fase 3** (re-aplicar las mejoras de kult-port sobre
+  este C limpio).

@@ -95,9 +95,10 @@ mapa (el harness necesita `dlsym`). Detalle en `docs/VISIBILIDAD.md`.
    bit8, `music_install` retorno, `music_tick` channel[8], `bit_reverse_word`
    palabra alta, `run_text_entry_ex` D5, `anim_counter` byte, motor do-while,
    `walk_entry` decl) y 5 *intencional* (hooks de port y casos degenerados).
-3. **Revisión P2** (siguiente): `palette`, `cursor`, `input`, `delay`, `boxdraw`,
-   `line`, `maskblit`, `sprite`, `text`, `overlay`, `screens`, `state`, `stubs`.
-   Al cerrarla se abre la fase 3.
+3. **Revisión P2** (siguiente; plan en `docs/REVISION.md` §10 y prompt en
+   `docs/PROMPT_SESION.md`): `stubs`, `delay`, `input`, `state`, `palette`,
+   `cursor`, `boxdraw`, `line`, `sprite`, `maskblit`, `text`, `screens`,
+   `overlay`. Al cerrarla se abre la fase 3.
 4. **Futuro (fase 3 del PLAN):** re-aplicar sobre este C limpio las mejoras de
    kult-port (guardado por ranuras, textos ES, overlay F1, etc.), **solo tras
    cerrar la revisión**.
