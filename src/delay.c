@@ -15,16 +15,16 @@
 
 /* 0x13594 — espera de VBL. */
 void wait_vbl(uint8_t *img) {
-    uint8_t d0 = img[A_DAT_1ACD4];
-    while (sched_poll8(img, A_DAT_1ACD4, 0x1359a) == d0)
+    uint8_t prev = img[A_DAT_1ACD4];
+    while (sched_poll8(img, A_DAT_1ACD4, 0x1359a) == prev)
         ;
 }
 
 /* 0x16d1e — espera de VBL + contador par (paso de los wipes de texto). */
 void wait_vbl_even(uint8_t *img) {
     for (;;) {
-        uint8_t d0 = img[A_DAT_1ACD4];
-        while (sched_poll8(img, A_DAT_1ACD4, 0x16d24) == d0)
+        uint8_t prev = img[A_DAT_1ACD4];
+        while (sched_poll8(img, A_DAT_1ACD4, 0x16d24) == prev)
             ;
         if (!(img[A_DAT_1ACD4] & 1))
             break;

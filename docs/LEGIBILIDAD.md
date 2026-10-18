@@ -148,9 +148,31 @@ Cada tanda = un commit. Dentro de cada módulo, función a función.
 
 ## 6. Progreso
 
-| módulo | ids_reg antes | ids_reg después | goto antes→después | estado |
-|---|---:|---:|---:|---|
-| textblit.c | 400 | — | 0 | parcial (blitters hechos) |
-| overlay.c | 569 | — | 0 | decompilador hecho; locales pendientes |
+**Tanda 1 — hojas y base: HECHA** (`ids_reg` antes→después, medido con `make regscan`):
 
-*(Actualizar al cerrar cada módulo.)*
+| módulo | antes | después | goto |
+|---|---:|---:|---:|
+| screens.c | 390 | 25 | 0 |
+| maskblit.c | 233 | 3 | 0 |
+| sprite.c | 162 | 2 | 0 |
+| boxdraw.c | 110 | 3 | 0 |
+| line.c | 106 | 3 | 0 |
+| misc.c | 48 | 14 | 0 |
+| vm.c | 31 | 10 | 0 |
+| cursor.c | 26 | 3 | 0 |
+| state.c | 11 | 2 | 0 |
+| palette.c | 9 | 0 | 0 |
+| input.c | 5 | 3 | 0 |
+| delay.c | 4 | 0 | 0 |
+| stubs.c | 0 | 0 | 0 |
+
+Totales: `ids_reg` **8801 → 7734**, `goto` 95 (sin cambios; Tanda 2+).
+Residuales pequeños (p. ej. `screens.c` 25) son variables sueltas menores; se
+afinan al tocar cada módulo.
+
+| tanda | módulos | estado |
+|---|---|---|
+| 1 | palette, screens, cursor, input, delay, stubs, state, boxdraw, line, sprite, maskblit, misc, vm | **HECHA** |
+| 2 | textblit (resto), text, textbox, textform, icons, video, select (+goto), mode | pendiente |
+| 3 | element, anim, scale, reveal, overlay (locales), commands, handlers | pendiente |
+| 4 | dispatch, sound, music (+goto), fileio (+goto), loop (+goto) | pendiente |

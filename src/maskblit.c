@@ -41,129 +41,129 @@ static uint16_t asl_w(uint16_t v, unsigned count) {
 }
 
 /* 0x12698 — precalcula las máscaras de borde. */
-void blit_mask_setup(uint8_t *img, uint32_t d2, uint32_t d7) {
-    uint16_t d0 = (uint16_t)d7;
-    uint16_t d1 = (uint16_t)~lsr_w(0xffff, d0);   /* máscara de la primera palabra */
-    d0 = (uint16_t)(d0 >> 2);
-    uint16_t d5 = (uint16_t)(4 - d0);
-    uint16_t d6 = (uint16_t)d2;
-    uint16_t d4 = 1;
+void blit_mask_setup(uint8_t *img, uint32_t width, uint32_t phase) {
+    uint16_t phase16 = (uint16_t)phase;
+    uint16_t first = (uint16_t)~lsr_w(0xffff, phase16);   /* máscara de la primera palabra */
+    phase16 = (uint16_t)(phase16 >> 2);
+    uint16_t rem = (uint16_t)(4 - phase16);
+    uint16_t acc = (uint16_t)width;
+    uint16_t groups = 1;
 
-    /* sub.w d5,d6: d6 se actualiza; bls salta el recuento si d2 <= d5. */
-    uint16_t before = d6;
-    d6 = (uint16_t)(before - d5);
-    if (!(word_sub_extend(before, d5) || d6 == 0)) {
+    /* sub.w rem,acc: acc se actualiza; bls salta el recuento si width <= rem. */
+    uint16_t before = acc;
+    acc = (uint16_t)(before - rem);
+    if (!(word_sub_extend(before, rem) || acc == 0)) {
         for (;;) {
-            before = d6;
-            d4 = (uint16_t)(d4 + 1);
-            d6 = (uint16_t)(before - 4);
-            if (word_sub_extend(before, 4) || d6 == 0)   /* subi.w / bhi */
+            before = acc;
+            groups = (uint16_t)(groups + 1);
+            acc = (uint16_t)(before - 4);
+            if (word_sub_extend(before, 4) || acc == 0)   /* subi.w / bhi */
                 break;
         }
     }
 
-    d6 = (uint16_t)(-d6);                          /* neg.w */
-    d6 = (uint16_t)(d6 << 2);                      /* lsl.w #2 */
-    uint16_t right = (uint16_t)~asl_w(0xffff, d6); /* asl.w d6,d5 / not.w */
+    acc = (uint16_t)(-acc);                          /* neg.w */
+    acc = (uint16_t)(acc << 2);                      /* lsl.w #2 */
+    uint16_t last = (uint16_t)~asl_w(0xffff, acc); /* asl.w acc,rem / not.w */
 
-    wr16(img + A_BLIT_MASK_FIRST, d1);
-    wr16(img + A_BLIT_MASK_LAST, right);
-    wr16(img + A_BLIT_GROUPS, d4);
+    wr16(img + A_BLIT_MASK_FIRST, first);
+    wr16(img + A_BLIT_MASK_LAST, last);
+    wr16(img + A_BLIT_GROUPS, groups);
 }
 
 /* Un grupo de 4 palabras mezclado bajo d4; d5 = ~d4. */
-static void merge_group(uint8_t *img, uint32_t *a0, uint32_t *a1,
-                        uint16_t d4, uint16_t d5) {
+static void merge_group(uint8_t *img, uint32_t *dest, uint32_t *src,
+                        uint16_t mask, uint16_t inv) {
     for (int i = 0; i < 4; i++) {
-        uint16_t s = be16(img + *a1);
-        uint16_t d = be16(img + *a0);
-        wr16(img + *a0, (uint16_t)((d & d4) | (s & d5)));
-        *a0 += 2;
-        *a1 += 2;
+        uint16_t s = be16(img + *src);
+        uint16_t d = be16(img + *dest);
+        wr16(img + *dest, (uint16_t)((d & mask) | (s & inv)));
+        *dest += 2;
+        *src += 2;
     }
 }
 
 /* 0x123c0 — blitea una fila enmascarada. */
-void blit_mask_row(uint8_t *img, uint32_t a0, uint32_t a1) {
-    uint16_t d4 = be16(img + A_BLIT_MASK_FIRST);
-    uint16_t d6 = (uint16_t)(be16(img + A_BLIT_GROUPS) - 1);
-    if (d6 == 0)                                   /* subq/bne falla: un solo grupo */
-        d4 = (uint16_t)(d4 | be16(img + A_BLIT_MASK_LAST));
-    uint16_t d5 = (uint16_t)~d4;
+void blit_mask_row(uint8_t *img, uint32_t dest, uint32_t src) {
+    uint16_t first = be16(img + A_BLIT_MASK_FIRST);
+    uint16_t groups = (uint16_t)(be16(img + A_BLIT_GROUPS) - 1);
+    if (groups == 0)                                   /* subq/bne falla: un solo grupo */
+        first = (uint16_t)(first | be16(img + A_BLIT_MASK_LAST));
+    uint16_t inv = (uint16_t)~first;
 
-    merge_group(img, &a0, &a1, d4, d5);
+    merge_group(img, &dest, &src, first, inv);
 
     for (;;) {
-        uint16_t before = d6;
-        d6 = (uint16_t)(before - 1);               /* subq.w #1,d6 */
+        uint16_t before = groups;
+        groups = (uint16_t)(before - 1);               /* subq.w #1,groups */
         if (word_sub_extend(before, 1))            /* bcs: borrow -> fin */
             break;
-        if (d6 == 0) {                             /* beq: último grupo enmascarado */
-            d4 = be16(img + A_BLIT_MASK_LAST);
-            d5 = (uint16_t)~d4;
-            merge_group(img, &a0, &a1, d4, d5);
+        if (groups == 0) {                             /* beq: último grupo enmascarado */
+            first = be16(img + A_BLIT_MASK_LAST);
+            inv = (uint16_t)~first;
+            merge_group(img, &dest, &src, first, inv);
             break;
         }
-        wr32(img + a0, be32(img + a1));            /* move.l (a1)+,(a0)+ x2 */
-        a0 += 4;
-        a1 += 4;
-        wr32(img + a0, be32(img + a1));
-        a0 += 4;
-        a1 += 4;
+        wr32(img + dest, be32(img + src));            /* move.l (src)+,(dest)+ x2 */
+        dest += 4;
+        src += 4;
+        wr32(img + dest, be32(img + src));
+        dest += 4;
+        src += 4;
     }
 }
 
 /* 0x1215e — corre el blit de fila sobre D3 filas. */
-void mask_restore_rows(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7) {
-    blit_mask_setup(img, d2, d7);
+void mask_restore_rows(uint8_t *img, uint32_t dest, uint32_t cols, uint32_t rows, uint32_t phase) {
+    blit_mask_setup(img, cols, phase);
     if (img[A_BLIT_D8EA] != 0x41)
         img[A_TEMPL_DATA] = 0;
-    uint32_t n = (d3 - 1) & 0xffff;                /* dbf cuenta pasadas del cuerpo */
+    uint32_t n = (rows - 1) & 0xffff;                /* dbf cuenta pasadas del cuerpo */
     do {
-        blit_mask_row(img, a0, a0 - 0x8000u);
-        a0 += 0xa0;
+        blit_mask_row(img, dest, dest - 0x8000u);
+        dest += 0xa0;
         n = (n - 1) & 0xffff;
     } while (n != 0xffff);
 }
 
 /* 0x12466 — copia D3 filas desde el buffer 0x1a534 con máscaras de borde. */
-void blit_mask_rows(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d3) {
-    uint32_t d7 = (d3 - 1) & 0xffff;
-    uint32_t d4 = be16(img + 0x1a538);
-    uint32_t d5 = be16(img + 0x1a53a);
-    uint32_t a2 = a0, a3 = a1;
+void blit_mask_rows(uint8_t *img, uint32_t dest, uint32_t s, uint32_t rows) {
+    uint32_t row = (rows - 1) & 0xffff;
+    uint32_t first = be16(img + 0x1a538);
+    uint32_t last = be16(img + 0x1a53a);
+    uint32_t dst = dest, src2 = s;
     for (;;) {
-        uint32_t d6 = (be16(img + 0x1a53c) - 1) & 0xffff;
+        uint32_t groups = (be16(img + 0x1a53c) - 1) & 0xffff;
         uint32_t src[4];
-        src[0] = be16(img + a1); a1 += 2;
-        src[1] = be16(img + a1); a1 += 2;
-        src[2] = be16(img + a1); a1 += 2;
-        src[3] = be16(img + a1); a1 += 2;
+        src[0] = be16(img + s); s += 2;
+        src[1] = be16(img + s); s += 2;
+        src[2] = be16(img + s); s += 2;
+        src[3] = be16(img + s); s += 2;
         for (uint32_t p = 0; p < 4; p++) {
-            wr16(img + a0, ((be16(img + a0) & d4) | src[p]) & 0xffff);
-            a0 += 2;
+            wr16(img + dest, ((be16(img + dest) & first) | src[p]) & 0xffff);
+            dest += 2;
         }
         for (;;) {
-            d6 = (d6 - 1) & 0xffff;
-            if (d6 == 0)
+            groups = (groups - 1) & 0xffff;
+            if (groups == 0)
                 break;
-            wr32(img + a0, be32(img + a1)); a0 += 4; a1 += 4;
-            wr32(img + a0, be32(img + a1)); a0 += 4; a1 += 4;
+            wr32(img + dest, be32(img + s)); dest += 4; s += 4;
+            wr32(img + dest, be32(img + s)); dest += 4; s += 4;
         }
-        src[0] = be16(img + a1); a1 += 2;
-        src[1] = be16(img + a1); a1 += 2;
-        src[2] = be16(img + a1); a1 += 2;
-        src[3] = be16(img + a1); a1 += 2;
+        src[0] = be16(img + s); s += 2;
+        src[1] = be16(img + s); s += 2;
+        src[2] = be16(img + s); s += 2;
+        src[3] = be16(img + s); s += 2;
         for (uint32_t p = 0; p < 4; p++) {
-            wr16(img + a0, ((be16(img + a0) & d5) | src[p]) & 0xffff);
-            a0 += 2;
+            wr16(img + dest, ((be16(img + dest) & last) | src[p]) & 0xffff);
+            dest += 2;
         }
-        a0 = a2 + 0xa0;
-        a1 = a3 + 0x40;
-        a2 = a0;
-        a3 = a1;
-        d7 = (d7 - 1) & 0xffff;
-        if (d7 == 0xffff)
+        dest = dst + 0xa0;
+        s = src2 + 0x40;
+        dst = dest;
+        src2 = s;
+        row = (row - 1) & 0xffff;
+        if (row == 0xffff)
             break;
     }
     wait_vbl(img);
@@ -171,112 +171,112 @@ void blit_mask_rows(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d3) {
 
 /* 0x120a8 — busca hueco libre en la tabla de 10 entradas de 16 B en 0x1a850 y guarda
  * [word d4][long a0][word d7][word d0][word d1][word d2][word d3]. */
-void hint_slot_alloc(uint8_t *img, uint32_t d4, uint32_t a0, uint32_t d7,
-                     uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3) {
-    uint32_t a2 = 0x1a850;
-    for (uint32_t d6 = 9;; d6 = (d6 - 1) & 0xffff) {
-        if (be16(img + a2) == 0)
+void hint_slot_alloc(uint8_t *img, uint32_t word0, uint32_t arg0, uint32_t phase,
+                     uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4) {
+    uint32_t p = 0x1a850;
+    for (uint32_t i = 9;; i = (i - 1) & 0xffff) {
+        if (be16(img + p) == 0)
             break;
-        a2 += 0x10;
-        if (d6 == 0)
+        p += 0x10;
+        if (i == 0)
             break;
     }
-    wr16(img + a2, d4 & 0xffff); a2 += 2;
-    wr32(img + a2, a0); a2 += 4;
-    wr16(img + a2, d7 & 0xffff); a2 += 2;
-    wr16(img + a2, d0 & 0xffff); a2 += 2;
-    wr16(img + a2, d1 & 0xffff); a2 += 2;
-    wr16(img + a2, d2 & 0xffff); a2 += 2;
-    wr16(img + a2, d3 & 0xffff);
+    wr16(img + p, word0 & 0xffff); p += 2;
+    wr32(img + p, arg0); p += 4;
+    wr16(img + p, phase & 0xffff); p += 2;
+    wr16(img + p, arg1 & 0xffff); p += 2;
+    wr16(img + p, arg2 & 0xffff); p += 2;
+    wr16(img + p, arg3 & 0xffff); p += 2;
+    wr16(img + p, arg4 & 0xffff);
     img[0x1ad0a] = img[0x1a851];
 }
 
 /* Cuerpo compartido de selección de icono (0x120f8): dado A1 (entrada de la tabla) y
  * D1 (valor a escribir), devuelve out[0..6] = a0, d4, d7, d0, d1, d2, d3; out[7] = d5. */
-static void hint_body(uint8_t *img, uint32_t a1, uint32_t d1, uint32_t *o) {
-    uint32_t d4 = be16(img + a1);
-    wr16(img + a1, d1 & 0xffff);
-    uint32_t dest = be32(img + a1 + 2);
-    uint32_t d0 = (be32(img + A_SCREEN_PTR_A) & 0xffff0000u) | (dest & 0xffff);
-    uint32_t a0 = d0;
-    uint32_t d7 = be16(img + a1 + 6);
-    d0 = (a0 & 0xffff0000u) | be16(img + a1 + 8);
-    d1 = be16(img + a1 + 10);
-    uint32_t d2 = be16(img + a1 + 12);
-    uint32_t d3 = be16(img + a1 + 14);
+static void hint_body(uint8_t *img, uint32_t entry, uint32_t value, uint32_t *o) {
+    uint32_t word = be16(img + entry);
+    wr16(img + entry, value & 0xffff);
+    uint32_t dest = be32(img + entry + 2);
+    uint32_t tmp = (be32(img + A_SCREEN_PTR_A) & 0xffff0000u) | (dest & 0xffff);
+    uint32_t addr = tmp;
+    uint32_t phase = be16(img + entry + 6);
+    tmp = (addr & 0xffff0000u) | be16(img + entry + 8);
+    value = be16(img + entry + 10);
+    uint32_t w = be16(img + entry + 12);
+    uint32_t h = be16(img + entry + 14);
     img[0x1ad0a] = img[0x1a851];
-    o[0] = a0; o[1] = d4; o[2] = d7; o[3] = d0; o[4] = d1; o[5] = d2; o[6] = d3; o[7] = 0;
+    o[0] = addr; o[1] = word; o[2] = phase; o[3] = tmp; o[4] = value; o[5] = w; o[6] = h; o[7] = 0;
 }
 
 /* 0x120dc — selecciona el icono d0-ésimo (D1=2). */
-void hint_select_on(uint8_t *img, uint32_t d0, uint32_t *o) {
-    hint_body(img, 0x1a850 + ((d0 - 1) & 0xffff) * 0x10, 2, o);
+void hint_select_on(uint8_t *img, uint32_t index, uint32_t *out) {
+    hint_body(img, 0x1a850 + ((index - 1) & 0xffff) * 0x10, 2, out);
 }
 
 /* 0x120e4 — selecciona el icono d0-ésimo (D1=0). */
-void hint_select_off(uint8_t *img, uint32_t d0, uint32_t *o) {
-    hint_body(img, 0x1a850 + ((d0 - 1) & 0xffff) * 0x10, 0, o);
+void hint_select_off(uint8_t *img, uint32_t index, uint32_t *out) {
+    hint_body(img, 0x1a850 + ((index - 1) & 0xffff) * 0x10, 0, out);
 }
 
 /* 0x1213a — busca el word d0 en la tabla; si lo encuentra lo desactiva (d5=0). */
-void hint_find(uint8_t *img, uint32_t d0, uint32_t *o) {
-    uint32_t a1 = 0x1a850;
-    for (uint32_t d6 = 9;; d6 = (d6 - 1) & 0xffff) {
-        if (be16(img + a1) == (d0 & 0xffff)) {
-            hint_body(img, a1, 0, o);
+void hint_find(uint8_t *img, uint32_t word, uint32_t *out) {
+    uint32_t p = 0x1a850;
+    for (uint32_t i = 9;; i = (i - 1) & 0xffff) {
+        if (be16(img + p) == (word & 0xffff)) {
+            hint_body(img, p, 0, out);
             return;
         }
-        a1 += 0x10;
-        if (d6 == 0)
+        p += 0x10;
+        if (i == 0)
             break;
     }
-    o[7] = 1;
+    out[7] = 1;
 }
 
 /* 0x1222e — selecciona el icono A6[1] y lo blitea; A6 += 2. */
-void hint_blit_entry(uint8_t *img, uint32_t a6, uint32_t *a6_out) {
-    uint32_t o[8];
-    hint_select_off(img, img[a6 + 1], o);
-    mask_restore_rows(img, o[0], o[5], o[6], o[2]);      /* a0, d2, d3, d7 */
-    *a6_out = a6 + 2;
+void hint_blit_entry(uint8_t *img, uint32_t script, uint32_t *script_out) {
+    uint32_t out[8];
+    hint_select_off(img, img[script + 1], out);
+    mask_restore_rows(img, out[0], out[5], out[6], out[2]);      /* a0, d2, d3, d7 */
+    *script_out = script + 2;
 }
 
 /* 0x1232e — blitea los iconos 1 y un trazo de 2x15 desde la dirección del icono. */
-void hint_blit_stroke(uint8_t *img, uint32_t *a6) {
-    *a6 += 1;
+void hint_blit_stroke(uint8_t *img, uint32_t *script) {
+    *script += 1;
     wr16(img + 0x1a484, 0);
     for (;;) {
-        uint32_t o[8];
-        hint_find(img, 1, o);
-        if (o[7] != 0)
+        uint32_t out[8];
+        hint_find(img, 1, out);
+        if (out[7] != 0)
             break;
-        mask_restore_rows(img, o[0], o[5], o[6], o[2]);
-        uint32_t d7;
-        uint32_t a0 = screen_address(img, o[3], o[4], &d7);
-        mask_restore_rows(img, a0, 2, 0xf, d7);
+        mask_restore_rows(img, out[0], out[5], out[6], out[2]);
+        uint32_t phase;
+        uint32_t addr = screen_address(img, out[3], out[4], &phase);
+        mask_restore_rows(img, addr, 2, 0xf, phase);
     }
 }
 
 /* 0x12368 — blitea los iconos 2. */
-void hint_blit_2(uint8_t *img, uint32_t *a6) {
-    *a6 += 1;
+void hint_blit_2(uint8_t *img, uint32_t *script) {
+    *script += 1;
     for (;;) {
-        uint32_t o[8];
-        hint_find(img, 2, o);
-        if (o[7] != 0)
+        uint32_t out[8];
+        hint_find(img, 2, out);
+        if (out[7] != 0)
             break;
-        mask_restore_rows(img, o[0], o[5], o[6], o[2]);
+        mask_restore_rows(img, out[0], out[5], out[6], out[2]);
     }
 }
 
 /* 0x12384 — blitea los iconos 3. */
-void hint_blit_3(uint8_t *img, uint32_t *a6) {
-    *a6 += 1;
+void hint_blit_3(uint8_t *img, uint32_t *script) {
+    *script += 1;
     for (;;) {
-        uint32_t o[8];
-        hint_find(img, 3, o);
-        if (o[7] != 0)
+        uint32_t out[8];
+        hint_find(img, 3, out);
+        if (out[7] != 0)
             break;
-        mask_restore_rows(img, o[0], o[5], o[6], o[2]);
+        mask_restore_rows(img, out[0], out[5], out[6], out[2]);
     }
 }

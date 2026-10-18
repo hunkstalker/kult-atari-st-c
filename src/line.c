@@ -24,8 +24,8 @@ void wait_vbl(uint8_t *img);
 
 /* 0x13d0e — trazo Bresenham. */
 void reveal_line(uint8_t *img) {
-    uint32_t a5 = A_BLIT_SCRATCH;                 /* 0x55b02 */
-    wr16(img + a5, 0);
+    uint32_t flags = A_BLIT_SCRATCH;                 /* 0x55b02 */
+    wr16(img + flags, 0);
 
     uint32_t x0 = be16(img + 0x1a516);
     uint32_t x1 = be16(img + 0x1a518);
@@ -35,83 +35,83 @@ void reveal_line(uint8_t *img) {
     uint32_t dx = (x1 - x0) & 0xffff;
     if (word_sub_extend((uint16_t)x1, (uint16_t)x0)) {
         dx = (~dx) & 0xffff;
-        img[a5] = 1;
+        img[flags] = 1;
     }
-    uint32_t d6 = dx;
-    uint32_t d4 = (~(dx << 1)) & 0xffff;
+    uint32_t steps = dx;
+    uint32_t err_inc = (~(dx << 1)) & 0xffff;
 
     uint32_t dy = (y1 - y0) & 0xffff;
     if (word_sub_extend((uint16_t)y1, (uint16_t)y0)) {
         dy = (~dy) & 0xffff;
-        img[a5 + 1] = 1;
+        img[flags + 1] = 1;
     }
-    d6 = (d6 + dy + 1) & 0xffff;
-    uint32_t d5 = (dy << 1) & 0xffff;
+    steps = (steps + dy + 1) & 0xffff;
+    uint32_t dy2 = (dy << 1) & 0xffff;
 
-    uint32_t d7;
-    uint32_t a0 = screen_address_raw(img, x0, y0, &d7);
-    if (d7 & 8)
-        a0 += 1;
-    uint32_t a1 = a0 - 0x8000;
-    d7 &= 7;
-    uint32_t d3m = rotate_right32(0x80808080u, d7);
-    d7 = (d5 + d4) & 0xffff;
+    uint32_t err;
+    uint32_t front = screen_address_raw(img, x0, y0, &err);
+    if (err & 8)
+        front += 1;
+    uint32_t back = front - 0x8000;
+    err &= 7;
+    uint32_t mask = rotate_right32(0x80808080u, err);
+    err = (dy2 + err_inc) & 0xffff;
 
     for (;;) {
-        uint32_t nd3 = ~d3m;
-        movep_write_l(img, a0, (movep_read_l(img, a1) & d3m) |
-                                  (movep_read_l(img, a0) & nd3));
+        uint32_t nmask = ~mask;
+        movep_write_l(img, front, (movep_read_l(img, back) & mask) |
+                                  (movep_read_l(img, front) & nmask));
 
-        d6 = (d6 - 1) & 0xffff;
-        if (d6 == 0)
+        steps = (steps - 1) & 0xffff;
+        if (steps == 0)
             return;
 
-        if ((int16_t)d7 <= 0) {
-            if (img[a5] == 1) {
-                uint32_t c = (d3m >> 31) & 1;
-                d3m = ((d3m << 1) | c) & 0xffffffffu;
-                if (c) {
-                    a0 -= 1; a1 -= 1;
-                    if (a0 & 1) { a0 -= 6; a1 -= 6; }     /* `beq` salta si par */
+        if ((int16_t)err <= 0) {
+            if (img[flags] == 1) {
+                uint32_t carry = (mask >> 31) & 1;
+                mask = ((mask << 1) | carry) & 0xffffffffu;
+                if (carry) {
+                    front -= 1; back -= 1;
+                    if (front & 1) { front -= 6; back -= 6; }     /* `beq` salta si par */
                 }
             } else {
-                uint32_t c = d3m & 1;
-                d3m = ((d3m >> 1) | (c << 31)) & 0xffffffffu;
-                if (c) {
-                    a0 += 1; a1 += 1;
-                    if (!(a0 & 1)) { a0 += 6; a1 += 6; }  /* `bne` salta si impar */
+                uint32_t carry = mask & 1;
+                mask = ((mask >> 1) | (carry << 31)) & 0xffffffffu;
+                if (carry) {
+                    front += 1; back += 1;
+                    if (!(front & 1)) { front += 6; back += 6; }  /* `bne` salta si impar */
                 }
             }
-            d7 = (d7 + d5) & 0xffff;
-            if ((int16_t)d7 > 0) {
-                d6 = (d6 - 1) & 0xffff;
-                if (d6 == 0)
+            err = (err + dy2) & 0xffff;
+            if ((int16_t)err > 0) {
+                steps = (steps - 1) & 0xffff;
+                if (steps == 0)
                     return;
             } else {
                 continue;
             }
         }
-        if (img[a5 + 1] == 1) {
-            a0 -= 0xa0; a1 -= 0xa0;
+        if (img[flags + 1] == 1) {
+            front -= 0xa0; back -= 0xa0;
         } else {
-            a0 += 0xa0; a1 += 0xa0;
+            front += 0xa0; back += 0xa0;
         }
-        d7 = (d7 + d4) & 0xffff;
+        err = (err + err_inc) & 0xffff;
     }
 }
 
 /* 0x13e14 — dos tandas de trazos (d2*4 pasos y *(0x1a52c)). */
-void reveal_lines_h(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3) {
-    d0 = (d0 << 2) & 0xffff;
-    wr16(img + 0x1a516, d0);
-    d2 = (d2 << 2) & 0xffff;
-    d0 = (d0 + d2 - 1) & 0xffff;
-    wr16(img + 0x1a518, d0);
-    wr16(img + 0x1a51a, d1 & 0xffff);
-    d3 = (d3 + d1 - 1) & 0xffff;
-    wr16(img + 0x1a51c, d3);
+void reveal_lines_h(uint8_t *img, uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
+    x = (x << 2) & 0xffff;
+    wr16(img + 0x1a516, x);
+    w = (w << 2) & 0xffff;
+    x = (x + w - 1) & 0xffff;
+    wr16(img + 0x1a518, x);
+    wr16(img + 0x1a51a, y & 0xffff);
+    h = (h + y - 1) & 0xffff;
+    wr16(img + 0x1a51c, h);
 
-    uint32_t n1 = (d2 - 1) & 0xffff;
+    uint32_t n1 = (w - 1) & 0xffff;
     for (;;) {
         reveal_line(img);
         wait_vbl(img);
@@ -142,18 +142,18 @@ void reveal_lines_h(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_
 }
 
 /* 0x13eae — tres tandas de trazos (alto, ancho<<2 y 0x1a52c). */
-void reveal_lines_v(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3) {
-    d0 = (d0 << 2) & 0xffff;
-    wr16(img + 0x1a516, d0);
-    d2 = (d2 << 1) & 0xffff;
-    d0 = (d0 + d2 - 1) & 0xffff;
-    wr16(img + 0x1a518, d0);
-    d2 = d3 & 0xffff;
-    d3 = (d3 + d1 - 1) & 0xffff;
-    wr16(img + 0x1a51c, d3);
-    wr16(img + 0x1a51a, d3);
+void reveal_lines_v(uint8_t *img, uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
+    x = (x << 2) & 0xffff;
+    wr16(img + 0x1a516, x);
+    w = (w << 1) & 0xffff;
+    x = (x + w - 1) & 0xffff;
+    wr16(img + 0x1a518, x);
+    w = h & 0xffff;
+    h = (h + y - 1) & 0xffff;
+    wr16(img + 0x1a51c, h);
+    wr16(img + 0x1a51a, h);
 
-    uint32_t n1 = (d2 - 1) & 0xffff;
+    uint32_t n1 = (w - 1) & 0xffff;
     for (;;) {
         reveal_line(img);
         wait_vbl(img);

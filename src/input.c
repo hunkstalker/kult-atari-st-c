@@ -17,9 +17,9 @@
 #include "sched.h"
 
 /* 0x13686 — copia el paquete IKBD de 5 bytes desde A0. */
-void ikbd_packet_copy(uint8_t *img, uint32_t a0) {
+void ikbd_packet_copy(uint8_t *img, uint32_t packet) {
     for (int i = 0; i < 5; i++)
-        img[A_IKBD_PACKET + i] = img[a0 + i];
+        img[A_IKBD_PACKET + i] = img[packet + i];
 }
 
 /* 0x13698 — wait_frame. */

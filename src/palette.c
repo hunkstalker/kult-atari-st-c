@@ -40,8 +40,8 @@ void set_palette(uint8_t *img) {
 /* 0x162e2 — fija una entrada de paleta: copia los 5 words de
  * A_PAL_TABLE + d0*0xa a *(A_PALETTE_PTR)+2 y, al no tener `rts`, cae en 0x16300
  * (aplica la paleta). Es la entrada que usan 0x162da y 0x162ce. */
-void set_palette_entry(uint8_t *img, uint32_t d0) {
-    uint32_t src = A_PAL_TABLE + (d0 & 0xffff) * 0xa;   /* mulu.w #$a,d0 */
+void set_palette_entry(uint8_t *img, uint32_t index) {
+    uint32_t src = A_PAL_TABLE + (index & 0xffff) * 0xa;   /* mulu.w #$a,index */
     uint32_t dst = be32(img + A_PALETTE_PTR) + 2;
     for (uint32_t i = 0; i < 5; i++)
         wr16(img + dst + i * 2, be16(img + src + i * 2));
@@ -55,17 +55,17 @@ void set_palette_current(uint8_t *img) {
 
 /* 0x162ce — d0 = A6[1] (índice tomado del guion), avanza A6 +2 y cae en 0x162e2.
  * Devuelve el A6 resultante para poder comprobarlo como registro de salida. */
-uint32_t set_palette_from_entry(uint8_t *img, uint32_t a6) {
-    uint32_t index = img[a6 + 1] & 0xff;
-    a6 += 2;
+uint32_t set_palette_from_entry(uint8_t *img, uint32_t script) {
+    uint32_t index = img[script + 1] & 0xff;
+    script += 2;
     set_palette_entry(img, index);
-    return a6;
+    return script;
 }
 
 /* 0x162d8 — `addq.l #1,a6` y cae en 0x162da (paleta actual). Devuelve el A6
  * resultante (avanza el guion un byte). */
-uint32_t set_palette_advance(uint8_t *img, uint32_t a6) {
-    a6 += 1;
+uint32_t set_palette_advance(uint8_t *img, uint32_t script) {
+    script += 1;
     set_palette_current(img);
-    return a6;
+    return script;
 }
