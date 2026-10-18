@@ -155,10 +155,10 @@ Cada tanda = un commit. Dentro de cada módulo, función a función.
 | 1 | palette, screens, cursor, input, delay, stubs, state, boxdraw, line, sprite, maskblit, misc, vm | **HECHA** |
 | 2 | textblit, text, textbox, textform, icons, video, select, mode | **HECHA** |
 | 3 | element, anim, scale, reveal, overlay, commands, handlers | **HECHA** |
-| 4 | dispatch, sound, fileio | **HECHA** |
-| 4 | loop, music | pendiente |
+| 4 | dispatch, sound, fileio, music | **HECHA** |
+| 4 | loop | parcial |
 
-Totales: **`ids_reg` 8801 → 3198**, `goto` 95 (los de `select.c`/`text.c`/
+Totales: **`ids_reg` 8801 → 2461**, `goto` 95 (los de `select.c`/`text.c`/
 `fileio.c` se conservan por fidelidad; §2).
 
 ### Tanda 1 — hojas y base
@@ -210,8 +210,11 @@ Totales: **`ids_reg` 8801 → 3198**, `goto` 95 (los de `select.c`/`text.c`/
 |---|---:|---:|---:|
 | dispatch.c | 416 | 22 | 0 |
 | sound.c | 98 | 3 | 0 |
+| music.c | 581 | 44 | 18 |
 | fileio.c | 23 | 4 | 10 |
+| loop.c | 1547 | 1347 | 29 |
 
-Pendiente: `loop.c` (1547) y `music.c` (581), los dos mayores. Los residuales
-pequeños (p. ej. `screens.c` 25) son variables sueltas menores que se afinan al
-tocar cada módulo.
+Pendiente: `loop.c` (el mayor, 2456 líneas, 74 funciones): su pasada
+per-función (`d0..d7`/`a0..a5` → semántico) queda para una sesión dedicada;
+por ahora solo se normalizó el puntero de guion (`a6` → `script`). Los
+residuales pequeños de otros módulos se afinan al tocarlos.
