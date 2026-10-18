@@ -120,24 +120,25 @@ def test_fun_143e2_dibuja():
         assert not diffs, f"mode={mode:#x}\n{report(diffs)}"
 
 
-def _script_pokes():
-    """Estado del script: indice en el buffer de entrada y contadores de linea."""
-    pokes = _form_pokes()
+def _script_pokes(heights=(2, 2, 2)):
+    """Estado del script. OJO: 0x142cc escribe la lista sobre $d8f2.. y $d900/2/4
+    caen en el SEGUNDO registro, asi que el numero de repeticiones lo fija el alto
+    de la 2a linea del formulario (`heights[1]`), no un poke directo a $d902."""
+    pokes = _form_pokes(heights=heights)
     pokes[0x1AB4F] = bytes([0x00])
-    pokes[FORM0] = (1).to_bytes(2, "big")
-    pokes[FORM1] = (2).to_bytes(2, "big")
-    pokes[FORM2] = (0x40000).to_bytes(4, "big")
     pokes[RECORD + 1] = bytes([1])       # indice para 0x141f4/0x14246
     return pokes
 
 
 def test_fun_141fa_cuerpo():
-    pokes = _script_pokes()
-    diffs, _ = differential(
-        FUN_141FA, {"a6": RECORD + 2, "d0": 1, "_pokes": pokes},
-        lambda lib, buf: lib.textform_fwd(buf, RECORD + 2, 1),
-        schedule=_vbl_schedule(3), wait_sites=[VBL_SITE])
-    assert not diffs, report(diffs)
+    # $d902 (builteado) = alto de la 2a linea; fwd hace (alto>>1) draws de 3 lineas.
+    for heights, waits in (((2, 2, 2), 3), ((2, 4, 2), 6), ((2, 6, 2), 9)):
+        pokes = _script_pokes(heights=heights)
+        diffs, _ = differential(
+            FUN_141FA, {"a6": RECORD + 2, "d0": 1, "_pokes": pokes},
+            lambda lib, buf: lib.textform_fwd(buf, RECORD + 2, 1),
+            schedule=_vbl_schedule(waits), wait_sites=[VBL_SITE])
+        assert not diffs, f"heights={heights}\n{report(diffs)}"
 
 
 def test_fun_141f4_entrada():
@@ -150,12 +151,14 @@ def test_fun_141f4_entrada():
 
 
 def test_fun_1424c_cuerpo():
-    pokes = _script_pokes()
-    diffs, _ = differential(
-        FUN_1424C, {"a6": RECORD + 2, "d0": 1, "_pokes": pokes},
-        lambda lib, buf: lib.textform_rev(buf, RECORD + 2, 1),
-        schedule=_vbl_schedule(6), wait_sites=[VBL_SITE])
-    assert not diffs, report(diffs)
+    # rev hace (alto>>1) draws del bucle + 1 final, de 3 lineas cada uno.
+    for heights, waits in (((2, 2, 2), 6), ((2, 4, 2), 9), ((2, 6, 2), 12)):
+        pokes = _script_pokes(heights=heights)
+        diffs, _ = differential(
+            FUN_1424C, {"a6": RECORD + 2, "d0": 1, "_pokes": pokes},
+            lambda lib, buf: lib.textform_rev(buf, RECORD + 2, 1),
+            schedule=_vbl_schedule(waits), wait_sites=[VBL_SITE])
+        assert not diffs, f"heights={heights}\n{report(diffs)}"
 
 
 def test_fun_14246_entrada():
