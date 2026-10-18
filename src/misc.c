@@ -48,8 +48,9 @@ uint32_t hint_blit_entry_b(uint8_t *img, uint32_t script) {
     return script_out;
 }
 
-/* Avanzan A6 y caen en el cuerpo real. */
-/* 0x16512 — Avanzan A6 y caen en el cuerpo real. */
+/* Los cuatro `addq.l #1,a6` que caen en su cuerpo real (0x16514/0x16556/0x16582/
+ * 0x18d28) mas el que salva/restaura A6 (0x16576). */
+/* 0x16512 — +1 y cae en 0x16514 (iconos de pista). */
 uint32_t hint_icons_wrap(uint8_t *img, uint32_t script) { hint_icons(img); return script + 1; }
 /* 0x16554 — draw hint icons wrap */
 uint32_t draw_hint_icons_wrap(uint8_t *img, uint32_t script) { draw_hint_icons(img); return script + 1; }

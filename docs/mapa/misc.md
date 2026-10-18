@@ -10,7 +10,7 @@ misc.c — envoltorios y entradas alternativas pequenas (varias familias).  0x11
 | `0x127f0` | `masked_save_blit` | FUN_000127f0 @ 0x127f0: 0x127fa (save enmascarado) y 0x1104a (blit de texto); el 0x127fa preserva D2/D3/D7/A0/A1, asi que el segundo ve los mismos argumentos. | test_misc |
 | `0x12324` | `gemdos_cnecin` | FUN_00012324 @ 0x12324: GEMDOS Cnecin (trap #1/$8); devuelve la tecla en D0. | test_misc |
 | `0x12fea` | `hint_blit_entry_b` | FUN_00012fea @ 0x12fea: cae en 0x1222e (icono A6[1]). | test_misc |
-| `0x16512` | `hint_icons_wrap` | Avanzan A6 y caen en el cuerpo real. | test_misc |
+| `0x16512` | `hint_icons_wrap` | +1 y cae en 0x16514 (iconos de pista). | test_misc |
 | `0x16554` | `draw_hint_icons_wrap` | draw hint icons wrap | test_misc |
 | `0x16576` | `update_icon_list_wrap` | update icon list wrap | test_misc |
 | `0x18d26` | `draw_selection_frame_wrap` | draw selection frame wrap | test_misc |
