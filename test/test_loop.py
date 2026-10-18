@@ -2738,3 +2738,34 @@ def test_fun_14bfa():
             max_insns=5_000_000)
         assert not diffs, f"{name}\n{report(diffs)}"
         assert info["ret"] == info["regs"]["a6"], name
+
+
+def _f14_hit_pokes(cur3, b3, acd7=0x10):
+    """Entrada de la l_014c94 alcanzada: rect valido en 0x1a6ae[0..3] que acierta
+    con el cursor (0x30,0x40) de _tb_pokes, y cur3/b3 en los slots reg/slot."""
+    pokes = _f14_fixture(match_idx=0, sel4=2)
+    pokes[0x1A6AE + 0] = bytes([0x00])
+    pokes[0x1A6AE + 1] = bytes([0x20])
+    pokes[0x1A6AE + 2] = bytes([0x30])
+    pokes[0x1A6AE + 3] = bytes([0x60])
+    pokes[0x1A8F0 + 3] = bytes([cur3])       # cur3 = reg[3]
+    pokes[0x1A8F6 + 3] = bytes([b3])         # b3   = slot[3]
+    pokes[0x1ACD7] = bytes([acd7])
+    pokes.update(_tb_pokes(0x99, keys=4))
+    return pokes
+
+
+def test_fun_14bfa_cur3_especial():
+    """H-1: cur3 en {0x6d,0x6c} va a l_014ce6 (no a l_014cc6); b3 siempre valido.
+
+    Con el bug (cur3 en {0x6d,0x6c,0x84} caia a l_014cc6) el candidato re-buclea y
+    no termina; con el arreglo sigue la via ce6 y cuadra con el oraculo.
+    """
+    for cur3 in (0x6d, 0x6c):
+        diffs, info = differential(
+            FUN_14BFA, {"a6": 0x52000, "_pokes": _f14_hit_pokes(cur3, 0x68)},
+            lambda lib, buf: lib.sample_menu_b(buf, 0x52000),
+            schedule=_f14_sched(), wait_sites=[VBL_SITE, 0x136B0],
+            max_insns=5_000_000)
+        assert not diffs, f"cur3={cur3:#x}\n{report(diffs)}"
+        assert info["ret"] == info["regs"]["a6"], f"cur3={cur3:#x}"

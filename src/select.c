@@ -189,9 +189,11 @@ void sample_menu(uint8_t *, uint32_t, uint32_t, uint32_t);
 /* 0x14ac6 — Un handler de byte de la VM (tabla 0x19f62): recibe a6 y devuelve el a6 nuevo. El avance de A6 es el neto del handler original (los `addq`/push-pop), dato qu... */
 uint32_t sample_menu_a(uint8_t *img, uint32_t script) {
     uint32_t saved = be32(img + 0x1a4e0);
-    uint32_t mask = 0xfe00, value = 0x8000;
-    wr16(img + 0x1a488, 0xf0ff);
     for (;;) {
+        /* El original re-fija D2/D3 y $1a488 al principio de CADA pasada
+         * (l_014ad0); el bucle puede re-entrar por la via cc6. */
+        uint32_t mask = 0xfe00, value = 0x8000;
+        wr16(img + 0x1a488, 0xf0ff);
         sample_menu(img, script, mask, value);
         if (be16(img + 0x1a510) == 0) {
             wr16(img + 0x1a50e, 0xc1bc);
@@ -260,11 +262,12 @@ uint32_t sample_menu_a(uint8_t *img, uint32_t script) {
  * corre 0xc1c6 (que puede fijar $1ad04) y comparte las colas. A6 = entry+1. */
 uint32_t sample_menu_b(uint8_t *img, uint32_t script) {
     uint32_t saved = be32(img + 0x1a4e0);
-    uint32_t mask = 0xfe00, value = 0x8000;
     wr16(img + 0x1a50e, 0x9099);
     run_command_keep_sp(img, script);
-    wr16(img + 0x1a488, 0xf0ff);
     for (;;) {
+        /* l_014c10 re-fija D2/D3 y $1a488 al principio de cada pasada. */
+        uint32_t mask = 0xfe00, value = 0x8000;
+        wr16(img + 0x1a488, 0xf0ff);
         sample_menu(img, script, mask, value);
         if (be16(img + 0x1a510) == 0) {
             wr16(img + 0x1a50e, 0xc1c5);
@@ -291,10 +294,10 @@ uint32_t sample_menu_b(uint8_t *img, uint32_t script) {
             uint32_t cur3 = img[reg + 3];
             if (cur3 == b3)
                 goto L_14bfa_cc6;
-            if (!(cur3 == 0x6d || cur3 == 0x6c || cur3 == 0x84)) {
-                if (img[0x1acd7] < 0x9a)
-                    goto L_14bfa_ce6;
-            }
+            if (cur3 == 0x6d || cur3 == 0x6c || cur3 == 0x84)
+                goto L_14bfa_ce6;
+            if (img[0x1acd7] < 0x9a)
+                goto L_14bfa_ce6;
         L_14bfa_cc6:
             img[reg] = 0x81;
             wr16(img + 0x1a50e, 0xc1bd);
