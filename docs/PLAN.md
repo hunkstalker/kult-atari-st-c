@@ -110,12 +110,14 @@ Regla de oro: una pieza está hecha solo si su prueba diferencial pasa.
   entrada y compara **imagen de memoria + registros**; los efectos de hardware
   (paleta, PSG, …) van a un "ledger" de eventos que también se compara.
 - Baseline: las 469 pruebas del intento anterior pasan con el C viejo (verificado
-  al montar este repo). Las nuevas pruebas se escriben para el C nuevo.
+  al montar este repo). La suite nueva tiene **478** pruebas verdes.
 
-## 6. Piloto: PALETA (primera tarea)
+## 6. Piloto: PALETA (HECHO)
 
-Objetivo: **acordar el estilo** (nombres, comentarios, cómo se declara el estado,
-cómo se escribe la prueba) antes de escalar a todo el juego.
+Objetivo cumplido: **acordar el estilo** (nombres, comentarios, cómo se declara
+el estado, cómo se escribe la prueba) antes de escalar. Resultado:
+`src/palette.c` + `test/test_palette.py` verdes, y las convenciones fijadas en
+§4.1.
 
 Piezas implicadas (en A `matching/`):
 
@@ -126,16 +128,14 @@ Piezas implicadas (en A `matching/`):
   `A_PALETTE_PTR+2`. Efecto **en RAM** (imagen).
 - `0x162d8`: `addq.l #1, a6` (avanza el guion).
 
-Entregable del piloto: `src/palette.c` + `test/test_palette.py`, `make test`
-verde, y las convenciones (§4) escritas/confirmadas.
-
 ## 7. Fases
 
 0. **Setup** — HECHO (este repo, arnés, docs).
-1. **Piloto paleta** — acordar estilo.
-2. **Escalar por subsistemas** — uno a uno, cada uno con sus pruebas. Orden
-   tentativo: paleta/cursor → input → vídeo/blit → texto/UI → animación →
-   salas/transiciones → VM/guion → bucle → sonido → música.
+1. **Piloto paleta** — HECHO (estilo acordado, §4.1).
+2. **Escalar por subsistemas** — HECHO: **todo el juego** portado (33 módulos,
+   417 funciones, 478 pruebas). El orden tentativo (paleta/cursor → input →
+   vídeo/blit → texto/UI → animación → salas/transiciones → VM/guion → bucle →
+   sonido → música) se cubrió; el detalle de tandas está en `docs/LEGIBILIDAD.md`.
 3. **Futuro** — re-aplicar sobre este C limpio las modificaciones de kult-port
    (guardado por ranuras, textos ES, overlay F1, etc.).
 

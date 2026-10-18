@@ -43,15 +43,25 @@ tools/gen_mapa.py     genera docs/mapa/ desde src/, names.txt y test/
 tools/regscan.py      mide la deuda de legibilidad por módulo (docs/LEGIBILIDAD.md)
 reference/test_f4/    469 pruebas del intento anterior (referencia, no se ejecutan)
 work/                 PRG original (gitignored) + names.txt (registro de nombres)
-docs/                 plan, prompt de sesión, referencia, mapa/, VISIBILIDAD
+docs/                 ESTADO, PLAN, PROMPT_SESION, REFERENCIA_F4, LEGIBILIDAD,
+                      VISIBILIDAD, mapa/ (fichas por módulo)
 ```
 
 ## Estado
 
-- Setup **HECHO**: arnés funcionando (verificado: 469 pruebas del intento
-  anterior pasan con el C viejo). `src/` **vacío**: la reimplementación empieza
-  de cero.
-- **Primera tarea:** el **piloto de la paleta** (ver `docs/PLAN.md` §6).
+**Completado**: la reimplementación cubre **todo el juego**.
+
+- `src/`: **33 módulos** (~12.400 líneas de C), **417 funciones** identificadas
+  (0 placeholders) y **221 globales** con nombre.
+- `test/`: **478 pruebas diferenciales** verdes contra el oráculo (Musashi),
+  **0 warnings** de compilación.
+- Convenciones, registro único de nombres (`names.txt`), generación de
+  `addrs.h`/`docs/mapa/`, API/visibilidad on-target y **legibilidad** (0
+  identificadores de registro/decompilador en código) — todo cerrado.
+
+- Estado detallado y cómo continuar: **`docs/ESTADO.md`**.
+- Plan y método: `docs/PLAN.md` · legibilidad: `docs/LEGIBILIDAD.md` ·
+  visibilidad on-target: `docs/VISIBILIDAD.md`.
 
 ## Cómo se verifica
 
