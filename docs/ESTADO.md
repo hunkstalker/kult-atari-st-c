@@ -99,9 +99,12 @@ mapa (el harness necesita `dlsym`). Detalle en `docs/VISIBILIDAD.md`.
    `docs/PROMPT_SESION.md`): `stubs`, `delay`, `input`, `state`, `palette`,
    `cursor`, `boxdraw`, `line`, `sprite`, `maskblit`, `text`, `screens`,
    `overlay`. Al cerrarla se abre la fase 3.
-4. **Futuro (fase 3 del PLAN):** re-aplicar sobre este C limpio las mejoras de
-   kult-port (guardado por ranuras, textos ES, overlay F1, etc.), **solo tras
-   cerrar la revisión**.
+4. **Futuro (fase 3 del PLAN):** reimplementar sobre esta base C limpia las
+   modificaciones del proyecto previo, tomando **kult-port** (previsiblemente
+   renombrado `kult-port-legacy`) como **referencia** (guardado por ranuras,
+   textos ES, overlay F1, etc.). **Solo tras cerrar la revisión**, y con plan
+   detallado hecho entonces. Mientras tanto, kult-port queda **fuera de
+   alcance** (no se toca).
 - Trampas conocidas del oráculo/kit: `docs/REFERENCIA_F4.md` (sección final).
 - Al auditar apareció una clase de fallo recurrente del import+renombrado:
   llamada a la **función hermana equivocada** (H-V1: `sound_play_b` por

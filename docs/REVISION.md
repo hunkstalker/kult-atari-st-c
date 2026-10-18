@@ -52,6 +52,10 @@ vm 47/4/3
 Total: 12.417 líneas, 456 definiciones, 478 pruebas (418 `def test_` + casos
 parametrizados), 0 warnings, `ids_reg=0`.
 
+> **Censo previo a la revisión.** Al cerrar P1 el repo quedó en **494 pruebas**
+> (478 + las añadidas por P0/P1: cobertura y regresiones). Las cifras de esta
+> sección son la foto inicial; el estado vivo está en `docs/ESTADO.md`.
+
 ## 3. Los cuatro ejes (checklist)
 
 ### 3.1 Fidelidad de comportamiento vs ASM
@@ -141,7 +145,7 @@ rutas no probadas / riesgo de UB; **BAJA** = nombre/comentario/estilo.
 - Todos los módulos **P0 y P1** revisados con checklist completa.
 - Hallazgos ALTA/MEDIA arreglados **con prueba** o marcados *intencional* con
   justificación (p. ej. reconstrucción de una cola del original).
-- `make test` verde (478+), `make regscan` `ids_reg=0`, `make core` OK.
+- `make test` verde (494+), `make regscan` `ids_reg=0`, `make core` OK.
 - `docs/REVISION.md` con el **registro de hallazgos** y `docs/ESTADO.md`
   actualizado. Solo entonces se abre la fase 3.
 

@@ -53,7 +53,7 @@ docs/                 ESTADO, PLAN, PROMPT_SESION, REVISION, REFERENCIA_F4,
 
 - `src/`: **33 módulos** (~12.400 líneas de C), **417 funciones** identificadas
   (0 placeholders) y **221 globales** con nombre.
-- `test/`: **478 pruebas diferenciales** verdes contra el oráculo (Musashi),
+- `test/`: **494 pruebas diferenciales** verdes contra el oráculo (Musashi),
   **0 warnings** de compilación.
 - Convenciones, registro único de nombres (`names.txt`), generación de
   `addrs.h`/`docs/mapa/`, API/visibilidad on-target y **legibilidad** (0
@@ -62,6 +62,10 @@ docs/                 ESTADO, PLAN, PROMPT_SESION, REVISION, REFERENCIA_F4,
 - Estado detallado y cómo continuar: **`docs/ESTADO.md`**.
 - Plan y método: `docs/PLAN.md` · legibilidad: `docs/LEGIBILIDAD.md` ·
   visibilidad on-target: `docs/VISIBILIDAD.md`.
+- **Siguiente:** cerrar la **revisión del C** (P2, plan en `docs/REVISION.md`
+  §10; prompt en `docs/PROMPT_SESION.md`). Después, reimplementar sobre esta base
+  las modificaciones del proyecto previo tomando **kult-port** (previsiblemente
+  `kult-port-legacy`) como **referencia**.
 
 ## Cómo se verifica
 
