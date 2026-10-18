@@ -50,7 +50,9 @@ def test_fun_12ef6_dot():
 
 def test_fun_12e2e_reveal():
     for d0, d1, d2, d3, step in ((2, 1, 1, 1, 1), (0, 0, 2, 2, 1),
-                                 (4, 3, 1, 3, 2), (1, 1, 1, 2, 1)):
+                                 (4, 3, 1, 3, 2), (1, 1, 1, 2, 1),
+                                 # step que desborda el total: cubre `acc > total`
+                                 (0, 0, 1, 2, 3), (0, 0, 2, 3, 5)):
         pokes = _screen_pokes()
         pokes[0x1a45e] = DEST.to_bytes(4, "big")
         pokes[STEP] = bytes([step])
