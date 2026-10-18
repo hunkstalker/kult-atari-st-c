@@ -197,6 +197,16 @@ fn 0x12510 blit_rect                 # bucle del blit de sprite (A0/A1/D2/D3/D7/
 fn 0x124da blit_rect_vbl             # blit_rect con stride 0x1a534 + espera de VBL
 fn 0x123a0 copy_scratch_rows         # copia filas de 0xd8f0 a A0 (stride 0xa0)
 
+# ==== blitters de planos de overlay (overlay.c) ====
+fn 0x111b6 overlay_compose_planes    # compone 1..4 planos de A1 en 0xd8f0 (shift D0/D1) + VBL
+fn 0x111ac overlay_compose_planes_wrap # 0x111b6 con D3-=1, D2=5, D1=(D1<<2)-1
+fn 0x114ba overlay_compose_planes32  # variante 32 bits (acarreo en D6)
+fn 0x114b0 overlay_compose_planes32_wrap # 0x114ba con D3-=1, D2=5, D1=(D1<<2)-1
+fn 0x117fe overlay_compose_masked    # dos fuentes (A0 mascara, A1 dato) con ror32(0x80000000,D0)
+fn 0x117de overlay_compose_masked_wrap # 0x117fe con 0x1a53e=1
+fn 0x11afa overlay_compose_shift     # variante roxl (flag 0x1a53e)
+fn 0x11ada overlay_compose_shift_wrap # 0x11afa con 0x1a53e=1
+
 # ==== globales (direcciones de datos, base de carga 0x10000) ====
 # ---- screen buffers (crt0_init @ 0x135e2) ----
 var 0x1a45e screen_ptr_a    # buffer de pantalla A
