@@ -13,7 +13,7 @@ y verificada con el **diferencial** contra el oráculo (Musashi).
 
 - `src/`: **33 módulos**, ~12.460 líneas.
 - Nombres: **417 funciones** + **221 globales** en `work/names.txt` (registro único).
-- Pruebas: **494** diferenciales en verde, **0 warnings**.
+- Pruebas: **499** diferenciales en verde, **0 warnings**.
 - Legibilidad: **0** identificadores de registro/decompilador en código.
 - API pública del core + visibilidad on-target cerradas.
 
@@ -83,27 +83,24 @@ mapa (el harness necesita `dlsym`). Detalle en `docs/VISIBILIDAD.md`.
 
 ## Pendiente / siguiente
 
-1. **Revisión del C (P0 HECHO y cerrado):** los nueve módulos P0 (`commands`,
-   `video`, `dispatch`, `handlers`, `loop`, `scale`, `textbox`, `select`, `mode`)
-   están auditados contra el ASM y el registro está en **`docs/REVISION.md` §7**.
-   20 hallazgos: 17 arreglados, **16 con prueba** (incluidos H-D1, H-C1, H-C3 y
-   la cobertura H-M1), 5 *intencional* con justificación (H-V2/H-L5 busy-waits
-   sin efecto, H-C4, H-D5, H-S2, H-SC1 retorno doble de `0x128a4`, H-SC2 divu
-   por 0 = trap) y **0 ALTA/MEDIA abiertos**. 492 pruebas.
-2. **Revisión P1 (HECHO, ver `docs/REVISION.md` §9):** los 11 módulos
-   auditados. 10 hallazgos arreglados (con prueba los ALTA/MEDIA: `music_cmd`
-   bit8, `music_install` retorno, `music_tick` channel[8], `bit_reverse_word`
-   palabra alta, `run_text_entry_ex` D5, `anim_counter` byte, motor do-while,
-   `walk_entry` decl) y 5 *intencional* (hooks de port y casos degenerados).
-3. **Revisión P2** (siguiente; plan en `docs/REVISION.md` §10 y prompt en
-   `docs/PROMPT_SESION.md`): `stubs`, `delay`, `input`, `state`, `palette`,
-   `cursor`, `boxdraw`, `line`, `sprite`, `maskblit`, `text`, `screens`,
-   `overlay`. Al cerrarla se abre la fase 3.
-4. **Futuro (fase 3 del PLAN):** reimplementar sobre esta base C limpia las
-   modificaciones del proyecto previo, tomando **kult-port** (previsiblemente
-   renombrado `kult-port-legacy`) como **referencia** (guardado por ranuras,
-   textos ES, overlay F1, etc.). **Solo tras cerrar la revisión**, y con plan
-   detallado hecho entonces. Mientras tanto, kult-port queda **fuera de
+1. **Revisión del C — CERRADA (P0 + P1 + P2).** Los 33 módulos están auditados
+   contra el ASM con la checklist de `docs/REVISION.md` §3. Registro:
+   - **P0** (§7): 9 módulos, 20 hallazgos (17 arreglados, 16 con prueba, 5
+     intencionales); 0 ALTA/MEDIA abiertos.
+   - **P1** (§9): 11 módulos, 10 hallazgos arreglados (ALTA/MEDIA con prueba) y
+     5 intencionales.
+   - **P2** (§11): 13 módulos; **H-MB1** (`hint_entry`, truncado `lsl.w`) y
+     **H-OV1** (desplazamientos lógicos mod 64 del 68k) arreglados **con
+     prueba**; H-SCR1/H-LN1/H-SP1/H-TX1..TX5 *intencionales* justificados
+     (palabras altas residuales, `bgt`/V y `dbra` inalcanzables) y H-SCR2/H-SE1
+     (BAJA) arreglados. **0 ALTA/MEDIA abiertos.**
+   Resultado: **499 pruebas** verdes, `make regscan` `ids_reg=0`, `make core` OK,
+   0 warnings.
+2. **Siguiente: fase 3 del PLAN (revisión ya cerrada).** Reimplementar sobre
+   esta base C limpia las modificaciones del proyecto previo, tomando
+   **kult-port** (previsiblemente renombrado `kult-port-legacy`) como
+   **referencia** (guardado por ranuras, textos ES, overlay F1, etc.), con plan
+   detallado hecho al abrir la fase. Mientras tanto, kult-port queda **fuera de
    alcance** (no se toca).
 - Trampas conocidas del oráculo/kit: `docs/REFERENCIA_F4.md` (sección final).
 - Al auditar apareció una clase de fallo recurrente del import+renombrado:
@@ -121,3 +118,7 @@ mapa (el harness necesita `dlsym`). Detalle en `docs/VISIBILIDAD.md`.
    arreglados (16 con prueba), 5 intencionales; 478 → 492 pruebas.
 7. **Revisión P1 del C** (`docs/REVISION.md` §9): 11 módulos; 10 hallazgos
    arreglados (ALTA/MEDIA con prueba) y 5 intencionales; 492 → 494 pruebas.
+8. **Revisión P2 del C** (`docs/REVISION.md` §11): 13 módulos; H-MB1 (truncado
+   `lsl.w` de `hint_entry`) y H-OV1 (desplazamientos lógicos mod 64 del 68k)
+   arreglados con prueba, 2 BAJA arreglados y 7 intencionales justificados;
+   494 → 499 pruebas. **Revisión del C cerrada; se abre la fase 3.**

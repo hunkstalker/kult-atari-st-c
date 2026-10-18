@@ -27,11 +27,11 @@ origen), los globales `A_*` que toca y las pruebas que la cubren.
 | `palette.c` | 6 | 3 | 6 | [palette](palette.md) |
 | `reveal.c` | 4 | 13 | 4 | [reveal](reveal.md) |
 | `scale.c` | 6 | 8 | 6 | [scale](scale.md) |
-| `screens.c` | 21 | 12 | 14 | [screens](screens.md) |
+| `screens.c` | 20 | 12 | 15 | [screens](screens.md) |
 | `select.c` | 8 | 0 | 8 | [select](select.md) |
 | `sound.c` | 17 | 1 | 17 | [sound](sound.md) |
 | `sprite.c` | 7 | 2 | 6 | [sprite](sprite.md) |
-| `state.c` | 4 | 2 | 4 | [state](state.md) |
+| `state.c` | 4 | 8 | 4 | [state](state.md) |
 | `stubs.c` | 4 | 0 | 4 | [stubs](stubs.md) |
 | `text.c` | 16 | 16 | 16 | [text](text.md) |
 | `textblit.c` | 26 | 10 | 24 | [textblit](textblit.md) |

@@ -502,3 +502,126 @@ Orden: de menor a mayor. `overlay` va último (blitters con muchas trampas).
 - `make test` verde (494+), `make regscan` `ids_reg=0`, `make core` OK.
 - Registro §7/§9/§11 ampliado y `docs/ESTADO.md` actualizado.
 - **Entonces** se abre la **fase 3** (re-aplicar kult-port).
+
+---
+
+## 11. Registro de hallazgos P2 (cierre de la revisión)
+
+Revisión P2 completada (los 13 módulos) con los cuatro ejes. `make test` **499**
+verde, `make regscan` `ids_reg=0`, `make core` OK. Commits
+`revision(<módulo>)` (uno por módulo, incluidos los que solo aportan comentario o
+cobertura).
+
+Módulos: `stubs`, `delay`, `input`, `state`, `palette`, `cursor`, `boxdraw`,
+`line`, `sprite`, `maskblit`, `text`, `screens`, `overlay`.
+
+### Tabla resumen
+
+| id | sev | módulo | función (0xADDR) | estado |
+|---|---|---|---|---|
+| H-MB1 | MEDIA | maskblit | `hint_select_on/off` (0x120dc/0x120e4) | arreglado (7cfbdac) + test |
+| H-OV1 | MEDIA | overlay | `overlay_compose_*` (0x111b6/0x114ba/0x117fe/0x11afa) | arreglado (963789b) + test |
+| H-SCR1 | MEDIA | screens | `screen_offset/address*` (0x10ff4/0x10fec/0x10fee) | intencional (palabra alta de D7) |
+| H-SCR2 | BAJA | screens | `copy_rows` (0x15944) / `screen_address_off` | arreglado (978df7a) |
+| H-LN1 | MEDIA | line | `reveal_line` (0x13d0e) | intencional (bgt/V inalcanzable) |
+| H-SP1 | BAJA | sprite | `blit_sprite` (0x124f8) | intencional (outer/inner = 0) |
+| H-TX1 | MEDIA | text | `measure_words` (0x10998) | intencional (palabra alta D5/D6) |
+| H-TX2 | MEDIA | text | `wrap_line` (0x109bc) | intencional (palabra alta D5/D6) |
+| H-TX3 | MEDIA | text | `print_words_fit` (0x1090e) | intencional (palabra alta D6) |
+| H-TX4 | BAJA | text | `print_word` (0x108a2) | intencional (palabra alta D0) |
+| H-TX5 | BAJA | text | `overlay_a_draw/b_draw` (0x109fe/0x10a88) | intencional (A6 no consumido) |
+| H-SE1 | BAJA | state | `clear_object_flags`/`set_cursor_clip`/`fix_sample_flag` | arreglado (2678d1a) |
+
+Módulos **sin hallazgo de comportamiento**: `stubs`, `delay`, `input`, `palette`,
+`cursor`, `boxdraw` (solo mejoras de comentario y cobertura; ver detalle).
+
+### Detalle
+
+**[H-MB1] MEDIA · maskblit · `hint_select_on/off` (0x120dc/0x120e4)**
+La entrada se calcula con `subq.w #1,d0; lsl.w #4,d0; andi.l #$ffff,d0`: el
+desplazamiento es de **palabra** y se trunca a 16 bits. El C multiplicaba en 32
+bits, así que con `index == 0` leía `0x11a840` (fuera de la imagen) en vez de
+`0x2a840`, y con `index == 0x1001` leía `0x2a850` en vez de `0x1a850`. Arreglo:
+`hint_entry()` con `((((index-1)&0xffff)<<4)&0xffff)`. Test:
+`test_hint_select_offset_truncado` (index 0 y 0x1001, con la entrada y la de
+`0x2a840` pokeadas con valores distintos).
+
+**[H-OV1] MEDIA · overlay · blitters de planos**
+`lsr.l`/`asl.l` del 68000 toman el count **mod 64** y dan 0 para 32..63; el C
+usaba el desplazamiento nativo (mod 32 en x86 y UB en C para counts ≥ 32). Con
+`d0 = 32/33/40` el oráculo y el candidato diferían en `0xd8f2..` y en pantalla.
+Arreglo: helpers `lsr_l`/`lsl_l` (count mod 64, 0 si ≥ 32) en los 8 sitios de
+las cuatro familias. Test: `test_fun_phase_ge_32` (d0 = 32, 33, 40, 63 en
+`planes`/`planes32`/`masked`/`shift`).
+
+**[H-SCR1] MEDIA · screens · `screen_offset` (0x10ff4) — *intencional***
+`move.w d0,d7` + `andi.w #$f,d7` solo escriben la palabra baja de D7: el
+original conserva `d7[31:16]` de entrada. El C devuelve solo el nibble. Es un
+residuo del registro del llamante, no un valor de la función; ningún llamante
+lee la mitad alta (todos usan `move.w`/`andi.w`/`ror.l`) y modelarla obligaría a
+leer locales `phase` sin inicializar en ~40 llamantes. Inobservable en el juego.
+
+**[H-SCR2] BAJA · screens (arreglado)**
+El comentario de `copy_rows` (0x15944) describía una caja de texto
+(copia-pega de `textbox.c`); es la variante de `screen_copies` sobre
+`screen_ptr_b`. Se corrige y se elimina `screen_address_off` (código muerto
+duplicado de 0x10fec). Se añade cobertura directa de `copy_screen_rev` 0x121b6
+(A→B) con `poison`.
+
+**[H-LN1] MEDIA · line · `reveal_line` (0x13d0e) — *intencional***
+El `bgt` tras `add.w d5,d7` usa el flag V (comparación con signo real); el C
+prueba `(int16_t)err > 0`, que solo mira N. Solo divergen si el `add.w` de 16
+bits desborda con signo, lo que exige `|dy| >= 0x4000` (la recta saldría de la
+imagen: el candidato indexaría fuera del buffer y el oráculo descartaría las
+escrituras). No es construible como caso diferencial y no es alcanzable con los
+datos del juego (altos de caja de decenas de píxeles). El resto del Bresenham
+(paridad `beq`/`bne`, acarreo de `rol/ror`, `+/-6`) es fiel y queda cubierto.
+
+**[H-SP1] BAJA · sprite · `blit_sprite` (0x124f8) — *intencional***
+`d2/d3` se cargan de bytes y el original hace `subq.w #1` + `dbra`: con
+`outer == 0` o `inner == 0` ejecuta 65536 iteraciones. El C usa `for`. Con
+stride `0xa0` eso escribiría muy fuera de la imagen; los descriptores reales
+(`save_rect`/sprites) tienen ambos ≥ 1 y el caso no es construible en el arnés.
+`blit_rect` (misma entrada 0x12510) sí usa el do-while fiel.
+
+**[H-TX1..TX4] MEDIA/BAJA · text — *intencional***
+`measure_words` (0x10998), `wrap_line` (0x109bc) y `print_words_fit` (0x1090e)
+hacen `clr.w`/`move.w`/`addq.w` sobre D5/D6, y `print_word` (0x108a2) `move.w
+#1,d0`: solo sustituyen la palabra baja, conservando la alta del llamante. El C
+devuelve el valor de 16 bits significativo. La mitad alta es un residuo, ningún
+llamante la lee (todos usan `cmp.w`/`addq.w`/`tst.w`) y modelarla exigiría pasar
+ese residuo como entrada o leer locales sin inicializar. Inobservable en el juego.
+
+**[H-TX5] BAJA · text · overlays (0x109fe/0x10a88) — *intencional***
+`text_index_arg` avanza A6 cuando el selector es < 4, pero `overlay_a_draw`/
+`overlay_b_draw` descartan ese A6 (no lo devuelven). Ningún llamante lo consume
+después; los que pasan `script = 0` lo hacen con selectores ≥ 4 (p. ej.
+`game_loop` fija 0x75/0x64) y los que pueden usar < 4 pasan el guion real
+(`scene_text_box`). Se añade cobertura del selector 0 y de d4 = 1..3 en
+`text_index_arg`.
+
+**[H-SE1] BAJA · state (arreglado)**
+`clear_object_flags`, `set_cursor_clip` y `fix_sample_flag` usaban literales
+para globales que ya tienen macro (`A_OBJ_TBL`, `A_DAT_1ACD3`, `A_CLIP_X/Y`,
+`A_CURSOR_SPRITE_PTR`, `A_LIST_1A8F0`). Se alinean con la convención §4.1; sin
+cambio de comportamiento (mismas direcciones).
+
+**[stubs/delay/input/palette/cursor/boxdraw] Sin hallazgos de comportamiento**
+Los cuatro `rts` de `stubs` (y 0x11014 en `textblit.c`), las esperas de VBL
+`do-while`, `wait_frame` (IKBD + Crawio), la paleta (incluido `mulu.w` de la
+palabra baja), el cursor (clip/rotación/guardado 16×16) y las primitivas de
+caja (planos, wrap de grupo, copias) coinciden instrucción a instrucción. Se
+añadieron casos de cobertura (fases, clip, índices con palabra alta, fase 15,
+`copy_screen_rev`) y comentarios de contrato (D0 residual de las esperas).
+
+### Cierre de la revisión (P0 + P1 + P2)
+
+- **33/33 módulos** auditados con la checklist de §3.
+- **499 pruebas** diferenciales verdes, `make regscan` `ids_reg=0`, `make core`
+  OK, 0 warnings.
+- Hallazgos P2: **2 ALTA/MEDIA arreglados con prueba** (H-MB1, H-OV1); el resto
+  ALTA/MEDIA se justifica *intencional* por ser inobservable/inalcanzable o no
+  construible en el arnés (H-SCR1, H-LN1, H-TX1..TX3). No queda ningún ALTA/MEDIA
+  abierto. Los BAJA se arreglan o se documentan.
+- La revisión del C queda **cerrada**: se abre la **fase 3** (re-aplicar las
+  mejoras de `kult-port` sobre esta base, con plan detallado hecho entonces).

@@ -20,23 +20,18 @@ Reimplementación en **C legible** de *Kult: The Temple of Flying Saucers*
 
 ## Estado (a día de hoy)
 
-- **Todo el juego portado:** 33 módulos, ~12.5k líneas, 494 pruebas
+- **Todo el juego portado:** 33 módulos, ~12.5k líneas, 499 pruebas
   diferenciales verdes, 0 warnings, `make regscan` `ids_reg=0`, `make core` OK.
-- **Revisión del C:** **P0 y P1 hechos** (registro en `docs/REVISION.md` §7 y
-  §9). **Falta P2** (13 módulos): plan en `docs/REVISION.md` §10.
+- **Revisión del C: CERRADA.** P0 (§7), P1 (§9) y P2 (§11) auditados; 0
+  ALTA/MEDIA abiertos. Registro completo en `docs/REVISION.md`.
 - Detalle de estado y censo: `docs/ESTADO.md`.
 
-## Tarea siguiente: cerrar la revisión P2
+## Tarea siguiente: fase 3 (re-aplicar kult-port)
 
-Auditar los 13 módulos P2 contra el ASM y dejar el registro completo. Al
-cerrarla se abre la fase 3.
-
-Plan concreto (orden, foco por módulo, riesgos heredados, criterio de cierre):
-**`docs/REVISION.md` §10**. Método y plantilla de hallazgo: §3–§5.
-Prompt listo para pegar: `docs/PROMPT_SESION.md`.
-
-Orden: `stubs`, `delay`, `input`, `state`, `palette`, `cursor`, `boxdraw`,
-`line`, `sprite`, `maskblit`, `text`, `screens`, `overlay` (de menor a mayor).
+La revisión está cerrada; se abre la **fase 3**: reimplementar sobre esta base C
+limpia las mejoras del proyecto previo (`kult-port`, previsiblemente
+`kult-port-legacy`) con un plan detallado hecho al empezar. La revisión y sus
+métodos quedan documentados en `docs/REVISION.md` §3–§5 y §11.
 
 ## Método por función (resumen)
 
