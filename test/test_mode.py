@@ -244,6 +244,42 @@ def test_fun_1460a_texto_pendiente():
     assert info["ret"] == info["regs"]["a6"]
 
 
+def test_fun_1460a_formulario():
+    """H-M1 (cobertura): (0x1ad0f & 0x38)==8 corre 0x141fa (formulario hacia
+    delante) y pone $1a572=1; 0x1ad0f&7=0 no lanza la busqueda de objeto.
+    Se compara con la rama (0x38)==0 del mismo fixture."""
+    TABLE = 0x1A7B6
+    ENTRIES = 0x41FB0
+    RECORD = 0x50000
+    SCREEN = 0x90000
+    SRC = 0x60000
+    for d0f, waits in ((0x08, 3), (0x00, 0)):
+        pokes = _f1460a_pokes(0x87, d0f, (_obj8(0x10, 0x20, 0x30, 0x40, 0x88),),
+                              a570=0)
+        pokes[0x1ACC9] = bytes([1])
+        pokes[TABLE] = RECORD.to_bytes(4, "big")
+        for i in range(6):
+            pokes[ENTRIES + i * 6] = (6).to_bytes(2, "big")
+            pokes[ENTRIES + i * 6 + 2] = bytes([2])
+            pokes[ENTRIES + i * 6 + 3] = bytes([4])
+        for i, (idx, x, y) in enumerate(((0, 2, 1), (1, 5, 1), (2, 8, 1))):
+            pokes[RECORD + i * 3] = bytes([idx])
+            pokes[RECORD + i * 3 + 1] = bytes([x])
+            pokes[RECORD + i * 3 + 2] = bytes([y])
+        for i in range(0x8000):
+            pokes[SCREEN - 0x8000 + i] = bytes([(i * 5 + 1) & 0xFF])
+            pokes[SCREEN + i] = bytes([(i * 3 + 1) & 0xFF])
+            pokes[SRC + i] = bytes([(i * 7 + 3) & 0xFF])
+        diffs, info = differential(
+            FUN_1460A, {"a6": 0x30000, "_pokes": pokes},
+            lambda lib, buf: lib.scene_mode_apply(buf, 0x30000),
+            schedule=_vbl_k(waits) if waits else [],
+            wait_sites=[VBL_SITE] if waits else None,
+            max_insns=3_000_000)
+        assert not diffs, f"d0f={d0f:#x}\n{report(diffs)}"
+        assert info["ret"] == info["regs"]["a6"]
+
+
 def _body_pokes(cmd=0x00, sel=0, ad1d=0, a572=0):
     pokes = {
         0x1A572: bytes([a572]), 0x1A570: bytes([0x00]),

@@ -2062,6 +2062,27 @@ def test_fun_14f74():
         assert info["ret"] == info["regs"]["a6"]
 
 
+def test_fun_14f74_dispatch_sel():
+    """H-C1: con A_SEL_1ACC9 != 0, 0x14f74 lee el campo +0 (no +8) de la tabla
+    0x1ab62. Un objeto en 0x68000 que siempre acierta deja la seleccion puesta
+    (0x40000 lo pisa grid_bands); el campo +0 es 0 (cae a 0x1ab50) y el +8 es
+    0xa035 (noop), que es lo que leia el C viejo."""
+    pokes = _f14f74_pokes(0x40, 0x20)
+    pokes[0x1A7CA] = (0x68000).to_bytes(4, "big")
+    pokes[0x1A7CE] = (0x68008).to_bytes(4, "big")
+    pokes[0x68000] = bytes([0x00, 0xFF, 0x00, 0xFF, 0x80, 0, 0, 0])
+    pokes[0x1AB62 + 0] = (0).to_bytes(2, "big")          # campo +0 (el que lee el ASM)
+    pokes[0x1AB62 + 8] = (0xA035).to_bytes(2, "big")     # campo +8 (el que leia el C)
+    pokes[0x1AB50] = (0).to_bytes(2, "big")
+    diffs, info = differential(
+        FUN_14F74, {"a6": 0x30000, "_pokes": pokes},
+        lambda lib, buf: lib.grid_wait(buf, 0x30000),
+        schedule=_wait_schedule(), wait_sites=[IKBD_SITE, VBL_SITE],
+        max_insns=3_000_000)
+    assert not diffs, report(diffs)
+    assert info["ret"] == info["regs"]["a6"]
+
+
 FUN_18A30 = 0x18A30
 FUN_16A20 = 0x16A20
 harness._lib.screen_clean.argtypes = [_u8p]

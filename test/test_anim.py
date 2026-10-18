@@ -607,6 +607,23 @@ def test_fun_14f24():
     assert not diffs, report(diffs)
 
 
+harness._lib.anim_threshold2.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.anim_threshold2.restype = ctypes.c_uint32
+
+
+def test_fun_14f5e_retorno2():
+    """H-C3: 0x14f5e con 0x1ad20 < 2. 0x14f24 devuelve 2 y hace `addq.l #4,a7`
+    (salta al llamante de 0x14f5e), asi que 0x16310 y el flag $1ad0f NO se
+    ejecutan. stop_pc=0x14f5c (el rts compartido tras anim_entry_b)."""
+    pokes = _umbral_table()
+    pokes[0x1AD20] = bytes([1])          # 1 < 2 -> retorno 2
+    diffs, _ = differential(
+        0x14F5E, {"a6": 0x50000, "_pokes": pokes},
+        lambda lib, buf: lib.anim_threshold2(buf, 0x50000),
+        stop_pc=0x14F5C)
+    assert not diffs, report(diffs)
+
+
 def _vbl_schedule(n):
     """Un store por espera de VBL (cada elemento de 15da6 espera un VBL)."""
     return [{"pc": VBL_SITE, "nth": i, "addr": VBL_COUNTER, "width": 1,

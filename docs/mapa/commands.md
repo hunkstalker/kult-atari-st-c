@@ -8,7 +8,7 @@ commands.c — comandos de escena de la familia 0x151b0 (sin esperas).  Todos em
 |---|---|---|---|
 | `0x15052` | `obj_action_select` | FUN_00015052 @ 0x15052: comando de seleccion (tabla 0x1ab62). | test_family151 |
 | `0x14f74` | `grid_wait` | grid wait | test_loop |
-| `0x14f5e` | `anim_threshold2` | anim threshold2 | test_loop |
+| `0x14f5e` | `anim_threshold2` | anim threshold2 | test_anim, test_loop |
 | `0x14e66` | `overlay_menu` | overlay menu | test_loop |
 | `0x14ee8` | `cmd135` | FUN_00014ee8 @ 0x14ee8 (cmd idx 135): toma el parametro A6[1] de la entrada de objeto seleccionada en la tabla 0x1ab62 (5 words, +2*param) o, si es 0, de la tabla de reserva 0x1ab50, y despacha. | test_loop |
 | `0x150ae` | `obj_action` | obj action | test_family151 |
