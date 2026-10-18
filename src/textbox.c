@@ -303,6 +303,10 @@ void text_window(uint8_t *img, uint32_t str, uint32_t script) {
 
     uint32_t bx = img[script + 1], by = img[script + 2];
     uint32_t b6 = img[script + 3] & 0xe0;
+    /* El original deja d0/d1 en (bx,by) y solo las ramas de borde los reescriben;
+     * para 0x40/0x60 (no hay rama) 0x120a8 recibe (bx,by). */
+    x = bx;
+    y = by;
     if (b6 == 0) {
         x = (bx + 1) & 0xffff;
         y = (by - 7) & 0xffff;
@@ -357,7 +361,7 @@ void copy_rows(uint8_t *);
 void walk_entry(uint8_t *, uint32_t, uint32_t, uint32_t *,
                   uint32_t *);
 void run_text_entry_ex(uint8_t *, uint32_t, uint32_t *, uint32_t *,
-                    uint32_t *, uint32_t *);
+                    uint32_t *, uint32_t *, uint32_t *);
 void print_char(uint8_t *, uint32_t);
 void overlay_a_draw(uint8_t *, uint32_t);
 void box_hline_back(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
@@ -387,13 +391,12 @@ void scene_text_box(uint8_t *img) {
                 continue;
             }
         }
-        uint32_t addr, w, h, phase;
-        run_text_entry_ex(img, script, &addr, &w, &h, &phase);
+        uint32_t addr, w, h, phase, v2;
+        run_text_entry_ex(img, script, &addr, &w, &h, &phase, &v2);
         /* D6 = A6[1] & 0x7f: 14138 lo guarda con bit7 y lo enmascara al ajustar
          * la posicion (0x1416c); sin la mascara el ancho de la caja se dispara. */
         uint32_t v = img[script + 1] & 0x7f;
-        /* D5 = (A6[2] << 1) & 0xff: 14138 hace `lsl.b` (byte), no `lsl.w`. */
-        uint32_t v2 = (img[script + 2] << 1) & 0xff;
+        /* D5 = (A6[2]<<1)&0xff ya ajustado por 14138 (el -8 de 'S'); ver v2. */
         if (v < img[0x1ab40])
             img[0x1ab40] = (uint8_t)v;
         uint32_t t = (v + w) & 0xff;

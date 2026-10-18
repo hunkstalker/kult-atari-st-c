@@ -120,7 +120,7 @@ def test_fun_10b52():
     for i, b in enumerate(bank):
         base[0x3C534 + i] = bytes([b])
     for d4 in (0, 4, 5, 6):
-        for flags in (0x00, 0x20, 0x80, 0xA0, 0xC0, 0xE0):
+        for flags in (0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0, 0xE0):
             pokes = dict(base)
             # a6 apunta a 0x50002 (d4<4, 10fb4 consume un byte) o 0x50001 (d4>=4):
             # se fija y = 0x10 (>= 7; con y < 7 el borde hace (y-7) y genera una
@@ -171,8 +171,46 @@ def test_fun_13f86():
             pokes[0x88000 + i] = bytes([0xCC])
             pokes[0x90000 + i] = bytes([0x55])
         diffs, _ = differential(FUN_13F86, {"_pokes": pokes},
-                                lambda lib, buf: lib.scene_text_box(buf))
+                                lambda lib, buf: lib.scene_text_box(buf),
+                                max_insns=1_000_000)
         assert not diffs, f"chain={chain}\n{report(diffs)}"
+
+
+def test_fun_13f86_special_char():
+    """Bloque 'S' (0x53) con A_DAT_1A49E impar: 0x14138 resta 8 a D5 y 0x13f86
+    usa ese D5 (no vuelve a calcular (A6[2]<<1)&0xff) para la caja.
+
+    Sin el ajuste el candidato coloca el marco en otra y. La tabla de texto lleva
+    0x53 entradas de longitud 2 para que el avance de 0x10f8e caiga en rows/cols.
+    """
+    pokes = {
+        0x1A45E: (0x90000).to_bytes(4, "big"),
+        0x1A462: (0x88000).to_bytes(4, "big"),
+        0x1A573: bytes([0]),
+        0x1ACF1: bytes([5]),          # A_DAT_1A49E = 5 (impar)
+        0x1ACC7: bytes([1]),
+        0x1ACC9: bytes([0]),
+        0x1ACED: bytes([0]),
+        0x1ACC6: bytes([0x87]),
+        0x24982: bytes([4]),          # un solo bloque
+        0x24983: bytes([0x53, 0x01, 0x10]),
+        0x41FB0: (2).to_bytes(2, "big"),
+        0x41FB2: bytes([2, 2]),
+    }
+    for i in range(83):               # 0x53 entradas de longitud 2
+        pokes[0x41FB0 + 2 * i] = (2).to_bytes(2, "big")
+    pokes[0x41FB0 + 166] = (2).to_bytes(2, "big")
+    pokes[0x41FB0 + 168] = bytes([2])   # rows
+    pokes[0x41FB0 + 169] = bytes([2])   # cols
+    for i in range(0x60):
+        pokes[0x41FB0 + 170 + i] = bytes([(0x10 + i) & 0xFF])
+    for i in range(0x4000):
+        pokes[0x88000 + i] = bytes([0xCC])
+        pokes[0x90000 + i] = bytes([0x55])
+    diffs, _ = differential(FUN_13F86, {"_pokes": pokes},
+                            lambda lib, buf: lib.scene_text_box(buf),
+                            max_insns=1_000_000)
+    assert not diffs, report(diffs)
 
 
 FUN_17930 = 0x17930

@@ -172,8 +172,9 @@ void text_blit_rev(uint8_t *img, uint32_t dest, uint32_t src, uint32_t stride,
  * them across the blit with the `movem` at 0x141b0/0x141d6, and FUN_000141dc
  * (0x141dc) feeds them straight into FUN_0001215e, so the reconstruction has to
  * hand them back. */
-void run_text_entry_ex(uint8_t *img, uint32_t entry,
-                    uint32_t *addr_out, uint32_t *cols_out, uint32_t *rows_out, uint32_t *phase_out) {
+void run_text_entry_ex(uint8_t *img, uint32_t entry, uint32_t *addr_out,
+                    uint32_t *cols_out, uint32_t *rows_out, uint32_t *phase_out,
+                    uint32_t *yflags_out) {
     uint32_t count = img[entry] & 0xff;
     uint32_t table = advance_text_entry(img, A_TEXT_TABLE, count);
 
@@ -206,6 +207,10 @@ void run_text_entry_ex(uint8_t *img, uint32_t entry,
     if (cols_out) *cols_out = cols;
     if (rows_out) *rows_out = rows;
     if (phase_out) *phase_out = phase;
+    /* D5 = D1 ya ajustado (`lsl.b` y el -8 de 'S'); lo consume 0x13f86 para la
+     * caja. El original lo deja en el registro tras el `movem` (0x10fec no lo
+     * toca). */
+    if (yflags_out) *yflags_out = flags;
     uint32_t addr = screen - 0x8000;
     uint32_t stride2 = be32(img + A_DAT_1A534);
     if (img[entry + 1] & 0x80)
@@ -216,7 +221,7 @@ void run_text_entry_ex(uint8_t *img, uint32_t entry,
 
 /* 0x14138 — lee entrada de script A6, calcula pantalla y blitea texto */
 void run_text_entry(uint8_t *img, uint32_t entry) {
-    run_text_entry_ex(img, entry, 0, 0, 0, 0);
+    run_text_entry_ex(img, entry, 0, 0, 0, 0, 0);
 }
 
 void grid_fill(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
@@ -368,7 +373,7 @@ void mask_restore_rows(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
 /* 0x141dc — dispatch.c — el despacho de comandos y la VM de bytes del script. run_command @ 0x103a8 / run_command_keep_sp @ 0x103ae: leen `the_command` ($1a50e) y despac... */
 void text_entry_blit(uint8_t *img, uint32_t entry) {
     uint32_t addr, w, h, phase;
-    run_text_entry_ex(img, entry + 1, &addr, &w, &h, &phase);
+    run_text_entry_ex(img, entry + 1, &addr, &w, &h, &phase, 0);
     mask_restore_rows(img, addr, w, h, phase);
 }
 
