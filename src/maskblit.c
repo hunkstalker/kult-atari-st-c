@@ -208,14 +208,22 @@ static void hint_body(uint8_t *img, uint32_t entry, uint32_t value, uint32_t *o)
     o[0] = addr; o[1] = word; o[2] = phase; o[3] = tmp; o[4] = value; o[5] = w; o[6] = h; o[7] = 0;
 }
 
+/* Dirección de la entrada d0-ésima de la tabla 0x1a850. El original hace
+ * `subq.w #1,d0; lsl.w #4,d0; andi.l #$ffff,d0`: el desplazamiento es de PALABRA,
+ * así que se trunca a 16 bits (p. ej. index 0 -> (0xffff<<4)&0xffff = 0xfff0,
+ * NO 0xffff0). */
+static uint32_t hint_entry(uint32_t index) {
+    return 0x1a850 + ((((index - 1) & 0xffff) << 4) & 0xffff);
+}
+
 /* 0x120dc — selecciona el icono d0-ésimo (D1=2). */
 void hint_select_on(uint8_t *img, uint32_t index, uint32_t *out) {
-    hint_body(img, 0x1a850 + ((index - 1) & 0xffff) * 0x10, 2, out);
+    hint_body(img, hint_entry(index), 2, out);
 }
 
 /* 0x120e4 — selecciona el icono d0-ésimo (D1=0). */
 void hint_select_off(uint8_t *img, uint32_t index, uint32_t *out) {
-    hint_body(img, 0x1a850 + ((index - 1) & 0xffff) * 0x10, 0, out);
+    hint_body(img, hint_entry(index), 0, out);
 }
 
 /* 0x1213a — busca el word d0 en la tabla; si lo encuentra lo desactiva (d5=0). */

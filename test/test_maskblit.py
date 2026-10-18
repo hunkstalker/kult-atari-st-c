@@ -136,6 +136,35 @@ def test_blit_mask_rows():
                                    f"{report(diffs)}")
 
 
+def _hint_offset_pokes():
+    """Pokea la entrada 0x1a850 (index 0x1001) y la 0x2a840 (index 0) con valores
+    distintos, para fijar el truncado `lsl.w #4`."""
+    pokes = {0x1a851: bytes([0x11]), 0x1ad0a: bytes([0x00]),
+             0x1a45e: (0x90000).to_bytes(4, "big")}
+    for base in (0x1a850, 0x2a840):
+        pokes[base] = (0x2222).to_bytes(2, "big")
+        pokes[base + 2] = (0x90000).to_bytes(4, "big")
+        pokes[base + 6] = (0x0007).to_bytes(2, "big")
+        pokes[base + 8] = (0x0001).to_bytes(2, "big")
+        pokes[base + 10] = (0x0002).to_bytes(2, "big")
+        pokes[base + 12] = (0x0003).to_bytes(2, "big")
+        pokes[base + 14] = (0x0004).to_bytes(2, "big")
+    return pokes
+
+
+def test_hint_select_offset_truncado():
+    """`subq.w #1; lsl.w #4; andi.l #$ffff`: index 0 -> 0x1a850+0xfff0 = 0x2a840
+    (no 0x11a840) y index 0x1001 -> 0x1a850 (no 0x2a850)."""
+    for d0 in (0, 0x1001):
+        o = (ctypes.c_uint32 * 8)()
+        diffs, info = differential(
+            HINT_SELECT_OFF, {"d0": d0, "_pokes": _hint_offset_pokes()},
+            lambda lib, buf, n=d0, p=o: lib.hint_select_off(buf, n, p))
+        assert not diffs, f"d0={d0:#x}\n{report(diffs)}"
+        for i, reg in enumerate(("a0", "d4", "d7", "d0", "d1", "d2", "d3")):
+            assert o[i] == info["regs"][reg], f"d0={d0:#x} out[{i}]({reg})"
+
+
 def _hint_table_pokes():
     pokes = {0x1a851: bytes([0x11]), 0x1ad0a: bytes([0x00]),
              0x1a45e: (0x90000).to_bytes(4, "big")}
