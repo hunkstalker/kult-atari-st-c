@@ -36,7 +36,8 @@ void clear_object_flags(uint8_t *img) {
 /* 0x14a98 — fija el origen de recorte (0x19700/0x19702) y el puntero del sprite
  * de cursor (0x199ca) desde la tabla 0x196dc (stride 4) y 0x1949c (stride 64),
  * indexadas por D0. */
-void set_cursor_clip(uint8_t *img, uint32_t d0) {
+void set_cursor_clip(uint8_t *img, uint32_t a0, uint32_t d0) {
+    (void)a0;
     uint32_t off = (d0 << 2) & 0xffffffffu;
     uint32_t p = 0x196dc + off;
     wr16(img + 0x19700, be16(img + p));

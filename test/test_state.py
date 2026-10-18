@@ -13,7 +13,7 @@ harness._lib.clear_flag.argtypes = [_u8p]
 harness._lib.clear_flag.restype = None
 harness._lib.clear_object_flags.argtypes = [_u8p]
 harness._lib.clear_object_flags.restype = None
-harness._lib.set_cursor_clip.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.set_cursor_clip.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32]
 harness._lib.set_cursor_clip.restype = None
 harness._lib.fix_sample_flag.argtypes = [_u8p]
 harness._lib.fix_sample_flag.restype = None
@@ -53,7 +53,7 @@ def test_set_cursor_clip():
             pokes[i] = bytes([(i * 5 + 2) & 0xFF])
         diffs, _ = differential(
             SET_CURSOR_CLIP, {"a0": 0x12345678, "d0": d0, "_pokes": pokes},
-            lambda lib, buf, v=d0: lib.set_cursor_clip(buf, v))
+            lambda lib, buf, v=d0: lib.set_cursor_clip(buf, 0, v))
         assert not diffs, f"d0={d0}\n{report(diffs)}"
 
 

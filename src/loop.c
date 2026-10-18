@@ -1,0 +1,2417 @@
+/* loop.c — piezas del bucle principal (seleccion de objeto, lista de objetos).
+ *
+ * FUN_0001778e @ 0x1778e: busca en la lista de objetos (0x1a7ca..0x1a7ce, 8 B/entrada)
+ * la entrada cuyo byte 4 con mascara 0x3f coincide con D0 (byte). Devuelve D2 =
+ * indice+1 y D1 = clase encontrada, o D1 = 0xff si no hay. El resultado en el
+ * llamante se lee por el Z (encontrado -> Z=1).
+ *
+ * FUN_000177bc @ 0x177bc: indexa la tabla 0x1aa72 por el byte D0, fija 0x1a772,
+ * calcula la clase (byte3 & 7 | 0x10) y busca (0x1778e). Si la encuentra fija
+ * 0x1a81a, 0x1acc9 y 0x1a81e y deja D0 = 0; si no, sale por 0x10768 dejando D0.
+ */
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "machine.h"
+#include "addrs.h"
+#include "kult_port.h"
+#include "os.h"
+
+
+/* Devuelve 1 si encontrado. d1o = clase (o 0xff), d2o = indice+1. Conserva los bytes
+ * altos de d2_in como el original (`move.b`/`addq.b`). */
+int func_17792(uint8_t *img, uint32_t d0, uint32_t d3, uint32_t d2_in,
+                uint32_t *a0o, uint32_t *d1o, uint32_t *d2o) {
+    uint32_t a0 = be32(img + A_OBJECT_LIST_BEGIN);
+    uint32_t d2 = (d2_in & 0xffffff00u) | 1;
+    for (;;) {
+        uint32_t d1 = img[a0 + 4] & (d3 & 0xff);
+        if (d1 == (d0 & 0xff)) {
+            *a0o = a0;
+            *d1o = d1;
+            *d2o = d2;
+            return 1;
+        }
+        a0 += 8;
+        d2 = (d2 & 0xffffff00u) | (((d2 & 0xff) + 1) & 0xff);
+        if (a0 == be32(img + A_OBJECT_LIST_END))
+            break;
+    }
+    *a0o = a0;
+    *d1o = 0xff;
+    *d2o = d2;
+    return 0;
+}
+
+/* FUN_0001778e @ 0x1778e: `move.b #0x3f,d3` y cae en 0x17792; el cuerpo vive alli
+ * porque 0x1780c lo llama con su propia mascara D3. */
+int func_1778e(uint8_t *img, uint32_t d0, uint32_t d2_in,
+                uint32_t *a0o, uint32_t *d1o, uint32_t *d2o) {
+    return func_17792(img, d0, 0x3f, d2_in, a0o, d1o, d2o);
+}
+
+/* FUN_000177e4 @ 0x177e4: fija el objeto seleccionado A0 en 0x1a81a, su indice
+ * (D2, 1-based) en 0x1acc9 y el puntero de icono 0x1a81e = 0x1a776 + (D2-1)*4.
+ * Corazón compartido por 0x177bc (que cae en el) y 0x1780c. */
+void func_177e4(uint8_t *img, uint32_t a0, uint32_t d2) {
+    wr32(img + A_SELECTED_OBJECT, a0);
+    img[A_SEL_1ACC9] = (uint8_t)(d2 & 0xff);
+    uint32_t off = ((d2 & 0xff) - 1) & 0xff;
+    wr32(img + A_SELECTED_ICON_PTR, A_COMMAND_HINTS_LIST + (off << 2));
+}
+
+void func_14926(uint8_t *img);
+
+uint32_t func_177bc(uint8_t *img, uint32_t d0, uint32_t d2_in, uint32_t *d0o) {
+    d0 &= 0xff;
+    uint32_t a0 = A_OBJ_TBL + d0;
+    wr32(img + A_ELEM_CLASS, a0);
+    uint32_t cls = (img[a0 + 3] & 7) | 0x10;
+    uint32_t a0o, d1, d2 = d2_in;
+    if (!func_1778e(img, cls, d2_in, &a0o, &d1, &d2)) {
+        *d0o = cls;
+        return 0;
+    }
+    func_177e4(img, a0o, d2);
+    *d0o = 0;
+    return 1;
+}
+
+/* FUN_000188ce @ 0x188ce: si el byte de script (A6[1]) esta en 0x3b..0x3e y
+ * $1aaf9 == $1acd2, lanza las animaciones 0x87 (y 0x96 si $1ab08) con 0x177bc +
+ * 0x17856 sobre los datos 0x19d24/0x19d2a. Conserva A6 y restaura $1acc9. */
+void func_17856(uint8_t *img, uint32_t a1);
+
+uint32_t func_188ce(uint8_t *img, uint32_t a6) {
+    img[A_DAT_1AD1D] = 0;
+    if (img[A_DAT_1AAF9] != img[A_DAT_1ACD2])
+        return a6;
+    uint32_t d0 = img[a6 + 1];
+    if (d0 < 0x3b || d0 >= 0x3f)
+        return a6;
+    uint32_t d1 = img[A_SEL_1ACC9];
+    img[A_DAT_1AD1D] = 0xff;
+    uint32_t d0o;
+    func_177bc(img, 0x87, 0, &d0o);
+    func_17856(img, 0x19d24);
+    if (img[A_DAT_1AB08] != 0) {
+        func_177bc(img, 0x96, 0, &d0o);
+        func_17856(img, 0x19d2a);
+    }
+    img[A_SEL_1ACC9] = (uint8_t)d1;
+    return a6;
+}
+
+/* FUN_00017480 @ 0x17480: elige la accion de la tabla 0x1aa72 avanzando $1ad00
+ * de 5 en 5 (salta a 5 al pasar de 0x18). Con $1acd2 == 0x37 fija las etiquetas
+ * 0x37/0x32 y sale; si $1acec >= 0x3f o $1acd2 >= 0x2c sale tras limpiar. Busca el
+ * objeto de clase 0x11 (0x1778e), indexa por $1ad00 y, con la tabla 0x2741e
+ * (0x16210), decide el comando pendiente a018/a019 (o lo limpia). */
+uint32_t func_16210(uint8_t *img);
+
+void func_17480(uint8_t *img) {
+    if (img[A_DAT_1ACD2] == 0x37) {
+        img[0x1aa77] = 0x37;
+        img[0x1aa7c] = 0x37;
+        img[0x1aa81] = 0x37;
+        img[0x1aa79] = 0x32;
+        img[0x1aa7e] = 0x32;
+        img[0x1aa83] = 0x32;
+        return;
+    }
+    img[0x1aa77] = 0;
+    img[0x1aa7c] = 0;
+    img[0x1aa81] = 0;
+    img[0x1aa86] = 0;
+    if (img[A_DAT_1ACEC] >= 0x3f || img[A_DAT_1ACD2] >= 0x2c)
+        return;                                  /* bcc a 0x10768 (rts) */
+
+    uint32_t a0o, d1o, d2o;
+    if (!func_1778e(img, 0x11, 0, &a0o, &d1o, &d2o))
+        return;
+    wr32(img + 0x1a816, a0o);
+    uint32_t d1 = ((uint32_t)img[A_DAT_1AD00] + 5) & 0xff;
+    if (d1 > 0x18)
+        d1 = 5;
+    img[A_DAT_1AD00] = (uint8_t)d1;
+    uint32_t a1 = 0x1aa72 + d1;
+    wr32(img + 0x1a812, a1);
+    if (img[a1 + 1] & 0x40)
+        return;
+
+    uint32_t d1o2 = img[A_DAT_1ACD7];
+    func_16210(img);
+    uint32_t d0 = img[A_DAT_1ACD7];
+    uint32_t d2 = 0;
+
+    if (img[A_DAT_1ACD2] < 6) {
+        if (d1o2 < 0x5a && img[a1 + 4] != 0 && img[a1 + 4] >= 6 && img[a1 + 4] < 0x1b &&
+            (img[a1 + 4] < 0x13 || img[a1 + 4] >= 0x17))
+            d2 = 1;
+        if (d0 < 0x17)
+            goto cmd_a018;
+        if (d0 < 0x34)
+            goto cmd_a019;
+        img[A_DAT_1ACFF] = 0;
+        return;
+    }
+    if (d1o2 < 0x27 && img[a1 + 4] != 0)
+        d2 = 1;
+    if (d1o2 >= 0xa6)
+        d2 = 2;
+    if (d0 < 0x1a)
+        goto cmd_a018;
+    if (d0 >= 0x34) {
+        img[A_DAT_1ACFF] = 0;
+        return;
+    }
+cmd_a019:
+    wr16(img + A_DAT_1ABF8, 0xa019);
+    img[A_DAT_1ACF2] = 3;
+    img[A_DAT_1ACFF] = (uint8_t)(d2 | 4);
+    wr32(img + A_ELEM_CLASS, a1);
+    return;
+cmd_a018:
+    img[a1] = img[A_DAT_1ACD2];
+    wr16(img + A_DAT_1ABF8, 0xa018);
+    img[A_DAT_1ACF2] = 3;
+    img[A_DAT_1ACFF] = (uint8_t)d2;
+    wr32(img + A_ELEM_CLASS, a1);
+}
+
+/* FUN_0001857c @ 0x1857c: busca en la tabla 0x1a8f0 la entrada [0x40][$1acd2] y
+ * blitea los dos iconos (0x11020 + 0x11016) en (0x4a,0xe) con d4 = 0xad (0xac si
+ * no la encuentra), y cuenta las entradas 0x80 de la tabla 0x1a9d4 en $1acf7. */
+void func_11020(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4);
+void func_11016(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4);
+
+void func_1857c(uint8_t *img) {
+    uint32_t a0 = 0x1a8f0;
+    uint32_t d1 = img[A_DAT_1ACD2];
+    uint32_t d4 = 0xad;
+    uint32_t d0;
+    for (d0 = 0x3e;; d0 = (d0 - 1) & 0xffff) {
+        if (img[a0] == 0x40 && img[a0 + 1] == d1)
+            break;
+        a0 += 6;
+        if (d0 == 0) {
+            d4 = (d4 - 1) & 0xffff;
+            break;
+        }
+    }
+    func_11020(img, 0x4a, 0x0e, d4);
+    func_11016(img, 0x4a, 0x0e, d4);
+
+    a0 = 0x1a9d4;
+    img[A_DAT_1ACF7] = 0;
+    for (d0 = 0x0d;; d0 = (d0 - 1) & 0xffff) {
+        if (img[a0] == 0x80)
+            img[A_DAT_1ACF7] = (uint8_t)(img[A_DAT_1ACF7] + 1);
+        a0 += 6;
+        if (d0 == 0)
+            break;
+    }
+}
+
+/* FUN_00018944 @ 0x18944: si $1ad1d esta puesto, repite las animaciones 0x87/0x96
+ * de 0x188ce sobre los datos 0x19d21/0x19d27 (guardando $1aaf9/$1ab08), restaura
+ * $1acc9 y actualiza la lista de iconos (0x16582). */
+void update_icon_list(uint8_t *img);
+
+void func_18944(uint8_t *img) {
+    if (img[A_DAT_1AD1D] == 0)
+        return;
+    uint32_t d1 = img[A_SEL_1ACC9];
+    uint32_t d0o;
+    func_177bc(img, 0x87, 0, &d0o);
+    func_17856(img, 0x19d21);
+    img[A_DAT_1AAF9] = img[A_DAT_1ACD2];
+    if (img[A_DAT_1AB08] != 0) {
+        img[A_DAT_1AB08] = img[A_DAT_1ACD2];
+        func_177bc(img, 0x96, 0, &d0o);
+        func_17856(img, 0x19d27);
+    }
+    img[A_SEL_1ACC9] = (uint8_t)d1;
+    update_icon_list(img);
+}
+
+/* FUN_0001857a @ 0x1857a: `addq.l #1,a6` y cae en 0x1857c. */
+void func_159d2(uint8_t *img, uint32_t a6);
+void walk_entry(uint8_t *img, uint32_t a4, uint32_t d1, uint32_t *a4o, uint32_t *a5o);
+void func_164d4(uint8_t *img);
+void func_164f6(uint8_t *img, uint32_t a6, uint32_t d0);
+uint32_t func_159e2(uint8_t *img, uint32_t a6, uint32_t d0, uint32_t d1, uint32_t d2);
+
+uint32_t func_1857a(uint8_t *img, uint32_t a6) {
+    func_1857c(img);
+    return a6 + 1;
+}
+
+/* FUN_00018538 @ 0x18538: camina la entrada 0x7f de 0x27fe2 (walk_entry), guarda
+ * D3 en su byte +2 y, si D3 es 0x25/0x3a/0x28, incrementa o decrementa $1ad2c
+ * segun D4 == 0x80. */
+void func_18538(uint8_t *img, uint32_t d3, uint32_t d4) {
+    { FILE *fl = kult_dbgfile();
+      if (fl) { fprintf(fl, "18538 d3=%x d4=%x\n", d3, d4); fflush(fl); } }
+    uint32_t a4o, a5o;
+    walk_entry(img, 0x27fe2, 0x7f, &a4o, &a5o);
+    img[a5o + 2] = (uint8_t)d3;
+    if (d3 == 0x25 || d3 == 0x3a || d3 == 0x28) {
+        if (d4 == 0x80)
+            img[A_DAT_1AD2C] = (uint8_t)(img[A_DAT_1AD2C] + 1);
+        else
+            img[A_DAT_1AD2C] = (uint8_t)(img[A_DAT_1AD2C] - 1);
+    }
+}
+
+/* Cuerpo compartido 0x184de de los comandos 0x184cc/0x184d6/0x1851a: marca la
+ * entrada de sample $1a75e (D4 en +0, $1acd2 en +1), repinta (0x164d4), anima
+ * (0x159e2 con d0/d1 = 0x2c/0x29 y D5), blitea (0x1857c) y repinta texto
+ * (0x164f6). A6 += 1. */
+static uint32_t body_184de(uint8_t *img, uint32_t a6, uint32_t d4, uint32_t d5) {
+    a6 += 1;
+    uint32_t a0 = be32(img + A_DAT_1A75E);
+    { FILE *fl = kult_dbgfile();
+      if (fl) {
+          fprintf(fl, "184de d4=%x d5=%x sample=%u rec=%x byte2=%x c2=%u\n",
+                  d4, d5, (unsigned)(a0 & 0xffff), (unsigned)img[a0], (unsigned)img[a0 + 2],
+                  (unsigned)img[A_DAT_1ACD2]);
+          fflush(fl);
+      } }
+    func_18538(img, img[a0 + 2], d4);
+    img[a0] = (uint8_t)d4;
+    img[a0 + 1] = img[A_DAT_1ACD2];
+    func_164d4(img);
+    func_159e2(img, a6, 0x2c, 0x29, d5);
+    func_1857c(img);
+    func_164f6(img, a6, 0x2c);
+    return a6;
+}
+
+/* FUN_000184cc @ 0x184cc (cmd idx 116) y FUN_000184d6 @ 0x184d6 (idx 115). */
+uint32_t func_184cc(uint8_t *img, uint32_t a6) {
+    return body_184de(img, a6, 0x80, 0x55);
+}
+
+uint32_t func_184d6(uint8_t *img, uint32_t a6) {
+    return body_184de(img, a6, 0x40, 0x2b);
+}
+
+void draw_hint_icons(uint8_t *img);
+void func_16460(uint8_t *img);
+void copy_screen(uint8_t *img);
+
+/* FUN_000171b4 @ 0x171b4 y FUN_000173ae @ 0x173ae: fijan el byte de seleccion en
+ * la tabla 0x1aa72/0x1aa8b, buscan el objeto (0x177bc/0x17856 con el puntero de
+ * 0x1a80a/0x1a80e + 1), programan el temporizador ($1acaa/$1acac o $1acae/$1acb0)
+ * y repintan (0x16556/0x16582/copy_screen). */
+void func_17856(uint8_t *img, uint32_t a1);
+void func_18fa4(uint8_t *img);
+void hint_blit_2(uint8_t *img, uint32_t *a6);
+void hint_blit_3(uint8_t *img, uint32_t *a6);
+
+void func_171b4(uint8_t *img) {
+    uint32_t a1 = be32(img + 0x1a80a) + 1;
+    img[0x1aa72] = img[A_DAT_1ACD2];
+    uint32_t d0o;
+    func_177bc(img, 0, 0, &d0o);
+    func_17856(img, a1);
+    func_18fa4(img);
+    wr16(img + A_DAT_1ACAA, 0xa015);
+    wr16(img + A_DAT_1ACAC, (be16(img + A_DAT_1AB60) + 5) & 0xffff);
+    draw_hint_icons(img);
+    update_icon_list(img);
+    copy_screen(img);
+}
+
+void func_173ae(uint8_t *img) {
+    uint32_t a1 = be32(img + 0x1a80e) + 1;
+    img[0x1aa8b] = img[A_DAT_1ACD2];
+    uint32_t d0o;
+    func_177bc(img, 0x19, 0, &d0o);
+    func_17856(img, a1);
+    wr16(img + A_DAT_1ACAE, 0xa01f);
+    wr16(img + A_DAT_1ACB0, (be16(img + A_DAT_1AB60) + 5) & 0xffff);
+    draw_hint_icons(img);
+    update_icon_list(img);
+    copy_screen(img);
+}
+
+/* FUN_00017678 @ 0x17678: restaura los iconos 1 y 3, limpia la entrada $1a812 y
+ * $1abf8; si +1 no lleva el bit 6, limpia el bit 7 de $1a816[4], busca con $1ad00
+ * y anima 0x19cfa. */
+void func_17856(uint8_t *img, uint32_t a1);
+
+void func_17678(uint8_t *img) {
+    uint32_t a6b = 0;
+    hint_blit_2(img, &a6b);
+    hint_blit_3(img, &a6b);
+    uint32_t a1 = be32(img + 0x1a812);
+    img[a1] = 0;
+    wr16(img + A_DAT_1ABF8, 0);
+    if (img[a1 + 1] & 0x40)
+        return;
+    a1 = be32(img + 0x1a816);
+    img[a1 + 4] &= 0x7f;
+    img[A_DAT_1ACFF] = 0;
+    uint32_t d0o;
+    func_177bc(img, img[A_DAT_1AD00], 0, &d0o);
+    func_17856(img, 0x19cfa);
+}
+
+/* FUN_00018128 @ 0x18128: si la clase de $1a772 lleva 0x30, la limpia, elige la
+ * entrada ($1ace6-0xa) de 0x1a9d4 en $1a75e y corre 0x184d6. A6 += 1. */
+uint32_t func_18128(uint8_t *img, uint32_t a6) {
+    uint32_t a1 = be32(img + A_ELEM_CLASS);
+    if ((img[a1 + 3] & 0x38) != 0x30)
+        return a6 + 1;
+    img[a1 + 3] &= 0xe7;
+    uint32_t d0 = ((uint32_t)img[0x1ace6] - 0xa) & 0xff;
+    d0 = (d0 * 6) & 0xffff;
+    wr32(img + A_DAT_1A75E, 0x1a9d4 + d0);
+    func_184d6(img, a6);
+    return a6 + 1;
+}
+
+/* FUN_000178cc @ 0x178cc: consume la entrada $1a812[4]: elige la entrada de 0x1a8f0
+ * en $1a75e, sella 0x1ad33 y corre 0x184cc + despacho 0x90aa; si estaba a 0,
+ * despacha 0x9140. A6 += 1. */
+void run_command_keep_sp(uint8_t *img, uint32_t a6);
+
+uint32_t func_178cc(uint8_t *img, uint32_t a6) {
+    a6 += 1;
+    uint32_t a0 = be32(img + 0x1a812);
+    uint32_t d0 = img[a0 + 4];
+    if (d0 == 0) {
+        wr16(img + A_THE_COMMAND, 0x9140);
+        run_command_keep_sp(img, a6);
+        return a6;
+    }
+    img[a0 + 4] = 0;
+    d0 = (d0 - 1) & 0xff;
+    d0 = (d0 * 6) & 0xffff;
+    uint32_t a2 = 0x1a8f0 + d0;
+    wr32(img + A_DAT_1A75E, a2);
+    img[0x1ad01] = (uint8_t)(img[0x1ad01] + 1);
+    uint32_t a1 = 0x1ad33 + (((uint32_t)img[a0 + 3] >> 6) & 0x3);
+    img[a1] = img[a2 + 3];
+    func_184cc(img, a6);
+    wr16(img + A_THE_COMMAND, 0x90aa);
+    run_command_keep_sp(img, a6);
+    return a6;
+}
+
+/* FUN_000179a2 @ 0x179a2: como 0x18128 pero con 0x9148/0x9147/0x9032, sella 0x1ad33
+ * y marca $1ad2e. A6 += 1. */
+uint32_t func_179a2(uint8_t *img, uint32_t a6) {
+    wr16(img + A_THE_COMMAND, 0x9148);
+    uint32_t a0 = be32(img + A_ELEM_CLASS);
+    if ((img[a0 + 3] & 0xf8) == 0x30) {
+        img[a0 + 3] &= 0xe7;
+        uint32_t d0 = ((uint32_t)img[0x1ace6] - 0xa) & 0xff;
+        d0 = (d0 * 6) & 0xffff;
+        uint32_t a2 = 0x1a9d4 + d0;
+        wr32(img + A_DAT_1A75E, a2);
+        img[0x1ad01] = (uint8_t)(img[0x1ad01] + 1);
+        func_184cc(img, a6);
+        wr16(img + A_THE_COMMAND, 0x9147);
+        run_command_keep_sp(img, a6);
+        img[0x1ad2e] = 1;
+        wr16(img + A_THE_COMMAND, 0x9032);
+    }
+    run_command_keep_sp(img, a6);
+    return a6 + 1;
+}
+
+void load_eche_bank_wrap(uint8_t *img, uint32_t d0);
+void blit_sprite(uint8_t *img, uint32_t a1);
+void mask_restore_rows(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7);
+void func_18f8e(uint8_t *img, uint32_t d4);
+void text_window(uint8_t *img, uint32_t a5, uint32_t a6);
+uint32_t text_index_arg(uint8_t *img, uint32_t a5, uint32_t d4, uint32_t *a6);
+uint32_t func_1228a(uint8_t *img, uint32_t a6);
+void hint_blit_stroke(uint8_t *img, uint32_t *a6);
+uint32_t func_159e2(uint8_t *img, uint32_t a6, uint32_t d0, uint32_t d1, uint32_t d2);
+void func_18e12(uint8_t *img, uint32_t d1);
+
+int func_1285a(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3,
+                uint32_t *out);
+uint32_t func_129c8(uint8_t *img, uint32_t d1);
+void func_129d6(uint8_t *img, uint32_t a5, uint32_t a4);
+void hint_select_on(uint8_t *img, uint32_t d0, uint32_t *o);
+void blit_rect_vbl(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
+                 uint32_t d7);
+void func_16250(uint8_t *img);
+void func_18a30(uint8_t *img);
+void hint_blit_2(uint8_t *img, uint32_t *a6);
+void hint_blit_stroke(uint8_t *img, uint32_t *a6);
+uint32_t func_134da(uint8_t *img, uint32_t a6);
+void wait_frame(uint8_t *img);
+void func_18f98(uint8_t *img, uint32_t d4);
+
+/* FUN_00016dec @ 0x16dec: ficha/descripcion del objeto. Resuelve la clase (0x1285a),
+ * toma selector D1=A6[2] (0xff/0xfe -> defaults 0x1ab4c/0x1ab4d) y arranca el sonido
+ * (0x18e12); recorre la tabla 0x246e6 con 0x12950 y por cada entrada: compone el
+ * bitmap (0x129c8), si el siguiente byte es 0xff salta 3 con 0x129d6, elige el icono
+ * (0x120dc) y lo blitea (0x124da). Con $1aa6e != 0: si el byte previo es 0x25 avanza
+ * la pista (0x18a30/0x16250 segun $1ad03), si no hace la espera de D1>>4. A6 += 4. */
+uint32_t object_info_card(uint8_t *img, uint32_t a6) {
+    uint32_t out[4];
+    func_1285a(img, 0, 0, 0, 0, out);
+
+    uint32_t d2 = img[a6 + 1];
+    uint32_t d4 = img[a6 + 3];
+    uint32_t d1 = img[a6 + 2];
+    if (d1 == 0xff) d1 = img[0x1ab4c];
+    if (d1 == 0xfe) d1 = img[0x1ab4d];
+    func_18e12(img, d1);
+    d1 = (d1 - 1) & 0xffff;
+
+    uint32_t a4 = 0x246e6, a5 = 0;
+    walk_entry(img, 0x246e6, d1, &a4, &a5);
+    img[0x1a2ae] = (uint8_t)d2;
+    wr16(img + 0x1aa6e, d4 & 0xffff);
+    for (;;) {
+        img[0x1a2ad] = img[a5];
+        a5 = (a5 + 1) & 0xffffffffu;
+        uint32_t d1b = (uint32_t)img[0x1a2ad];
+        d1b = (d1b - 1) & 0xffff;
+        uint32_t a1 = func_129c8(img, d1b);
+        if (img[a5] == 0xff) {
+            a5 = (a5 + 1) & 0xffffffffu;
+            func_129d6(img, a5, (a5 + 3) & 0xffffffffu);
+        }
+        a1 = (a1 + 4) & 0xffffffffu;
+        uint32_t o[8];
+        hint_select_on(img, img[0x1a2ae], o);
+        blit_rect_vbl(img, o[0], a1, o[5], o[6], o[2]);
+        uint32_t dd = be16(img + 0x1aa6e);
+        if (dd != 0) {
+            if (img[a5 - 1] == 0x25) {
+                if (img[0x1ad03] != 0)
+                    func_16250(img);
+                else
+                    func_18a30(img);
+            } else {
+                dd = ((dd << 16) | (dd >> 16)) & 0xffffffffu;
+                dd = (dd >> 4) & 0xffffffffu;
+                do {
+                    dd = (dd - 1) & 0xffffffffu;
+                } while (dd != 0);
+            }
+        }
+        if (a4 == a5) break;
+    }
+    return (a6 + 4) & 0xffffffffu;
+}
+
+/* FUN_000189aa @ 0x189aa: ficha de objeto interactiva: retira los iconos 2/1
+ * (0x12368/0x1232e), configura la caja de texto 0x19704 (color segun $1ad20), la
+ * dibuja (0x134da), y repite {18f8e(0x1c); 16dec(0x19708); 18f98(0x1c);
+ * 16dec(0x19708); 13698} hasta que $1a456 tenga el bit 2 (clic); cierra con 0x12368.
+ * A6: entry+1/2/3 por los 12368/1232e y el ultimo 12368. */
+uint32_t object_info_wait(uint8_t *img, uint32_t a6) {
+    hint_blit_2(img, &a6);
+    hint_blit_stroke(img, &a6);
+    uint32_t a6b = 0x19704;
+    uint32_t d1 = 0x28;
+    uint32_t d0 = img[0x1ad20];
+    if (d0 != 0) {
+        d0 = d0 >> 4;
+        d1 = (d1 + d0) & 0xff;
+        d1 = (d1 + 1) & 0xff;
+    }
+    img[a6b + 6] = (uint8_t)d1;
+    d1 = (d1 + 0x0e) & 0xff;
+    img[a6b + 10] = (uint8_t)d1;
+    func_134da(img, a6b);
+    a6 = 0x19708;
+    do {
+        func_18f8e(img, 0x1c);
+        uint32_t a6c = object_info_card(img, 0x19708);   /* la 2a llamada hereda A6 = retorno */
+        func_18f98(img, 0x1c);
+        a6 = object_info_card(img, a6c);
+        wait_frame(img);
+    } while ((img[0x1a456] & 0x04) == 0);
+    hint_blit_2(img, &a6);
+    return a6;
+}
+
+/* FUN_00017a1a @ 0x17a1a: cambio de vista/objeto. Fija $1a57b, resuelve el objeto
+ * ($1a772), despacha los comandos pendientes $1acaa (0xa015) / $1abf8 (0xc357) con
+ * 177bc y 103ae, y si a0[2] no es 0x2c/0x38/0x33 toma d2/d3 de 0x1a858/0x1a85a.
+ * Monta el descriptor 0x19968 y corre 11f98 + 18a30; repinta el icono 1 (120e4/
+ * 1215e) y elige la accion d1 de 0x1a69d (con 0x1acf7/0x1ad2c, 0x18f8e y 16210)
+ * para publicarla en $1ad02. A6 = entry+1. */
+uint32_t func_11f98(uint8_t *img, uint32_t a6);
+void hint_select_off(uint8_t *img, uint32_t d0, uint32_t *o);
+uint32_t func_177bc(uint8_t *img, uint32_t d0, uint32_t d2_in, uint32_t *d0o);
+uint32_t func_16210(uint8_t *img);
+void noop_160c0(uint8_t *img);
+
+uint32_t func_17a1a(uint8_t *img, uint32_t a6) {
+    uint32_t a5 = be32(img + 0x1a4e0);
+    uint32_t d2 = 0x23;
+    uint32_t d3 = 0x14;
+    uint32_t a0 = be32(img + A_ELEM_CLASS);
+    img[0x1a57b] = 1;
+    if (img[a0 + 2] != 0x2c) {
+        uint32_t d0 = be16(img + A_DAT_1ACAA);
+        if (d0 == 0xa015) {
+            wr16(img + A_THE_COMMAND, d0 & 0xffff);
+            uint32_t idx = (a0 - 0x1aa72) & 0xffffffffu;
+            run_command_keep_sp(img, a6);
+            uint32_t d0o;
+            func_177bc(img, idx, d2, &d0o);
+            a0 = be32(img + A_ELEM_CLASS);
+        }
+        if (be16(img + A_DAT_1ABF8) == 0xc357) {
+            wr16(img + A_THE_COMMAND, be16(img + A_DAT_1ABF8));
+            run_command_keep_sp(img, a6);
+        }
+        if (img[a0 + 2] != 0x38 && img[a0 + 2] != 0x33) {
+            d2 = (be16(img + 0x1a858) + 0x10) & 0xff;
+            d3 = be16(img + 0x1a85a) & 0xff;
+            img[0x1a57b] = 0;
+        }
+    }
+    img[0x19968 + 2] = (uint8_t)d2;
+    img[0x19968 + 3] = (uint8_t)d3;
+    func_11f98(img, 0x19968);
+    func_18a30(img);
+    a0 = be32(img + A_ELEM_CLASS);
+    if (img[a0 + 2] != 0x2c && img[a0 + 2] != 0x38 && img[a0 + 2] != 0x33) {
+        uint32_t o[8];
+        hint_select_off(img, 1, o);
+        mask_restore_rows(img, o[0], o[5], o[6], o[2]);
+        a0 = be32(img + A_ELEM_CLASS);
+    }
+    uint32_t d1 = 0;
+    img[0x1ad02] = 0;
+    if (img[0x1ad03] == 0) {
+        uint32_t idx = (img[a0 + 2] - 0x2a) & 0xff;
+        d1 = img[0x1a69d + idx];
+        if (d1 != 1 && (img[a0 + 1] & 0x80))
+            d1 = (d1 - 1) & 0xff;
+        if (img[A_DAT_1ACF7] != 0 || img[0x1ad2c] != 0)
+            d1 = (d1 - 1) & 0xff;
+    }
+    if (d1 != 5) {
+        uint32_t dd = img[a0 + 4];
+        if ((dd >= 0x13 && dd < 0x17) || (dd >= 0x27 && dd < 0x34) || dd == 0x38 ||
+            dd == 0x39 || (img[a0 + 3] & 0xf8) == 0x30)
+            d1 = (d1 + 1) & 0xff;
+    }
+    d2 = 1;
+    d3 = img[A_DAT_1ACD7];
+    if (d1 == 2 || d1 == 4) {
+        uint32_t lim = (d1 == 2) ? 0xcd : 0x64;
+        if (d3 >= lim) {
+            d2 = 0x51;
+            if (func_16210(img) >= 0x80)
+                d2 = 0x52;
+        }
+    } else if (d1 == 3) {
+        if (d3 >= 0x80) {
+            d2 = 0x31;
+            if (func_16210(img) >= 0xcd)
+                d2 = 0x32;
+        } else {
+            d2 = 0x91;
+            if (func_16210(img) >= 0x33)
+                d2 = 0x92;
+        }
+    }
+    img[0x1ad02] = (uint8_t)d2;
+    noop_160c0(img);
+    (void)d1;
+    wr32(img + 0x1a4e0, a5);
+    return a6 + 1;
+}
+
+/* FUN_00017ca4 @ 0x17ca4: "usar/activar" el objeto de clase 0x1a772: fija $1aa70
+ * (indice relativo), marca el objeto (bit6 de +1, +0 = 0) y limpia el bit7 del
+ * seleccionado (0x1a81a[4]). Con a0[3] == 0x10/0x08 arma el script 0x55b0x y
+ * despacha (17856 con A1=0x19cfd/0x19d00 + $1a50e=$1acaa + 103ae); si no, segun
+ * a0[2] busca $1acc7 en 0x19d2d..0x19d55 (d0=0x2f/0x42) o en 0x19d55..0x19dbd,
+ * ajusta a6[1], suena (0x18f8e 0x96/0x97/0xb1 con $192d0) y corre la animacion
+ * 0x159d2; si $192d0 sigue a 0, cuelga el driver (0x18fa4). A6 = entry+1. */
+void func_159d2(uint8_t *img, uint32_t a6);
+void func_17856(uint8_t *img, uint32_t a1);
+void run_command_keep_sp(uint8_t *img, uint32_t a6);
+
+uint32_t func_17ca4(uint8_t *img, uint32_t a6) {
+    uint32_t a6ret = a6 + 1;
+    a6 += 1;
+    if (img[A_DAT_1AD09] == 0x12)
+        return a6ret;
+    uint32_t a0 = be32(img + A_ELEM_CLASS);
+    wr16(img + 0x1aa70, (uint16_t)((a0 - 0x1aa72) & 0xffff));
+    uint32_t a3 = be32(img + A_SELECTED_OBJECT);
+    img[a0 + 1] |= 0x40;
+    img[a0] = 0;
+    img[a3 + 4] &= 0x7f;
+    uint32_t d0 = img[a0 + 3];
+    uint32_t a1 = 0;
+    if (d0 == 0x10)
+        goto L_dea;
+    if (d0 == 0x08)
+        goto L_e22;
+    if (img[0x1a57a] == 0 && img[0x1ad26] == 0 && img[A_DAT_1ACF7] != 0 &&
+        img[0x1a57b] == 0) {
+        img[0x1ad02] &= 0xfe;
+        goto L_end;
+    }
+    img[0x1a57a] = 0;
+    d0 = 0x2f;
+    {
+        uint32_t a5;
+        if (img[a0 + 2] == 0x38)
+            goto L_d4c;
+        d0 = 0x42;
+        if (img[a0 + 2] != 0x33)
+            goto L_d5a;
+        wr16(img + 0x1acae, 0);
+    L_d4c:
+        a6 = 0x19d2d;
+        a5 = 0x19d55;
+        goto L_d68;
+    L_d5a:
+        d0 = 0;
+        a5 = 0x19dbd;
+        a6 = 0x19d55;
+    L_d68:
+        {
+            uint32_t d1 = img[A_DAT_1ACC7];
+            for (;;) {
+                if (img[a6] == d1)
+                    break;
+                a6 += 4;
+                if (a6 == a5)
+                    goto L_end;
+            }
+        }
+        if (d0 != 0)
+            img[a6 + 1] = (uint8_t)d0;
+        if (img[a6 + 1] == 0x18 || img[a6 + 1] == 0x1c) {
+            img[0x192d0] = 1;
+            func_18f8e(img, 0x96);
+        } else if (img[a6 + 1] == 0x37) {
+            func_18f8e(img, 0x97);
+        } else if (img[a6 + 1] == 0x43) {
+            func_18f8e(img, 0xb1);
+        }
+        func_159d2(img, a6);
+        if (img[0x192d0] == 0)
+            func_18fa4(img);
+        goto L_end;
+    }
+L_dea:
+    img[0x1ab1c] = img[A_DAT_1ACD2];
+    a1 = 0x19cfd;
+    img[0x1ab1d] = img[a0 + 1];
+    goto L_e02;
+L_e22:
+    a1 = 0x19d00;
+    img[0x1ab21] = img[A_DAT_1ACD2];
+    img[0x1ab22] = img[a0 + 1];
+L_e02:
+    if (img[A_DAT_1ACF7] == 0)
+        func_17856(img, a1);
+    wr16(img + A_THE_COMMAND, be16(img + A_DAT_1ACAA));
+    run_command_keep_sp(img, a6);
+L_end:
+    return a6ret;
+}
+
+/* FUN_000176c0 @ 0x176c0: segun $1a57b/$1acc7 avanza la pista 4/3 (0x1066e),
+ * limpia $1ad2d y, con $1ad09 != 0x12, repinta la paleta (0x162da) y el icono del
+ * objeto seleccionado (0x124f8 + 0x1215e); si $1ad03/$1ad26/$1acf7/$1a57b lo piden,
+ * anima el objeto (0x18f8e 0x95 + 0x159e2 d1=0x28). Cierra copiando $1ad03 a $1a57a
+ * y limpiandolo. A6 += 1. */
+void set_palette_current(uint8_t *img);
+uint32_t func_176c0(uint8_t *img, uint32_t a6) {
+    if (img[0x1a57b] != 0) {
+        load_eche_bank_wrap(img, 4);
+    } else if (img[A_DAT_1ACC7] == 0x3d) {
+        load_eche_bank_wrap(img, 3);
+    }
+    img[0x1ad2d] = 0;
+    if (img[A_DAT_1AD09] != 0x12) {
+        set_palette_current(img);
+        uint32_t a2 = be32(img + A_SELECTED_ICON_PTR);
+        if (be32(img + a2) != 0) {
+            uint32_t a1 = be32(img + a2);
+            blit_sprite(img, a1);
+            uint32_t d2 = img[a1++];
+            uint32_t d3 = img[a1++];
+            uint32_t a0 = be32(img + a1);
+            a1 += 4;
+            uint32_t d7 = be16(img + a1);
+            a0 = (a0 + 0x8000) & 0xffffffffu;
+            mask_restore_rows(img, a0, d2, d3, d7);
+            if (img[0x1ad03] == 0 && img[0x1ad26] == 0 && img[A_DAT_1ACF7] != 0 &&
+                img[0x1a57b] == 0) {
+                img[0x1ad2d] = 1;
+                func_18f8e(img, 0x95);
+                uint32_t a0b = be32(img + A_SELECTED_OBJECT);
+                uint32_t d0 = img[a0b];
+                uint32_t d2b = img[a0b + 2];
+                func_159e2(img, a6, d0, 0x28, d2b);
+            }
+        }
+    }
+    a6 += 1;
+    img[0x1a57a] = img[0x1ad03];
+    img[0x1ad03] = 0;
+    return a6;
+}
+
+/* FUN_00016a20 @ 0x16a20: retrato/intro: avanza la pista (0x1066e), copia el primer
+ * par [indice][vol] de 0x1998a a 0xd8f0 y arma la lista con 0x16ab6 (a3=0x1998c,
+ * d7=2, $192be=0x64c8e). Repite 0xb veces 14138(0x1997e)/VBL/copy + 14138(0x19981)/
+ * VBL/copy, y cierra con 14138(0x19984), 14138(0x19987), copy y 0x18fa4. */
+void load_eche_bank_wrap(uint8_t *img, uint32_t d0);
+void wait_vbl(uint8_t *img);
+void func_16ab6(uint8_t *img, uint32_t a3, uint32_t d7);
+void run_text_entry(uint8_t *img, uint32_t a6);
+void func_18fa4(uint8_t *img);
+
+void func_16a20(uint8_t *img) {
+    img[0x1ad30] = 1;
+    load_eche_bank_wrap(img, 0);
+    uint32_t a3 = 0x1998a;
+    wr16(img + 0xd8f0, be16(img + a3));
+    a3 += 2;
+    wr16(img + 0x192e4, 0);
+    wr32(img + 0x192be, 0x64c8e);
+    func_16ab6(img, a3, 2);
+    for (uint32_t d6 = 0x0a;; d6 = (d6 - 1) & 0xffff) {
+        run_text_entry(img, 0x1997e);
+        wait_vbl(img);
+        copy_screen(img);
+        {
+            uint32_t d0b = 0xffff;
+            while (d0b != 0xffff)
+                d0b = (d0b - 1) & 0xffff;
+        }
+        run_text_entry(img, 0x19981);
+        wait_vbl(img);
+        copy_screen(img);
+        {
+            uint32_t d0b = 0xffff;
+            while (d0b != 0xffff)
+                d0b = (d0b - 1) & 0xffff;
+        }
+        if (d6 == 0) break;
+    }
+    run_text_entry(img, 0x19984);
+    run_text_entry(img, 0x19987);
+    copy_screen(img);
+    func_18fa4(img);
+}
+
+/* FUN_000171fa @ 0x171fa: variante A de la seleccion de pista. Ajusta A1 segun
+ * $1aa72/$1ab1c (con $1acfc bit7 y eco en $1aa73), busca $1acc6 en la tabla
+ * 0x19cd1..0x19cf7 -> $1acaa/$1acac y escribe la entrada en $1aa72, limpia el bit7
+ * del objeto indexado por $1aa73&0xf, fija $1a806 y busca/anima (0x177bc/0x17856). */
+uint32_t func_171fa(uint8_t *img, uint32_t a6) {
+    uint32_t a1 = be32(img + 0x1a80a) + 4;
+    uint32_t a2 = 0x1aa72;
+    if (img[a2] != 0)
+        goto l1723c;
+    a1 += 3;
+    a2 += 0xaa;
+    if (img[a2] != 0)
+        goto l1723c;
+    a1 += 3;
+    a2 += 5;
+    img[a2] = 0;
+    img[A_DAT_1ACFC] |= 0x80;
+    {
+        uint8_t d0 = img[a2 + 1];
+        a2 = 0x1aa72;
+        img[a2 + 1] = d0;
+    }
+l1723c:
+    {
+        uint32_t a3 = 0x19cd1;
+        uint8_t d0v = img[A_MODE_FLAG];
+        for (;;) {
+            if (img[a3] == d0v) {
+                wr16(img + A_DAT_1ACAA, 0xa016);
+                wr16(img + A_DAT_1ACAC, (be16(img + A_DAT_1AB60) + 5) & 0xffff);
+                img[a2] = img[a3 + 1];
+                break;
+            }
+            a3 += 2;
+            if (a3 == 0x19cf7) {
+                img[a2] = 0;
+                wr16(img + A_DAT_1ACAA, 0);
+                break;
+            }
+        }
+    }
+    {
+        uint32_t d0b = ((uint32_t)img[a2 + 1] & 0x0f) - 1;
+        d0b = (d0b << 3) & 0xffffffffu;
+        uint32_t a0 = be32(img + A_OBJECT_LIST_BEGIN) + d0b;
+        img[a0 + 4] &= 0x7f;
+    }
+    wr32(img + 0x1a806, a2);
+    uint32_t d0o;
+    func_177bc(img, 0, 0, &d0o);
+    /* 0x17856 deja A6 = A1+3 (o 0x55b05 si corrio el bloque del bit 7) */
+    uint32_t a6f = (img[a1] & 0x80) ? 0x55b05 : ((a1 + 3) & 0xffffffffu);
+    func_17856(img, a1);
+    func_18fa4(img);
+    img[A_DAT_1ACFC] &= 0x80;
+    return a6f;
+}
+
+/* FUN_000173f2 @ 0x173f2: variante B (temporizador B): busca $1acc6 en
+ * 0x19cd1..0x19cf7 -> $1acae/$1acb0 y escribe la entrada en $1aa8b, limpia el bit7
+ * del objeto ($1aa8c&0xf) y busca/anima con 0x177bc(0x19)/0x17856. */
+uint32_t func_173f2(uint8_t *img, uint32_t a6) {
+    uint32_t a1 = be32(img + 0x1a80e) + 4;
+    uint32_t a2 = 0x1aa72;
+    {
+        uint32_t a3 = 0x19cd1;
+        uint8_t d0v = img[A_MODE_FLAG];
+        for (;;) {
+            if (img[a3] == d0v) {
+                wr16(img + A_DAT_1ACAE, 0xa020);
+                wr16(img + A_DAT_1ACB0, (be16(img + A_DAT_1AB60) + 5) & 0xffff);
+                img[a2 + 25] = img[a3 + 1];
+                break;
+            }
+            a3 += 2;
+            if (a3 == 0x19cf7) {
+                img[a2 + 25] = 0;
+                wr16(img + A_DAT_1ACAE, 0);
+                break;
+            }
+        }
+    }
+    {
+        uint32_t d0b = ((uint32_t)img[a2 + 26] & 0x0f) - 1;
+        d0b = (d0b << 3) & 0xffffffffu;
+        uint32_t a0 = be32(img + A_OBJECT_LIST_BEGIN) + d0b;
+        img[a0 + 4] &= 0x7f;
+    }
+    uint32_t d0o;
+    func_177bc(img, 0x19, 0, &d0o);
+    uint32_t a6f = (img[a1] & 0x80) ? 0x55b05 : ((a1 + 3) & 0xffffffffu);
+    func_17856(img, a1);
+    return a6f;
+}
+
+/* FUN_00017c42 @ 0x17c42: dibuja los iconos de pista, busca el objeto 0xbe
+ * (0x177bc), fija $1ad26 y corre 0x176c0; luego busca el objeto $1aa70, marca la
+ * entrada (0x53), activa el bit7 del seleccionado, limpia el bit6 de su clase y
+ * copia $1acd2; repinta la lista de iconos y la pantalla. */
+uint32_t func_176c0(uint8_t *img, uint32_t a6);
+uint32_t func_177bc(uint8_t *img, uint32_t d0, uint32_t d2_in, uint32_t *d0o);
+
+uint32_t func_17c42(uint8_t *img, uint32_t a6) {
+    draw_hint_icons(img);
+    uint32_t d0o;
+    func_177bc(img, 0xbe, 0, &d0o);
+    img[0x1ad26] = 1;
+    a6 = func_176c0(img, a6);
+    img[0x1ad26] = 0;
+    img[0x1ab30] = 0;
+    func_177bc(img, be16(img + 0x1aa70), 0, &d0o);
+    {
+        uint32_t a0 = be32(img + A_OBJECT_LIST_BEGIN);
+        img[a0 + 44] = 0x53;
+    }
+    {
+        uint32_t a0 = be32(img + A_SELECTED_OBJECT);
+        img[a0 + 4] |= 0x80;
+    }
+    {
+        uint32_t a0 = be32(img + A_ELEM_CLASS);
+        img[a0 + 1] &= 0xbf;
+        img[a0] = img[A_DAT_1ACD2];
+    }
+    update_icon_list(img);
+    copy_screen(img);
+    return a6;
+}
+
+/* FUN_000185e6 @ 0x185e6: sonido 0xe1, anima el objeto seleccionado (0x159e2 d1=0x2a
+ * con +1/+6), elige el indice de pista d4 = 0x141 + ($1acd7&3) (+4 si $1ab60 >= 0xe10),
+ * imprime el nombre (0x10fb4/0x10b6c sobre 0x19970 con color 0xb4/0x94), avanza la
+ * tabla 0x2741e (0x18e12 con d1=0x22), anima d1=0x2b, espera tecla (0x1228a/0x1232e),
+ * sonido 0xe1 y anima d1=0x2d. D0/D2 se preservan alrededor de los helpers. */
+uint32_t track_name_print(uint8_t *img, uint32_t a6) {
+    func_18f8e(img, 0xe1);
+    uint32_t a0 = be32(img + A_SELECTED_OBJECT);
+    uint32_t d0 = img[a0];
+    uint32_t d2 = img[a0 + 2];
+    func_159e2(img, a6, (d0 + 1) & 0xffff, 0x2a, (d2 + 6) & 0xffff);
+    uint32_t d4 = (uint32_t)(img[A_DAT_1ACD7] & 3);
+    if (be16(img + A_DAT_1AB60) >= 0xe10)
+        d4 |= 4;
+    d4 = (d4 + 0x141) & 0xffff;
+    {
+        uint32_t a5 = text_index_arg(img, 0x3c534, d4, &a6);
+        wr16(img + 0x1a484, be16(img + A_TEXT_INDEX));
+        uint32_t a6n = 0x19970;
+        uint32_t d0f;
+        if ((d0 & 0xff) < 0x23) {
+            d0f = (d0 + 8) & 0xff;
+            img[a6n + 3] = 0xb4;
+        } else {
+            d0f = (d0 - 0x17) & 0xff;
+            img[a6n + 3] = 0x94;
+        }
+        img[a6n + 2] = (uint8_t)((d2 - 0x28) & 0xff);
+        img[a6n + 1] = (uint8_t)d0f;
+        text_window(img, a5, a6n);
+        func_18e12(img, 0x22);
+    }
+    func_159e2(img, 0x19970, d0, 0x2b, d2);
+    (void)func_1228a(img, 0x19970);
+    {
+        uint32_t a6b = 0x19971;
+        hint_blit_stroke(img, &a6b);
+    }
+    func_18f8e(img, 0xe1);
+    func_159e2(img, 0x19970, d0, 0x2d, d2);
+    return a6;
+}
+
+/* FUN_000175f6 @ 0x175f6: restaura el icono 1, sella la entrada $1a812 con $1acd2 y
+ * los comandos a018/3, limpia $1ace7, busca/anima (0x177bc($1ad00)/0x17856(0x19cf7)),
+ * repinta listas y copia pantalla; con $1acff == 5/6 despacha 0xc029/0xc165. */
+uint32_t func_175f6(uint8_t *img, uint32_t a6) {
+    uint32_t a6b = 0;
+    hint_blit_2(img, &a6b);
+    uint32_t a1 = be32(img + 0x1a812);
+    img[a1] = img[A_DAT_1ACD2];
+    wr16(img + A_DAT_1ABF8, 0xa018);
+    img[A_DAT_1ACF2] = 3;
+    img[A_DAT_1ACE7] = 0;
+    uint32_t d0o;
+    func_177bc(img, img[A_DAT_1AD00], 0, &d0o);
+    uint32_t a6f = (img[0x19cf7] & 0x80) ? 0x55b05 : 0x19cfa;
+    func_17856(img, 0x19cf7);
+    draw_hint_icons(img);
+    update_icon_list(img);
+    copy_screen(img);
+    if (img[A_DAT_1ACFF] == 5) {
+        wr16(img + A_THE_COMMAND, 0xc029);
+        img[A_DAT_1ACFF] = 0;
+        run_command_keep_sp(img, a6);
+        return a6f;
+    }
+    if (img[A_DAT_1ACFF] == 6) {
+        wr16(img + A_THE_COMMAND, 0xc165);
+        img[A_DAT_1ACFF] = 0;
+        run_command_keep_sp(img, a6);
+        return a6f;
+    }
+    return a6f;
+}
+
+/* FUN_0001817a @ 0x1817a: marca la entrada del objeto (byte 44 = 0x53), limpia
+ * $1ad0b/$1abf8 y cae en 0x18192. */
+void func_18192(uint8_t *img);
+
+void func_1817a(uint8_t *img) {
+    uint32_t a0 = be32(img + A_OBJECT_LIST_BEGIN);
+    img[A_DAT_1AD0B] = 0;
+    img[a0 + 44] = 0x53;
+    wr16(img + A_DAT_1ABF8, 0);
+    func_18192(img);
+}
+
+/* FUN_0001834a @ 0x1834a y 0x18342 (A5 = 0/0x8000): recorre 256 descriptores de
+ * 0xa bytes en 0xd8f0. Borra dos longs de pantalla con la mascara 0x7fff7fff
+ * rotada por la fase (word +2), recalcula la posicion desde el campo +8 (0x10fee
+ * con la escala 0xcffff/(v-0x138)) y OR-ea la mascara 0x8000 rotada en (0,2,4,6)
+ * segun el tramo; si +8 < 0x148 y D5 >= 0x1e reinicia la entrada (0x18316) con el
+ * bit 0x1800. Cierra con una VBL. */
+void func_18316(uint8_t *img, uint32_t a1);
+void wait_vbl(uint8_t *img);
+uint32_t screen_address_raw(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
+
+static uint32_t ror16b(uint32_t v, uint32_t n) {
+    n &= 15;
+    return n ? (((v >> n) | (v << (16 - n))) & 0xffff) : (v & 0xffff);
+}
+
+void func_1834a(uint8_t *img, uint32_t a5, uint32_t d5) {
+    uint32_t a1 = 0xd8f0;
+    for (uint32_t d6 = 0xff;; d6 = (d6 - 1) & 0xffff) {
+        uint32_t a0 = be32(img + A_SCREEN_PTR_A) + be16(img + a1);
+        uint32_t d1m = rotate_right32(0x7fff7fffu, be16(img + a1 + 2));
+        wr32(img + a0, be32(img + a0) & d1m);
+        wr32(img + a0 + 4, be32(img + a0 + 4) & d1m);
+
+        uint32_t v8 = be16(img + a1 + 8);
+        if (v8 >= 0x148) {
+            uint32_t d4 = (v8 - 0x148) & 0xffff;
+            wr16(img + a1 + 8, d4);
+            d4 = (d4 + 0x10) & 0xffff;
+            d4 = (0xcffffu / d4) & 0xffff;                   /* divu.w */
+            int32_t p1 = (int32_t)(int16_t)be16(img + a1 + 4) * (int32_t)d4;
+            uint32_t d0 = ((uint32_t)p1 >> 16) & 0xffff;     /* swap + move.w */
+            int32_t p2 = (int32_t)(int16_t)be16(img + a1 + 6) * (int32_t)d4;
+            uint32_t d1v = ((uint32_t)p2 >> 16) & 0xffff;
+            d0 = (d0 + 0xa0) & 0xffff;
+            if (!((int16_t)d0 < 0 || d0 >= 0x140)) {
+                d1v = (d1v + 0x64) & 0xffff;
+                if (!((int16_t)d1v < 0 || d1v >= 0xc8)) {
+                    uint32_t d7;
+                    uint32_t a0b = screen_address_raw(img, d0, d1v, &d7);
+                    uint32_t off = (a0b - be32(img + A_SCREEN_PTR_A)) & 0xffff;
+                    a0b = (a0b - a5) & 0xffffffffu;
+                    wr16(img + a1, off);
+                    wr16(img + a1 + 2, d7 & 0xffff);
+                    uint32_t m = ror16b(0x8000, d7);
+                    uint32_t vb = be16(img + a1 + 8);
+                    if (vb < 0x600) {
+                        wr16(img + a0b, be16(img + a0b) | m);
+                        wr16(img + a0b + 2, be16(img + a0b + 2) | m);
+                        wr16(img + a0b + 6, be16(img + a0b + 6) | m);
+                    } else if (vb < 0xc00) {
+                        wr16(img + a0b + 4, be16(img + a0b + 4) | m);
+                    } else {
+                        wr16(img + a0b + 2, be16(img + a0b + 2) | m);
+                        wr16(img + a0b + 6, be16(img + a0b + 6) | m);
+                    }
+                    if (vb >= 0x600 && vb < 0xc00)
+                        goto next;
+                    if (vb >= 0xc00)
+                        goto next;
+                    wr16(img + a0b + 4, be16(img + a0b + 4) | m);
+                } else {
+                    wr16(img + a1 + 8, 0);
+                }
+            } else {
+                wr16(img + a1 + 8, 0);
+            }
+        } else {
+            if (d5 >= 0x1e) {
+                func_18316(img, a1);
+                wr16(img + a1 + 8, be16(img + a1 + 8) | 0x1800);
+            }
+        }
+next:
+        a1 += 0xa;
+        if (d6 == 0)
+            break;
+    }
+    wait_vbl(img);
+}
+
+/* FUN_00018334 @ 0x18334: 0x65 pasadas de 0x1834a (A5 = 0) con D5 = 0x64..0. */
+void func_18334(uint8_t *img) {
+    uint32_t d5 = 0x64;
+    for (;;) {
+        func_1834a(img, 0, d5);
+        if (d5 == 0)
+            break;
+        d5 = (d5 - 1) & 0xffff;
+    }
+}
+
+/* FUN_000181f0 @ 0x181f0: acumula las 16 entradas de 0x198c0 en la tabla 0x3b1ac
+ * (16 longs inicializados a 0x014000c8). Cada pasada: avanza $1a4a0, refresca
+ * $1a4a2 con 0x16230 cada 8 y, si el bit 0 de D3 esta puesto, suma (x,y) con topes
+ * 0x258/0x190 (marcando en D2). Si algo topo, sale; si no, dibuja los 16 segmentos
+ * con 0x13d0e (leyendo x/y del long y del siguiente, con vuelta al primero) y
+ * repite. */
+void reveal_line(uint8_t *img);
+uint32_t func_16230(uint8_t *img);
+
+void func_181f0(uint8_t *img) {
+    uint32_t a0 = 0x3b1ac;
+    for (int i = 0; i < 0x10; i++) {
+        wr32(img + a0, 0x14000c8);
+        a0 += 4;
+    }
+    wr32(img + a0, 0);
+    wr16(img + A_DAT_1A49E, 0);
+    wr16(img + A_ANIM_1A4A0, 0);
+    wr16(img + A_SAVE_1A4A2, 0);
+    for (;;) {
+        uint32_t d1 = 0x0f;
+        uint32_t a2 = 0x3b1ac;
+        uint32_t a1 = 0x198c0;
+        uint32_t d2 = be16(img + A_DAT_1A49E);
+        uint32_t d4 = (be16(img + A_ANIM_1A4A0) + 1) & 0xffff;
+        wr16(img + A_ANIM_1A4A0, d4);
+        uint32_t d3 = be16(img + A_SAVE_1A4A2);
+        if ((d4 & 7) == 0) {
+            d3 = func_16230(img);
+            wr16(img + A_SAVE_1A4A2, d3);
+        }
+        for (;;) {
+            uint32_t c = d3 & 1;
+            d3 = (d3 >> 1) & 0xffff;
+            if (c) {
+                uint32_t d0 = (be16(img + a2) + be16(img + a1)) & 0xffff;
+                if (d0 >= 0x258) {
+                    d2 |= 1u << (d1 & 0x1f);
+                    d0 = be16(img + a2);
+                }
+                wr16(img + a2, d0);
+                d0 = (be16(img + a2 + 2) + be16(img + a1 + 2)) & 0xffff;
+                if (d0 >= 0x190) {
+                    d2 |= 1u << (d1 & 0x1f);
+                    d0 = be16(img + a2 + 2);
+                }
+                wr16(img + a2 + 2, d0);
+            }
+            a1 += 4;
+            a2 += 4;
+            if (d1 == 0)
+                break;
+            d1--;
+        }
+        if (d2 != 0)
+            return;
+        wr16(img + A_DAT_1A49E, (uint16_t)d2);
+        a2 = 0x3b1ac;
+        for (uint32_t d1b = 0x0f;; d1b = (d1b - 1) & 0xffff) {
+            uint32_t d0 = be32(img + a2);
+            a2 += 4;
+            wr16(img + 0x1a51a, ((d0 & 0xffff) >> 1) & 0xffff);
+            wr16(img + 0x1a516, (((d0 >> 16) & 0xffff) >> 1) & 0xffff);
+            uint32_t d0b = be32(img + a2);
+            if (d0b == 0)
+                d0b = be32(img + 0x3b1ac);
+            wr16(img + 0x1a51c, ((d0b & 0xffff) >> 1) & 0xffff);
+            wr16(img + 0x1a518, (((d0b >> 16) & 0xffff) >> 1) & 0xffff);
+            reveal_line(img);
+            if (d1b == 0)
+                break;
+        }
+    }
+}
+
+/* FUN_0001842c @ 0x1842c: prepara la sala: llena screen_ptr_b con 0xffffffff/0xffff0000,
+ * corre 0x181f0, limpia screen_ptr_b, copia a la frontal, reinicia la tabla de iconos
+ * (0x182f0) y las 0x65 pasadas de 0x18334, anima (0x159e2), fuerza $1acc6 = 0x87,
+ * carga FOND.PI1 (0x13568 reintentando con 0x918e), fija la paleta, repite 0x181f0,
+ * copia y encadena con 0x1682a. */
+void func_182f0(uint8_t *img);
+void load_fond(uint8_t *img);
+void set_palette(uint8_t *img);
+void reset_clear(uint8_t *img);
+void func_18f8e(uint8_t *img, uint32_t d4);
+uint32_t func_159e2(uint8_t *img, uint32_t a6, uint32_t d0, uint32_t d1, uint32_t d2);
+void run_command_keep_sp(uint8_t *img, uint32_t a6);
+
+uint32_t prepare_room(uint8_t *img, uint32_t a6) {
+    img[A_FRAME_1AB4F] = 0;
+    func_18f8e(img, 0xa0);
+    img[A_DAT_1AD0D] = 1;
+    uint32_t a0 = be32(img + A_SCREEN_PTR_B);
+    for (uint32_t d0 = 0xf9f;; d0 = (d0 - 1) & 0xffff) {
+        wr32(img + a0, 0xffffffffu); a0 += 4;
+        wr32(img + a0, 0xffff0000u); a0 += 4;
+        if (d0 == 0) break;
+    }
+    func_181f0(img);
+    a0 = be32(img + A_SCREEN_PTR_B);
+    for (uint32_t d0 = 0xf9f;; d0 = (d0 - 1) & 0xffff) {
+        wr32(img + a0, 0); a0 += 4;
+        wr32(img + a0, 0); a0 += 4;
+        if (d0 == 0) break;
+    }
+    copy_screen(img);
+    func_182f0(img);
+    func_18334(img);
+    func_18f8e(img, 0xa1);
+    func_159e2(img, a6, 0x27, 0x2c, 0x5f);
+    img[A_MODE_FLAG] = 0x87;
+    for (;;) {
+        load_fond(img);
+        if ((int16_t)be16(img + A_FILE_HANDLE) >= 0)
+            break;
+        wr16(img + A_THE_COMMAND, 0x918e);
+        run_command_keep_sp(img, a6);
+    }
+    set_palette(img);
+    func_181f0(img);
+    copy_screen(img);
+    reset_clear(img);
+    return a6;
+}
+
+/* FUN_0001881e @ 0x1881e: suena 0xf2, repinta el texto 0x13f56 y copia 0x3c
+ * filas de 0x28 longs desde screen_ptr_b+0x5500 a screen_ptr_a+0x5500 (VBL por
+ * fila, retrocediendo 0x140), guarda el icono del objeto +0x18 en 0x1a782
+ * (0x164a4), para el sonido y avanza A6. */
+void run_text_table(uint8_t *img, uint32_t a6, uint32_t d0, uint32_t d1);
+uint32_t func_164a4(uint8_t *img, uint32_t a1, uint32_t a2, uint32_t a5);
+void wait_vbl(uint8_t *img);
+void func_18f8e(uint8_t *img, uint32_t d4);
+void func_18fa4(uint8_t *img);
+
+uint32_t func_1881e(uint8_t *img, uint32_t a6) {
+    func_18f8e(img, 0xf2);
+    run_text_table(img, a6, 0, 0x62);
+    uint32_t a2 = be32(img + A_SCREEN_PTR_A) + 0x5500;
+    uint32_t a3 = be32(img + A_SCREEN_PTR_B) + 0x5500;
+    for (uint32_t d3 = 0x3b;; d3 = (d3 - 1) & 0xffff) {
+        for (uint32_t d2 = 0x27;; d2 = (d2 - 1) & 0xffff) {
+            wr32(img + a2, be32(img + a3));
+            a2 += 4;
+            a3 += 4;
+            if (d2 == 0)
+                break;
+        }
+        wait_vbl(img);
+        a3 = (a3 - 0x140) & 0xffffffffu;
+        a2 = (a2 - 0x140) & 0xffffffffu;
+        if (d3 == 0)
+            break;
+    }
+    uint32_t a2s = 0x1a782;
+    uint32_t a1 = be32(img + a2s);
+    func_164a4(img, a1, a2s, (be32(img + A_OBJECT_LIST_BEGIN) + 0x18) & 0xffffffffu);
+    func_18fa4(img);
+    return a6 + 1;
+}
+
+/* FUN_00018cfc @ 0x18cfc: dibuja los iconos de pista, baja 5 a los bytes 50/51 de
+ * la lista de objetos, reconstruye la tabla de iconos (0x16460), la lista
+ * (0x16582), copia pantalla y avanza A6. */
+uint32_t func_18cfc(uint8_t *img, uint32_t a6) {
+    draw_hint_icons(img);
+    uint32_t a0 = be32(img + A_OBJECT_LIST_BEGIN);
+    img[a0 + 50] = (uint8_t)(img[a0 + 50] - 5);
+    img[a0 + 51] = (uint8_t)(img[a0 + 51] - 5);
+    func_16460(img);
+    update_icon_list(img);
+    copy_screen(img);
+    return a6 + 1;
+}
+
+/* FUN_000186b6 @ 0x186b6: busca en 0x1a8f0 (desde la entrada A6[1], A6[2] intentos)
+ * la primera cuyo byte 0 sea A6[3]; guarda la entrada en $1a75e y A6 += 4. */
+uint32_t func_186b6(uint8_t *img, uint32_t a6) {
+    uint32_t d0 = ((uint32_t)img[a6 + 1] - 1) & 0xff;
+    d0 = (d0 * 6) & 0xffff;
+    uint32_t d1 = img[a6 + 3];
+    uint32_t count = img[a6 + 2];
+    uint32_t a0 = 0x1a8f0 + d0;
+    uint32_t d2 = (count - 1) & 0xffff;
+    for (;;) {
+        if (img[a0] == d1)
+            break;
+        a0 += 6;
+        if (d2 == 0) {
+            a0 = (a0 - 6) & 0xffffffffu;
+            break;
+        }
+        d2 = (d2 - 1) & 0xffff;
+    }
+    wr32(img + A_DAT_1A75E, a0);
+    return a6 + 4;
+}
+
+/* FUN_00018e12 @ 0x18e12: si $1a484 esta puesto, mapea D1 por la tabla 0x19994 a
+ * un trio (d2,d3,d4), compone 10 pares [pitch][vol] en 0xd8f0 desde 0x1d402+$1a484
+ * (dedup contra el par anterior, +4/+2 al cerrar) y arma la lista de samples en
+ * 0x192d2.. desde el banco 0x55b0a (0x10f8e) apuntando $192be a 0x55b0a; termina
+ * arrancando el driver (0x18f7a) con el primer par. */
+uint32_t advance_text_entry(uint8_t *img, uint32_t a1, uint32_t d4);
+void func_18f7a(uint8_t *img, uint32_t d1, uint32_t d4);
+
+static void tail_18e12(uint8_t *img, uint32_t a3, uint32_t d7);
+
+void func_18e12(uint8_t *img, uint32_t d1) {
+    if (be16(img + A_DAT_1A484) == 0)
+        return;
+    d1 = img[0x19994 + (((d1 & 0xff) - 1) & 0xff)];
+    if (d1 == 0)
+        return;
+
+    uint32_t d2 = 7, d3 = 0, d4 = 0x29;
+    d1 = (d1 - 1) & 0xff;
+    if (d1 != 0) {
+        d3 = 5;
+        d1 = (d1 - 1) & 0xff;
+        if (d1 != 0) {
+            d3 = 0xa; d4 = 0x23; d2 = 3;
+            d1 = (d1 - 1) & 0xff;
+            if (d1 != 0) {
+                d3 = 0xe; d4 = 0x1d;
+                d1 = (d1 - 1) & 0xff;
+                if (d1 != 0) {
+                    d3 = 5; d2 = 7;
+                    d1 = (d1 - 1) & 0xff;
+                    if (d1 != 0) {
+                        d2 = 3; d3 = 0xa; d4 = 0x29;
+                        d1 = (d1 - 1) & 0xff;
+                        if (d1 != 0) {
+                            d2 = 7; d3 = 0; d4 = 0x3d;
+                            d1 = (d1 - 1) & 0xff;
+                            if (d1 != 0) {
+                                d2 = 3; d3 = 0xe; d4 = 0x18;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    uint32_t a0 = 0x1d402 + be16(img + A_DAT_1A484);
+    uint32_t a1 = 0xd8f0;
+    uint32_t d7 = 9;
+    for (;;) {
+        uint32_t d0 = img[a0++];
+        d0 &= 7;
+        d0 &= d2;
+        if (d0 & 4)
+            d0 &= 4;
+        d0 = (d0 + d3) & 0xff;
+        if (d0 == img[a1 - 2])
+            continue;                        /* dedup: no avanza ni cuenta */
+        img[a1++] = (uint8_t)d0;
+        img[a1++] = (uint8_t)d4;
+        if (d7 == 0)
+            break;
+        d7 = (d7 - 1) & 0xffff;
+    }
+    img[a1 - 1] = (uint8_t)(img[a1 - 1] + 4);
+    img[a1 - 3] = (uint8_t)(img[a1 - 3] + 2);
+
+    wr32(img + 0x192be, 0x55b0a);
+    tail_18e12(img, 0xd8f2, 8);
+}
+
+/* Cola de 0x18e12 desde 0x18f0c: arma la lista de samples en 0x192d2 leyendo D7 pares
+ * [indice][vol] en A3 (banco 0x55b0a via 0x10f8e; los offsets son relativos a $192be) y
+ * arranca el driver con el primer par de 0xd8f0. Entrada propia 0x18f0c (desde 0x16ab6). */
+static void tail_18e12(uint8_t *img, uint32_t a3, uint32_t d7) {
+    img[0x192cf] = 1;
+    uint32_t a0b = 0x192d2;
+    wr32(img + 0x1930e, a0b);
+    for (;;) {
+        uint32_t d4b = img[a3];
+        img[a0b + 1] = img[a3 + 1];
+        uint32_t a1b = advance_text_entry(img, 0x55b0a, d4b);
+        uint32_t a2 = be32(img + A_CUR_STR_END);
+        uint32_t base = be32(img + 0x192be);
+        wr16(img + a0b + 2, (uint16_t)((a1b - base) + 2));
+        wr16(img + a0b + 4, (uint16_t)(a2 - base));
+        a3 += 2;
+        a0b += 6;
+        if (d7 == 0)
+            break;
+        d7 = (d7 - 1) & 0xffff;
+    }
+    func_18f7a(img, img[0xd8f1], img[0xd8f0]);
+}
+
+void func_18f0c(uint8_t *img, uint32_t a3, uint32_t d7) {
+    tail_18e12(img, a3, d7);
+}
+
+/* FUN_00013f2a @ 0x13f2a: imprime la tabla de texto 0x24982 con el indice de
+ * $1acf1 (0x13f56, d1=0x5c), suena 0x1d/0x1f y copia pantalla. A6 += 1. */
+uint32_t func_13f2a(uint8_t *img, uint32_t a6) {
+    uint32_t d0 = img[A_DAT_1ACF1];
+    a6 += 1;
+    run_text_table(img, a6, d0, 0x5c);
+    func_18f7a(img, 0x1d, 0x1f);
+    copy_screen(img);
+    return a6;
+}
+
+/* FUN_00016250 @ 0x16250: avanza la pista (0x18a10), pinta el color 7 a 0x777,
+ * espera una VBL (0x13594) y lo devuelve a 0. */
+void func_18a10(uint8_t *img);
+uint32_t func_1680c(uint8_t *img);
+
+void func_16250(uint8_t *img) {
+    func_18a10(img);
+    os_setcolor(0, 0x777);
+    wait_vbl(img);
+    os_setcolor(0, 0);
+}
+
+/* FUN_00013686 @ 0x13686: copia 5 bytes desde A0 al paquete IKBD $1a44f. */
+
+
+/* FUN_000169b4 @ 0x169b4 + envoltorios 0x1699c/0x169a4/0x169ac: llaman a 0x1680c
+ * (espera + clase), despachan el comando 0x9183 y, si hay seleccion y clase, mapean
+ * el byte 2 de la clase (0x5d-0x20, 0x85-0x49, -0x2a; <<1) a la tabla de A1; el
+ * wrapper 0x169ac ademas suena 0x16. */
+static void body_169b4(uint8_t *img, uint32_t a1) {
+    func_1680c(img);
+    uint32_t a0 = be32(img + A_ELEM_CLASS);
+    wr16(img + A_THE_COMMAND, 0x9183);
+    if (img[A_SEL_1ACC9] == 0 || img[0x1ace6] == 0) {
+        run_command_keep_sp(img, 0);
+        return;
+    }
+    uint32_t d0 = img[a0 + 2];
+    if (d0 == 0x5d)
+        d0 = (d0 - 0x20) & 0xff;
+    if (d0 == 0x85)
+        d0 = (d0 - 0x49) & 0xff;
+    d0 = (d0 - 0x2a) & 0xff;
+    d0 = (d0 << 1) & 0xffff;
+    wr16(img + A_THE_COMMAND, be16(img + a1 + d0));
+    if (a1 == 0x1ac32)
+        func_18f8e(img, 0x16);
+    run_command_keep_sp(img, 0);
+}
+
+void func_1699c(uint8_t *img) { body_169b4(img, 0x1ac82); }
+void func_169a4(uint8_t *img) { body_169b4(img, 0x1ac5a); }
+void func_169ac(uint8_t *img) { body_169b4(img, 0x1ac32); }
+void func_169b4(uint8_t *img) { body_169b4(img, 0x1ac0a); }
+
+/* FUN_00016ab6 @ 0x16ab6: guarda todos los registros y salta a la cola 0x18f0c con el
+ * A3/D7 del llamante (0x16a20 fija $192be = 0x64c8e antes). */
+void func_16ab6(uint8_t *img, uint32_t a3, uint32_t d7) {
+    tail_18e12(img, a3, d7);
+}
+
+/* FUN_00018e06 @ 0x18e06: D1 = A6[1], cuerpo 0x18e12 y A6 += 2. */
+uint32_t func_18e06(uint8_t *img, uint32_t a6) {
+    func_18e12(img, img[a6 + 1]);
+    return a6 + 2;
+}
+
+/* FUN_00016902 @ 0x16902: imprime el nombre del objeto seleccionado con la pista
+ * segun $1acd7 (6/7/0x23), publica $1a484 = $1a482, limpia el bit 6 del color,
+ * arma el banco de samples (0x18e12) y espera (0x1228a -> 0x1232e). Devuelve A6. */
+void func_1695a(uint8_t *img);
+void text_window(uint8_t *img, uint32_t a5, uint32_t a6);
+uint32_t text_index_arg(uint8_t *img, uint32_t a5, uint32_t d4, uint32_t *a6);
+uint32_t func_1228a(uint8_t *img, uint32_t a6);
+void hint_blit_stroke(uint8_t *img, uint32_t *a6);
+
+uint32_t func_16902(uint8_t *img, uint32_t a6) {
+    uint32_t d4 = 6;
+    if (img[A_DAT_1ACD7] < 0x55) {
+        d4 = 7;
+        if (img[A_DAT_1ACD7] < 0xaa)
+            d4 = 0x23;
+    }
+    uint32_t a5 = text_index_arg(img, 0x3c534, d4, &a6);
+    wr16(img + A_DAT_1A484, be16(img + A_TEXT_INDEX));
+    func_1695a(img);
+    /* 0x1695a deja A6 = 0x19970; 0x10b6c lo deja en 0x19974 (+4) */
+    img[0x19973] &= 0xbf;
+    text_window(img, a5, 0x19970);
+    func_18e12(img, 0x23);
+    (void)func_1228a(img, 0x19974);
+    uint32_t cur = 0x19975;
+    hint_blit_stroke(img, &cur);
+    return 0x19976;
+}
+
+/* FUN_0001870a @ 0x1870a: avanza la tabla 0x2741e (0x16210) hasta que (byte&7)
+ * != 7, imprime la entrada del banco 0x3c534 correspondiente (0x10fb4/0x10b6c con
+ * A6 = 0x19974), espera tecla (0x1228a) y blitea los iconos 0x1232e. */
+uint32_t text_index_arg(uint8_t *img, uint32_t a5, uint32_t d4, uint32_t *a6);
+void text_window(uint8_t *img, uint32_t a5, uint32_t a6);
+void hint_blit_stroke(uint8_t *img, uint32_t *a6);
+uint32_t func_1228a(uint8_t *img, uint32_t a6);
+
+uint32_t func_1870a(uint8_t *img, uint32_t a6) {
+    uint32_t d4;
+    for (;;) {
+        func_16210(img);
+        d4 = ((uint32_t)img[A_DAT_1ACD7] & 7) + 0x149;
+        if (d4 < 0x14f)
+            break;
+    }
+    uint32_t a5 = text_index_arg(img, 0x3c534, d4, &a6);
+    text_window(img, a5, 0x19974);
+    /* 0x10b6c deja A6 en 0x19978 (avanza +4); 0x1228a/0x1232e suman 1 cada uno */
+    (void)func_1228a(img, 0x19978);
+    uint32_t a6b = 0x19979;
+    hint_blit_stroke(img, &a6b);
+    return 0x1997a;
+}
+
+/* FUN_0001851a @ 0x1851a (cmd idx 117): fija $1a75e a la entrada (A6[1]-1) de
+ * 0x1a8f0, A6 += 1 y cae en 0x184cc (A6 total += 2). */
+uint32_t func_1851a(uint8_t *img, uint32_t a6) {
+    uint32_t d0 = ((uint32_t)img[a6 + 1] - 1) & 0xff;
+    d0 = (d0 * 6) & 0xffff;
+    wr32(img + A_DAT_1A75E, 0x1a8f0 + d0);
+    return body_184de(img, a6 + 1, 0x80, 0x55);
+}
+
+/* FUN_00018888 @ 0x18888 y FUN_00018890 @ 0x18890: fijan A4 = 0x8000/0 y caen en
+ * el cuerpo 0x18896: carga el banco de animacion A6[1] (0x15ac8), intercambia los
+ * bytes del stride en 0xd8f0 y blitea con 0x11030. A6 += 4. */
+void func_15ac8(uint8_t *img, uint32_t d0);
+void func_11030(uint8_t *img, uint32_t a1, uint32_t d0, uint32_t d1, uint32_t a4off);
+
+static void body_18896(uint8_t *img, uint32_t a6, uint32_t a4) {
+    wr32(img + 0x1a4c6, 0xd8f0);
+    func_15ac8(img, img[a6 + 1]);
+    uint32_t d0 = img[a6 + 2];
+    uint32_t d1 = img[a6 + 3];
+    uint32_t a1 = 0xd8f0;
+    uint32_t d2 = be16(img + a1);
+    d2 = ((d2 >> 8) | (d2 << 8)) & 0xffff;
+    wr16(img + a1, d2);
+    func_11030(img, a1, d0, d1, a4);
+}
+
+uint32_t func_18888(uint8_t *img, uint32_t a6) {
+    body_18896(img, a6, 0x8000);
+    return a6 + 4;
+}
+
+uint32_t func_18890(uint8_t *img, uint32_t a6) {
+    body_18896(img, a6, 0);
+    return a6 + 4;
+}
+
+/* FUN_00018a10 @ 0x18a10: avanza la tabla 0x2741e (0x16210) y llama al driver de
+ * sonido (0x18f7a) con D4 = ((byte>>3)&3)+0x90 y D1 = (byte&7)+0x23. */
+void func_18f7a(uint8_t *img, uint32_t d1, uint32_t d4);
+
+void func_18a10(uint8_t *img) {
+    func_16210(img);
+    uint32_t d0 = img[A_DAT_1ACD7];
+    uint32_t d4 = (((d0 >> 3) & 3) + 0x90) & 0xff;
+    uint32_t d1 = ((d0 & 7) + 0x23) & 0xff;
+    func_18f7a(img, d1, d4);
+}
+
+/* FUN_00018192 @ 0x18192: si $1acc7 == 8 avanza la pista 5 (0x1066e); busca el
+ * objeto 0xbe (0x177bc) y, si lo encuentra, le limpia el bit 7 de +4 y blitea su
+ * icono (0x124f8); luego busca en la tabla 0x19dbd..0x19e19 el byte $1acc7 y anima
+ * esa entrada (0x159d2). FUN_0001816e @ 0x1816e es el envoltorio: conserva A6, llama
+ * a 0x18192 y avanza A6. */
+void load_eche_bank_wrap(uint8_t *img, uint32_t d0);
+void blit_sprite(uint8_t *img, uint32_t a1);
+
+void func_18192(uint8_t *img) {
+    if (img[A_DAT_1ACC7] == 8)
+        load_eche_bank_wrap(img, 5);
+    uint32_t d0o;
+    if (func_177bc(img, 0xbe, 0, &d0o)) {
+        uint32_t a0 = be32(img + A_SELECTED_OBJECT);
+        img[a0 + 4] &= 0x7f;
+        uint32_t a2 = be32(img + A_SELECTED_ICON_PTR);
+        blit_sprite(img, be32(img + a2));
+    }
+    for (uint32_t a6l = 0x19dbd; a6l != 0x19e19; a6l += 4) {
+        if (img[a6l] == img[A_DAT_1ACC7]) {
+            func_159d2(img, a6l);
+            return;
+        }
+    }
+}
+
+uint32_t func_1816e(uint8_t *img, uint32_t a6) {
+    func_18192(img);
+    return a6 + 1;
+}
+
+/* FUN_0001780c @ 0x1780c: A6[1] es la mascara D3 y A6[2] la clase D0. Con D3 != 0
+ * busca el objeto (0x17792) y con D3 == 0 lo indexa directamente; luego 0x177e4 +
+ * 0x14926 y, si no hay clase (0x1ace6 == 0), deja 0x1a772 = 0x1aad6. A6 += 3.
+ * El camino "no encontrado" del original salta a 0x1018e (Pterm) sin escribir. */
+uint32_t func_1780c(uint8_t *img, uint32_t a6) {
+    uint32_t d0 = img[a6 + 2];
+    uint32_t d3 = img[a6 + 1];
+    uint32_t d2 = d0 & 0xff;
+    uint32_t a0;
+    if (d3 != 0) {
+        uint32_t d1;
+        if (!func_17792(img, d0, d3, 0, &a0, &d1, &d2))
+            return a6 + 3;
+    } else {
+        d0 = (d0 - 1) & 0xff;
+        a0 = be32(img + A_OBJECT_LIST_BEGIN) + (d0 << 3);
+    }
+    func_177e4(img, a0, d2);
+    func_14926(img);
+    if (img[A_CLASS_IDX] == 0)
+        wr32(img + A_ELEM_CLASS, 0x1aad6);
+    return a6 + 3;
+}
+
+/* ---- banco de animacion (0x15ac8) y blit de texto (0x1103e) ---- */
+
+uint32_t advance_text_entry(uint8_t *img, uint32_t a1, uint32_t d4);
+void func_12ad6(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
+                 uint32_t a3);
+void func_12b04(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
+                 uint32_t a3);
+void text_blit_fwd(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t a3,
+                     uint32_t d2w, uint32_t d3w, uint32_t d7w);
+
+/* FUN_0001103e @ 0x1103e: fija 0x1a534 = D2*2 y cae en el blit de texto (0x1104a). */
+void func_1103e(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
+                 uint32_t d7) {
+    uint32_t d5 = (d2 << 1) & 0xffff;
+    wr32(img + A_DAT_1A534, d5);
+    text_blit_fwd(img, a0, a1, be32(img + A_DAT_1A534), d2, d3, d7);
+}
+
+/* FUN_00015ac8 @ 0x15ac8: carga el banco de animacion en *(0x1a4c6) (0x190 longs a
+ * cero), recorre la entrada D0 de la tabla 0x27fe2 (walk), copia sus 2 primeros bytes
+ * como cabecera, toma el bitmap de 0x28ad2 (0x10f8e) y blitea cada bloque de 3 bytes
+ * [n][b1][b2] con 0x12ad6/0x12b04 (bit7), stride = cabecera[0]*2. */
+void func_15ac8(uint8_t *img, uint32_t d0) {
+    frame_gate_delay(img);
+    uint32_t a1 = be32(img + 0x1a4c6);
+    for (int i = 0; i < 0x190; i++)
+        wr32(img + a1 + (uint32_t)i * 4, 0);
+
+    uint32_t a4 = 0x27fe2;
+    if (d0 != 0) {
+        uint32_t n = (d0 - 1) & 0xffff;
+        for (;;) {
+            a4 += img[a4];
+            if (n == 0)
+                break;
+            n = (n - 1) & 0xffff;
+        }
+    }
+    uint32_t a5 = a4;
+    a4 += img[a4];
+    a5 += 1;
+    a1 = be32(img + 0x1a4c6);
+    img[a1++] = img[a5++];
+    img[a1++] = img[a5++];
+
+    /* Cada bloque recalcula su bitmap (0x10f8e), tamano y offset: el original
+     * hace TODO esto dentro del bucle (0x15b02). Calcularlo una sola vez fuera
+     * solo pintaba el primer bloque repetido -> sprites animados truncados. */
+    for (;;) {
+        uint32_t d4 = img[a5];
+        uint32_t a1b = advance_text_entry(img, 0x28ad2, d4);
+        uint32_t d3v = img[a1b++];
+        uint32_t d2v = img[a1b++];
+        uint32_t d0v = (((uint32_t)(img[a5 + 2] & 0x7f) << 8) | img[a5 + 1]) & 0xffff;
+        uint32_t a0 = be32(img + 0x1a4c6);
+        uint32_t a3 = ((uint32_t)img[a0] << 1) & 0xffffffffu;
+        a0 += 2;
+        a0 += (d0v << 1);
+        if (img[a5 + 2] & 0x80)
+            func_12b04(img, a0, a1b, d2v, d3v, a3);
+        else
+            func_12ad6(img, a0, a1b, d2v, d3v, a3);
+        a5 += 3;
+        if (a5 == a4) break;
+    }
+}
+
+void func_15ac8(uint8_t *img, uint32_t d0);
+void func_1103e(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
+                 uint32_t d7);
+uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
+
+/* FUN_00016636 @ 0x16636: el objeto A2 (byte0=x, byte2=y) pide la clase D3. Busca la
+ * clase en la tabla 0x1aa72 (0x29 entradas de 5 B) por byte1&0xf; con el indice
+ * avanza el contador de 0x1a57d, carga el banco de animacion en 0xd8f0 (0x15ac8) y
+ * lo blitea en el back buffer ((x,y)-0x8000) con 0x1103e. Devuelve D0=0xff si la
+ * clase esta, 0 si no. */
+uint32_t func_16636(uint8_t *img, uint32_t d3, uint32_t a2, uint32_t *o) {
+    uint32_t a3 = A_OBJ_TBL;
+    int found = 0;
+    for (uint32_t d2 = 0x28;; d2 = (d2 - 1) & 0xffff) {
+        if ((img[a3 + 1] & 0xf) == (d3 & 0xff)) {
+            found = 1;
+            break;
+        }
+        a3 += 5;
+        if (d2 == 0)
+            break;
+    }
+    if (!found)
+        return 0;
+
+    uint32_t d1 = img[a3 + 3] & 0xf8;
+    uint32_t d2v = d1 >> 3;
+    a3 = 0x1a57d + d1 + d2v;
+    uint32_t d0 = img[a3];
+    img[a3] = (uint8_t)((img[a3] + 1) & 7);
+    a3 += d0 + 1;
+    d0 = img[a3];
+
+    wr32(img + 0x1a4c6, A_SAVE_DESC);
+    func_15ac8(img, d0);
+
+    uint32_t d7;
+    uint32_t a0 = screen_address(img, img[a2], img[a2 + 2], &d7) - 0x8000;
+    uint32_t a1 = A_SAVE_DESC;
+    uint32_t e2 = img[a1++];
+    uint32_t e3 = img[a1++];
+    func_1103e(img, a0, a1, e2, e3, d7);
+    /* 0x16636 preserva D2/D3/D7/A0 alrededor de 0x1103e (movem #$3180): los deja
+     * tal cual entraron (destino back buffer, ancho/alto del banco y fase). */
+    o[0] = a0;
+    o[1] = e2;
+    o[2] = e3;
+    o[3] = d7;
+    return 0xff;
+}
+
+/* FUN_000166ec @ 0x166ec: escanea la lista de objetos desde *(0x1a7d2) buscando
+ * entradas con byte4 bit6 y clase 0xd0. Para la primera que ademas 0x16636 resuelva,
+ * espera VBL, restaura el cursor, blitea el sprite del banco y el icono del objeto.
+ * FUN_000166da @ 0x166da: solo si (0x1acd4 & 0x1f) == 0x1e. */
+void mask_restore_rows(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7);
+void cursor_draw(uint8_t *img);
+void cursor_restore(uint8_t *img);
+void blit_sprite(uint8_t *img, uint32_t a1);
+void wait_vbl(uint8_t *img);
+
+uint32_t func_166ec(uint8_t *img) {
+    uint32_t d2 = img[A_SEL_1AB4A];
+    uint32_t a2 = be32(img + A_SEL_1A7D2);
+    if (a2 == be32(img + A_OBJECT_LIST_END)) {
+        a2 = be32(img + A_OBJECT_LIST_BEGIN);
+        d2 = 0;
+    }
+    for (;;) {
+        d2 = (d2 + 1) & 0xff;
+        uint32_t d1 = img[a2 + 4];
+        if ((d1 & 0x40) && ((d1 & 0xf8) == 0xd0)) {
+            wr32(img + A_SEL_1A7D2, a2 + 8);
+            img[A_SEL_1AB4A] = (uint8_t)d2;
+            uint32_t d3 = (((a2 - be32(img + A_OBJECT_LIST_BEGIN)) >> 3) + 1) & 0xff;
+            uint32_t o[4];
+            if (func_16636(img, d3, a2, o) != 0) {
+                wait_vbl(img);
+                cursor_restore(img);
+                mask_restore_rows(img, o[0] + 0x8000, o[1], o[2], o[3]);
+                cursor_draw(img);
+                uint32_t idx = (img[A_SEL_1AB4A] - 1) & 0xff;
+                blit_sprite(img, be32(img + A_COMMAND_HINTS_LIST + idx * 4));
+                return 0;
+            }
+        }
+        a2 += 8;
+        if (a2 == be32(img + A_OBJECT_LIST_END))
+            break;
+    }
+    wr32(img + A_SEL_1A7D2, a2);
+    img[A_SEL_1AB4A] = (uint8_t)d2;
+    return 0;
+}
+
+uint32_t func_166da(uint8_t *img) {
+    if ((img[A_DAT_1ACD4] & 0x1f) != 0x1e)
+        return 0;
+    return func_166ec(img);
+}
+
+/* ---- hit-test de objetos y cursor ---- */
+
+int func_14798(uint8_t *img, uint32_t a4, uint32_t d0, uint32_t d1);
+void wait_frame(uint8_t *img);
+void cursor_draw(uint8_t *img);
+
+/* FUN_00010522 @ 0x10522: espera un frame y cae en el dibujo del cursor (0x10526). */
+void wait_frame_cursor(uint8_t *img) {
+    wait_frame(img);
+    cursor_draw(img);
+}
+
+/* FUN_00014886 @ 0x14886: hit-test de la lista de objetos contra el cursor. Si el
+ * cursor cae en un objeto con bit7 de su byte4 y (byte4 & D2) == D3, selecciona el
+ * icono/objeto y busca su clase en 0x1aa72. Si no, marca 0x1a48a=1 y el selector por
+ * defecto. */
+void hit_test_objects(uint8_t *img, uint32_t d2, uint32_t d3) {
+    uint32_t d0 = (be16(img + A_CURSOR_X) >> 2) & 0xffff;
+    uint32_t d1 = be16(img + A_CURSOR_Y);
+    uint32_t a4 = be32(img + A_OBJECT_LIST_BEGIN);
+    uint32_t d4 = 1;
+    int found = 0;
+    for (;;) {
+        if (func_14798(img, a4, d0, d1) && (img[a4 + 4] & 0x80) &&
+            ((img[a4 + 4] & (d2 & 0xff)) == (d3 & 0xff))) {
+            found = 1;
+            break;
+        }
+        a4 += 8;
+        d4 = (d4 + 1) & 0xff;
+        if (a4 == be32(img + A_OBJECT_LIST_END))
+            break;
+    }
+    if (!found) {
+        img[0x1a48a] = 1;
+        img[A_TEXT_SEL_A] = img[A_1AB48];
+        img[A_SEL_1ACC9] = 0;
+        return;
+    }
+
+    img[A_SEL_1ACC9] = (uint8_t)d4;
+    uint32_t off = (((d4 & 0xff) - 1) << 2);
+    wr32(img + A_SELECTED_ICON_PTR, A_COMMAND_HINTS_LIST + off);
+    wr32(img + A_SELECTED_OBJECT, a4);
+    img[A_CUR_CLASS] = img[a4 + 4];
+    img[A_TEXT_SEL_A] = img[a4 + 5];
+    img[0x1a48a] = 0;
+    wr16(img + A_THE_COMMAND, be16(img + a4 + 6));
+
+    uint32_t a0 = A_OBJ_TBL;
+    uint32_t dd2 = 1;
+    uint32_t cls = img[A_SEL_1ACC9];
+    for (uint32_t c = 0x28;; c = (c - 1) & 0xffff) {
+        if ((img[a0 + 1] & 0xf) == cls) {
+            wr32(img + A_ELEM_CLASS, a0);
+            img[A_CLASS_IDX] = (uint8_t)dd2;
+            return;
+        }
+        a0 += 5;
+        dd2 = (dd2 + 1) & 0xff;
+        if (c == 0)
+            break;
+    }
+    img[A_CLASS_IDX] = 0;
+}
+
+/* FUN_00014832 @ 0x14832: hit-test y eleccion del sprite del cursor segun 0x1a48a y
+ * los bits de 0x1ad0f. */
+void func_14832(uint8_t *img) {
+    hit_test_objects(img, img[A_HIT_MASK], img[A_HIT_VALUE]);
+    uint32_t a0 = 0x194dc;
+    if (img[0x1a48a] == 0) {
+        uint32_t d0 = img[A_CUR_CLASS] & 0x38;
+        a0 = 0x1961c;
+        if (d0 != 0x10) {
+            a0 = 0x1965c;
+            if (d0 & 0x20)
+                a0 = 0x1969c;
+        }
+    }
+    wr32(img + A_CURSOR_SPRITE_PTR, a0);
+}
+
+/* FUN_00016582 @ 0x16582 (update_icon_list): limpia el bit7 de los objetos de clase
+ * 0x10; recorre la tabla 0x1aa72 y, para las entradas activas de la clase actual
+ * (0x1acd2), marca el objeto correspondiente (bit7 + selector) y lo anima (0x16636). */
+void update_icon_list(uint8_t *img) {
+    for (uint32_t a2 = be32(img + A_OBJECT_LIST_BEGIN); a2 != be32(img + A_OBJECT_LIST_END); a2 += 8) {
+        if ((img[a2 + 4] & 0x38) == 0x10)
+            img[a2 + 4] &= 0x7f;
+    }
+
+    uint32_t a1 = A_OBJ_TBL;
+    for (uint32_t d6 = 0x28;; d6 = (d6 - 1) & 0xffff) {
+        img[a1 + 1] &= 0xf0;
+        if (img[0x1acd2] == img[a1] && !(img[a1 + 1] & 0x40)) {
+            uint32_t a2 = be32(img + A_OBJECT_LIST_BEGIN);
+            uint32_t d1 = (img[a1 + 3] & 7) | 0x10;
+            uint32_t d3 = 1;
+            int found = 0;
+            for (;;) {
+                uint32_t d2 = img[a2 + 4] & 0xbf;
+                if (d2 == d1) {
+                    found = 1;
+                    break;
+                }
+                a2 += 8;
+                d3 = (d3 + 1) & 0xff;
+                if (a2 == be32(img + A_OBJECT_LIST_END))
+                    break;
+            }
+            if (found) {
+                img[a2 + 4] |= 0x80;
+                img[a2 + 5] = img[a1 + 2];
+                img[a1 + 1] |= (uint8_t)d3;
+                if (img[a2 + 4] & 0x40) {
+                    uint32_t o[4];
+                    func_16636(img, d3, a2, o);
+                }
+            }
+        }
+        a1 += 5;
+        if (d6 == 0)
+            break;
+    }
+}
+
+/* ---- animacion del objeto seleccionado (0x17856) ---- */
+
+void blit_sprite(uint8_t *img, uint32_t a1);
+uint32_t draw_text_box(uint8_t *img, uint32_t a6);
+void func_159d2(uint8_t *img, uint32_t a6);
+
+/* FUN_00017856 @ 0x17856: blitea el icono seleccionado (*(0x1a81e)), y si el byte0
+ * del script (A1, que el original salva y recupera como A6) tiene el bit7, fija el
+ * cursor con la posicion del objeto (*(0x1a81a)), dibuja la caja de texto (0x1042c)
+ * y prepara el "script" de 3 bytes en 0x55b02 [indice|x|y]. Cierra con el
+ * interprete de animacion (0x159d2) sobre A1-1. */
+void func_17856(uint8_t *img, uint32_t a1) {
+    uint32_t a2 = be32(img + A_SELECTED_ICON_PTR);
+    blit_sprite(img, be32(img + a2));
+    uint32_t a0 = be32(img + A_SELECTED_OBJECT);
+    uint32_t a6 = a1;
+    if (img[a6] & 0x80) {
+        uint32_t d0 = ((uint32_t)img[a0] << 2) & 0xffff;
+        wr16(img + A_CURSOR_X, d0);
+        wr16(img + A_CURSOR_Y, img[a0 + 2]);
+        if (img[a6 + 1] != 0 || img[a6 + 2] != 0)
+            draw_text_box(img, a6);
+        d0 = img[a6] & 0x7f;
+        a6 = 0x55b02;
+        img[a6] = (uint8_t)d0;
+        img[a6 + 1] = img[a0];
+        img[a6 + 2] = img[a0 + 2];
+    }
+    func_159d2(img, a6 - 1);
+}
+
+/* FUN_00018740 @ 0x18740: logica de fase por el reloj 0x1ab60. Segun el tramo fija
+ * 0x1acfd/0x1ad14/0x1acec, reinicia partes de la tabla 0x1aa72 y encola comandos
+ * (0x1ac06). Sin llamadas ni efectos fuera de imagen. */
+void func_18740(uint8_t *img) {
+    uint32_t t = be16(img + A_DAT_1AB60);
+    if (t < 0xe10)
+        return;
+    if (img[A_DAT_1ACEC] >= 0x3f) {
+        if (t < 0x189c)
+            return;
+        if (t >= 0x1c20) {
+            wr16(img + A_DAT_1AC06, 0xc318);
+            return;
+        }
+        img[A_DAT_1ACFD] = 2;
+        img[A_DAT_1AD14] = 1;
+        if (img[A_DAT_1ACD2] == 0x3d)
+            return;
+        if (img[A_DAT_1ACD2] < 0x3b)
+            return;
+        if (img[A_DAT_1ACD2] < 0x4b) {
+            wr16(img + A_DAT_1AC06, 0xc012);
+            return;
+        }
+        return;
+    }
+
+    img[A_DAT_1ACFD] = 3;
+    img[A_DAT_1ACEC] = (img[A_DAT_1ACD2] < 0x2c) ? 0xff : 0x3f;
+    uint32_t a0 = A_OBJ_TBL;
+    img[a0 + 65] = 0;
+    img[a0 + 70] = 0;
+    img[a0 + 75] = 0;
+    img[a0 + 80] = 0;
+    img[a0 + 85] = 0;
+    img[a0 + 90] = 0;
+    img[a0 + 95] = 0x38;
+    img[a0 + 100] = 0x38;
+    img[a0 + 105] = 0x38;
+    img[a0 + 110] = 0x38;
+    if (img[A_DAT_1ACD2] >= 0x16)
+        return;
+    wr16(img + A_DAT_1AC06, 0xc012);
+}
+
+/* ---- actualizacion de pista / sonido (0x18dc0) ---- */
+
+uint32_t func_16210(uint8_t *img);
+
+/* FUN_00018dc0 @ 0x18dc0: si la pista es 8 o 0x32 y 0x1acd7 < 0x32, avanza la tabla
+ * 0x2741e (0x16210) y llama al driver de musica (0x18f7a) con D4/D1 derivados de la
+ * posicion. */
+void func_18f7a(uint8_t *img, uint32_t d1, uint32_t d4);
+void func_18dc0(uint8_t *img) {
+    uint8_t c = img[A_DAT_1ACD2];
+    if (c != 8 && c != 0x32)
+        return;
+    if (img[A_DAT_1ACD7] >= 0x32)
+        return;
+    func_16210(img);
+    uint32_t d0 = img[A_DAT_1ACD7];
+    uint32_t d4 = 0xd0 + ((d0 & 0x80) ? 1u : 0u);
+    uint32_t d1 = 0x34 + (d0 & 0xf);
+    func_18f7a(img, d1, d4);
+}
+
+/* ---- bucle principal (game_loop @ 0x101be) ---- */
+
+void func_18dc0(uint8_t *img);
+void script_step(uint8_t *img);
+void func_18740(uint8_t *img);
+void func_1627a(uint8_t *img);
+void wait_frame(uint8_t *img);
+int  func_1478a(uint8_t *img, uint32_t a4);
+void set_cursor_clip(uint8_t *img, uint32_t a0, uint32_t d0);
+void func_14832(uint8_t *img);
+uint32_t func_147ce(uint8_t *img, uint32_t a4);
+void overlay_a_draw(uint8_t *img, uint32_t a6);
+void overlay_b_draw(uint8_t *img, uint32_t a6);
+void handle_frame_input(uint8_t *img);
+void run_command_keep_sp(uint8_t *img, uint32_t a6);
+void run_command(uint8_t *img, uint32_t a7);
+void clear_object_flags(uint8_t *img);
+void draw_hint_icons(uint8_t *img);
+void func_16514(uint8_t *img);
+void wait_frame_cursor(uint8_t *img);
+
+/* Hook opcional al inicio de cada iteracion del bucle. Lo usa el motor nativo
+ * para aplicar guardado/carga de sala en un punto de control conocido (entre
+ * iteraciones); NULL en el build diferencial, asi que no altera la verificacion. */
+void (*hook_loop_top)(uint8_t *img) = 0;
+
+void game_loop(uint8_t *img, uint32_t a7) {
+    for (;;) {
+        if (hook_loop_top) hook_loop_top(img);
+        func_166da(img);
+        func_18dc0(img);
+        script_step(img);
+        func_18740(img);
+        func_1627a(img);
+        wait_frame(img);
+        wr16(img + A_THE_COMMAND, 0);
+
+        if (func_1478a(img, 0x1ab40)) {
+            set_cursor_clip(img, 0, 1);
+            img[A_TEXT_SEL_B] = 0x64;
+            func_14832(img);
+        } else {
+            set_cursor_clip(img, 0, 0);
+            img[A_TEXT_SEL_A] = 0x75;
+            func_147ce(img, 0x19b06);
+        }
+        if (img[A_TEXT_SEL_A] != img[A_1AB44])
+            overlay_a_draw(img, 0);
+        if (img[A_TEXT_SEL_B] != img[A_1AB47])
+            overlay_b_draw(img, 0);
+        handle_frame_input(img);
+
+        if ((img[A_INPUT_BUTTONS] & 0x04) && be16(img + A_THE_COMMAND) != 0) {
+            cursor_restore(img);
+            func_16514(img);
+            run_command(img, a7);
+            img[A_DAT_1ACE7]++;
+            if (img[A_DAT_1ACD3] != 0) {
+                img[A_DAT_1ACE8]--;
+                if (img[A_DAT_1ACE8] == 0)
+                    clear_object_flags(img);
+            }
+            goto lab_304;
+        }
+
+        if (img[A_DAT_1ACF2] < img[A_DAT_1ACE7]) {
+            wr16(img + A_THE_COMMAND, be16(img + A_DAT_1ABF8));
+            if (be16(img + A_THE_COMMAND) != 0)
+                goto lab_2cc;
+        }
+        if (img[A_DAT_1AD0B] != 0)
+            goto lab_310;
+        wr16(img + A_THE_COMMAND, be16(img + A_DAT_1AC06));
+        if (be16(img + A_THE_COMMAND) != 0)
+            goto lab_2cc;
+        if (be16(img + A_DAT_1ACAC) < be16(img + A_DAT_1AB60)) {
+            wr16(img + A_THE_COMMAND, be16(img + A_DAT_1ACAA));
+            if (be16(img + A_THE_COMMAND) != 0)
+                goto lab_2cc;
+        }
+        if (be16(img + A_DAT_1ACB0) < be16(img + A_DAT_1AB60))
+            goto lab_310;
+        wr16(img + A_THE_COMMAND, be16(img + A_DAT_1ACAE));
+        if (be16(img + A_THE_COMMAND) == 0)
+            goto lab_310;
+    lab_2cc:
+        cursor_restore(img);
+        func_16514(img);
+        run_command_keep_sp(img, 0);
+    lab_304:
+        draw_hint_icons(img);
+        wait_frame_cursor(img);
+        func_166ec(img);
+    lab_310:
+        if (be16(img + A_DAT_1A4D2) != 0)
+            return;
+    }
+}
+
+/* ---- intérprete de guion del bucle (script_step @ 0x17e3c) ---- */
+
+void update_icon_list(uint8_t *img);
+void copy_screen(uint8_t *img);
+uint32_t func_177bc(uint8_t *img, uint32_t d0, uint32_t d2_in, uint32_t *d0o);
+void func_17856(uint8_t *img, uint32_t a1);
+
+static void clear_selected_object(uint8_t *img) {
+    uint32_t p = be32(img + A_SELECTED_OBJECT);
+    img[p + 4] &= 0x7f;
+}
+
+void script_step(uint8_t *img) {
+    if (img[A_DAT_1AD0B] != 0)
+        return;
+    if (img[A_DAT_1ACEC] >= 0x3f)
+        return;
+    wr16(img + A_DAT_1AC06, 0);
+    if (img[A_1AAB4] & 0x40) {
+        img[A_1AAB3] = 0x38;
+        img[A_1AAB4] &= 0x0f;
+        img[A_1AAB6] = 0x34;
+    }
+    if (img[A_1AAE1] & 0x20)
+        img[A_DAT_1ACF6] |= 4;
+    if (be16(img + A_DAT_1ACB2) >= be16(img + A_DAT_1AB60))
+        return;
+    wr16(img + A_DAT_1ACB2, (be16(img + A_DAT_1AB60) + 0x1e) & 0xffff);
+
+    uint32_t a0 = be32(img + A_SCRIPT_PTR);
+    uint32_t a1e = A_OVL_ENTRY;
+    img[A_DAT_1AD05] = img[a0++];
+    if (a0 == 0x19d0f)
+        a0 = 0x19d03;
+    img[A_DAT_1AD06] = img[a0];
+    wr32(img + A_SCRIPT_PTR, a0);
+    if (img[A_DAT_1AD05] == 0x38) {
+        img[A_DAT_1ACF6] &= 0xfb;
+        img[a1e + 1] &= 0x1f;
+        img[a1e + 3] = 0x37;
+        if (img[A_1AAB3] == 0x38) {
+            img[A_1AAB4] &= 0x1f;
+            img[A_DAT_1AD07] = 1;
+        }
+    }
+    if (img[A_DAT_1AD05] == 0x0c && img[A_DAT_1AD06] == 0x0a) {
+        img[A_DAT_1AD07] = 0;
+        if (img[A_1AAB3] == 0x38) {
+            img[A_DAT_1AD06] = 0x2c;
+            wr32(img + A_SCRIPT_PTR, 0x19d07);
+        }
+    }
+    img[a1e] = img[A_DAT_1AD06];
+
+    uint32_t d0o;
+    uint32_t a1;
+    if (img[A_DAT_1AD07] != 0) {
+        uint32_t d0 = img[A_DAT_1AD06];
+        img[A_1AAB3] = (uint8_t)d0;
+        img[A_1AAD6] = (uint8_t)d0;
+        img[A_1AADB] = (uint8_t)d0;
+        if (img[A_DAT_1ACD2] == img[A_DAT_1AD05])
+            goto lab_180aa;
+        if (img[A_DAT_1ACD2] != img[A_DAT_1AD06])
+            return;
+        cursor_restore(img);
+        func_16514(img);
+        a1 = 0x19d12;
+        func_177bc(img, 0x6e, 0, &d0o);
+        func_17856(img, a1);
+        a1 = 0x19d15;
+        if (func_177bc(img, 0x64, 0, &d0o)) {
+            func_17856(img, a1);
+            a1 = 0x19d15;
+            func_177bc(img, 0x41, 0, &d0o);
+            func_17856(img, a1);
+            a1 = 0x19d15;
+            func_177bc(img, 0x69, 0, &d0o);
+            func_17856(img, a1);
+        }
+        goto lab_17fec;
+    }
+
+    if (img[a1e + 1] & 0x40)
+        return;
+    if (img[A_DAT_1ACD2] == img[A_DAT_1AD05])
+        goto lab_1807a;
+    if (img[A_DAT_1ACD2] != img[A_DAT_1AD06])
+        return;
+    cursor_restore(img);
+    func_16514(img);
+    func_177bc(img, 0x6e, 0, &d0o);
+    func_17856(img, 0x19d0f);
+    goto lab_17fec;
+
+lab_1807a:
+    cursor_restore(img);
+    func_16514(img);
+    func_177bc(img, 0x6e, 0, &d0o);
+    clear_selected_object(img);
+    func_17856(img, 0x19d18);
+    draw_hint_icons(img);
+    cursor_draw(img);
+    return;
+
+lab_180aa:
+    cursor_restore(img);
+    func_16514(img);
+    func_177bc(img, 0x6e, 0, &d0o);
+    clear_selected_object(img);
+    func_177bc(img, 0x41, 0, &d0o);
+    clear_selected_object(img);
+    func_177bc(img, 0x64, 0, &d0o);
+    clear_selected_object(img);
+    func_177bc(img, 0x69, 0, &d0o);
+    clear_selected_object(img);
+    func_17856(img, 0x19d1e);
+    draw_hint_icons(img);
+    cursor_draw(img);
+    return;
+
+lab_17fec:
+    update_icon_list(img);
+    copy_screen(img);
+    draw_hint_icons(img);
+    cursor_draw(img);
+    if (img[A_DAT_1ACF7] != 0) {
+        wr16(img + A_DAT_1AC06, 0xc1fd);
+        return;
+    }
+    if (img[A_1AAE1] & 0x20) {
+        wr16(img + A_DAT_1AC06, 0xc1e5);
+        return;
+    }
+    if (img[A_DAT_1ACD2] != 0x2c)
+        return;
+    wr16(img + A_DAT_1AC06, 0xc060);
+}
+
+/* ---- estado de objetos/hints 0x17094/0x172ca y tabla 0x16f90/0x17930 ---- */
+
+/* FUN_00016f90 @ 0x16f90: suma 0x101a8 a cada long no nulo de la tabla
+ * 0x1a752..0x1a82e (0x37 entradas). */
+void hint_table_relocate(uint8_t *img) {
+    for (uint32_t a0 = 0x1a752; a0 != 0x1a82e; a0 += 4) {
+        if (be32(img + a0) != 0)
+            wr32(img + a0, be32(img + a0) + 0x101a8);
+    }
+}
+
+/* FUN_00017094 @ 0x17094: mantiene la tabla 0x1aa72 (bytes 0, 0xaa, 0xaf, 0xb0)
+ * contra el objeto de clase 0x50 y la entrada 0x19b46 (13 B) elegida por 0x1acc7.
+ * Varias ramas fijan el comando 0x1acaa (0xa014/0xa015) y el temporizador 0x1acac. */
+static void hint_clear_17094(uint8_t *img, uint32_t a1) {
+    img[a1 + 170] = 0;
+    img[a1] = 0;
+    img[a1 + 175] = 0;
+    img[0x1acfc] &= 0x80;
+}
+
+void func_17094(uint8_t *img, uint32_t a1) {
+    if (img[0x1acd2] == 8 && (img[0x1acfc] & 0x80)) {
+        hint_clear_17094(img, a1);
+        return;
+    }
+    a1 = 0x1aa72;
+    uint32_t a2 = be32(img + A_OBJECT_LIST_BEGIN);
+    img[a1 + 1] &= 0xbf;
+    img[a1 + 171] &= 0xbf;
+    img[a1 + 176] &= 0xbf;
+    int found = 0;
+    for (;;) {
+        if ((img[a2 + 4] & 0x7f) == 0x50) { found = 1; break; }
+        a2 += 8;
+        if (a2 == be32(img + A_OBJECT_LIST_END)) break;
+    }
+    if (!found) { hint_clear_17094(img, a1); return; }
+    a2 = 0x19b46;
+    found = 0;
+    for (;;) {
+        if (img[a2] == img[A_DAT_1ACC7]) { found = 1; break; }
+        a2 += 0xd;
+        if (a2 == 0x19c8b) break;
+    }
+    if (!found) { hint_clear_17094(img, a1); return; }
+    wr32(img + 0x1a80a, a2);
+    uint32_t d0 = img[0x1acd2];
+    if (img[a1] == d0 || img[a1 + 170] == d0 || img[a1 + 175] == d0) {
+        wr16(img + 0x1acaa, 0xa015);
+        wr16(img + 0x1acac, (be16(img + 0x1ab60) + 5) & 0xffff);
+        img[0x1acfc] |= 1;
+        return;
+    }
+    hint_clear_17094(img, a1);
+    uint8_t c = img[A_DAT_1ACD7];
+    if (c < 0x27) {
+        img[a1] = img[0x1acd2];
+        wr16(img + 0x1acaa, 0xa015);
+        wr16(img + 0x1acac, (be16(img + 0x1ab60) + 5) & 0xffff);
+        img[0x1acfc] |= 1;
+        return;
+    }
+    if (c >= 0x4e) return;
+    wr16(img + 0x1acaa, 0xa014);
+    wr16(img + 0x1acac, (be16(img + 0x1ab60) + 5) & 0xffff);
+    img[0x1acfc] |= 1;
+}
+
+/* FUN_000172ca @ 0x172ca: como 0x17094 pero para la clase 0x51 y la tabla 0x19c8b
+ * (7 B); fija 0x1acae (0xa01e/0xa01f) y 0x1acb0. */
+void func_172ca(uint8_t *img) {
+    uint32_t a1 = 0x1aa72;
+    if (img[0x1acd2] == 0x3b && img[0x1ad14] == 0) {
+        img[0x1aa8b] = 0x3b;
+        return;
+    }
+    uint32_t a2 = be32(img + A_OBJECT_LIST_BEGIN);
+    img[a1 + 26] &= 0xbf;
+    int found = 0;
+    for (;;) {
+        if ((img[a2 + 4] & 0x7f) == 0x51) { found = 1; break; }
+        a2 += 8;
+        if (a2 == be32(img + A_OBJECT_LIST_END)) break;
+    }
+    if (!found) { img[a1 + 25] = 0; return; }
+    a2 = 0x19c8b;
+    found = 0;
+    for (;;) {
+        if (img[a2] == img[A_DAT_1ACC7]) { found = 1; break; }
+        a2 += 7;
+        if (a2 == 0x19cd1) break;
+    }
+    if (!found) { img[a1 + 25] = 0; return; }
+    wr32(img + 0x1a80e, a2);
+    uint32_t d0 = img[0x1acd2];
+    if (img[a1 + 25] == d0)
+        goto emit_a01f;
+    img[a1 + 25] = 0;
+    if (img[A_DAT_1ACD7] >= 0xd9) {
+        img[a1 + 25] = img[0x1acd2];
+        goto emit_a01f;
+    }
+    if (img[A_DAT_1ACD7] < 0xb2)
+        return;
+    wr16(img + 0x1acae, 0xa01e);
+    wr16(img + 0x1acb0, (be16(img + 0x1ab60) + 5) & 0xffff);
+    return;
+emit_a01f:
+    wr16(img + 0x1acae, 0xa01f);
+    wr16(img + 0x1acb0, (be16(img + 0x1ab60) + 5) & 0xffff);
+}
+
+uint32_t func_10dfa(uint8_t *img, uint32_t a6);
+void func_11020(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4);
+
+/* FUN_00017930 @ 0x17930: monta la entrada 0x19978 (x=0x1a858, y=0x1a85a+0x46,
+ * ancho=a1[3]+0x12), la dibuja (0x10dfa) y termina rellenando con 0x11020;
+ * a1 = 0x1a75e o 0x1a8f0+(obj[4]-1)*6 segun A6[1]. A6 += 2. */
+void func_17930(uint8_t *img, uint32_t a6) {
+    a6 += 2;
+    uint32_t a1;
+    if (img[a6 - 1] != 0) {
+        a1 = be32(img + 0x1a75e);
+    } else {
+        uint32_t a0 = be32(img + 0x1a812);
+        uint32_t d3 = (uint32_t)(((img[a0 + 4] - 1) & 0xff) * 6);
+        a1 = 0x1a8f0 + d3;
+    }
+    uint32_t ta6 = 0x19978;
+    uint32_t d0 = be16(img + 0x1a858);
+    uint32_t d1 = be16(img + 0x1a85a);
+    d1 = (d1 & 0xff00) | ((d1 + 0x46) & 0xff);
+    img[ta6 + 3] = (uint8_t)d0;
+    img[ta6 + 4] = (uint8_t)d1;
+    img[ta6 + 2] = (uint8_t)((img[a1 + 3] + 0x12) & 0xff);
+    func_10dfa(img, ta6);
+    uint32_t d4 = img[a1 + 2];
+    d1 = (d1 + 1) & 0xffff;
+    func_11020(img, d0, d1, d4);
+}

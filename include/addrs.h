@@ -248,5 +248,13 @@
 #define A_CMD_JUMP_TABLE     0x19eca  /* tabla de punteros a manejadores de comando (indexada por opcode&0x3ff) */
 #define A_SOUND_SAMPLE_PTR   0x192c2  /* puntero/estado del sample en curso */
 #define A_SOUND_TIMER_VECTOR 0x134  /* vector de interrupcion del timer B (sonido) */
+#define A_TEXT_FORM_TABLE    0x1a7b6
+#define A_TEXT_FORM_MODE     0xd8f0
+#define A_TEXT_FORM_LIST     0xd8f2
+#define A_TEXT_FORM_0        0xd900
+#define A_TEXT_FORM_1        0xd902
+#define A_TEXT_FORM_2        0xd904
+#define A_TEXT_FORM_BOX      0x1a56c
+#define A_TEXT_ENTRIES       0x41fb0
 
 #endif
