@@ -1,12 +1,17 @@
 # REVISIÓN del C (previa a la fase 3 de kult-port)
 
+> **Estado: CERRADA.** P0 (§7), P1 (§9) y P2 (§11) auditados, 0 ALTA/MEDIA
+> abiertos. 499 pruebas verdes, `make regscan` `ids_reg=0`, `make core` OK.
+> Se abre la **fase 3** (re-aplicar kult-port).
+
 Objetivo: auditar el C ya escrito y **renombrado** —antes de re-aplicar encima
 las mejoras de kult-port— para asegurar que es fiel, correcto y legible. No se
 modifica el comportamiento salvo que la revisión encuentre un fallo real
 (entonces: arreglo + prueba + commit).
 
-Este documento es el plan y el prompt de arranque. La revisión se hace en una
-**sesión nueva y limpia**, sin tocar nada de kult-port.
+Los §1–§6 son el plan y el método; §7, §9 y §11 son el registro de hallazgos de
+P0, P1 y P2. La revisión se hizo en sesiones nuevas y limpias, sin tocar
+kult-port.
 
 ## 1. Por qué revisar (riesgos conocidos)
 
@@ -142,12 +147,12 @@ rutas no probadas / riesgo de UB; **BAJA** = nombre/comentario/estilo.
 
 ## 6. Criterio de cierre
 
-- Todos los módulos **P0 y P1** revisados con checklist completa.
+- Todos los módulos **P0, P1 y P2** revisados con checklist completa.
 - Hallazgos ALTA/MEDIA arreglados **con prueba** o marcados *intencional* con
   justificación (p. ej. reconstrucción de una cola del original).
-- `make test` verde (494+), `make regscan` `ids_reg=0`, `make core` OK.
-- `docs/REVISION.md` con el **registro de hallazgos** y `docs/ESTADO.md`
-  actualizado. Solo entonces se abre la fase 3.
+- `make test` verde (499), `make regscan` `ids_reg=0`, `make core` OK.
+- `docs/REVISION.md` con el **registro de hallazgos** (§7/§9/§11) y
+  `docs/ESTADO.md` actualizado. La revisión quedó cerrada y se abre la fase 3.
 
 ## 7. Registro de hallazgos
 

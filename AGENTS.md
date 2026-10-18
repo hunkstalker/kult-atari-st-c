@@ -45,7 +45,7 @@ métodos quedan documentados en `docs/REVISION.md` §3–§5 y §11.
 3. Si es un fallo real: **arreglarlo con su prueba diferencial**.
 4. `make test` verde, `make regscan` `ids_reg=0`, `make core` OK.
 5. Commit `revision(<módulo>): …` y `make mapa`.
-6. Al cerrar P2: registro (§11), `docs/ESTADO.md`, `make mapa`.
+6. Al cerrar una tanda: registro (§7/§9/§11), `docs/ESTADO.md`, `make mapa`.
 
 Herramientas: `docs/mapa/<módulo>.md` (fichas), `make addrs` (si tocas
 `names.txt`), `make mapa` (regenera fichas), `make regscan` (deuda de
@@ -55,7 +55,7 @@ legibilidad).
 
 ```sh
 cd /app/kult-atari-st-c
-make test                      # compila src/*.c y pasa el diferencial (494)
+make test                      # compila src/*.c y pasa el diferencial (499)
 make test PYTEST_ARGS=-n0      # serial (depuración)
 make regscan                   # debe dar ids_reg=0
 make core                      # build on-target con la API restringida
