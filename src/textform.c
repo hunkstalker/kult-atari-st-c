@@ -16,8 +16,8 @@
 
 uint32_t advance_text_entry(uint8_t *img, uint32_t a1, uint32_t d4);
 uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
-void func_18f7a(uint8_t *img, uint32_t d1, uint32_t d4);
-void func_18f8e(uint8_t *img, uint32_t d4);
+void supexec_b(uint8_t *img, uint32_t d1, uint32_t d4);
+void sound_play_a(uint8_t *img, uint32_t d4);
 void text_blit_fwd(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t a3,
                      uint32_t d2w, uint32_t d3w, uint32_t d7w);
 void text_blit_rev(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t a3,
@@ -116,7 +116,7 @@ void textform_draw(uint8_t *img) {
 void textform_fwd(uint8_t *img, uint32_t a6, uint32_t d0) {
     (void)a6;
     textform_build(img, d0);
-    func_18f8e(img, 0x1d);
+    sound_play_a(img, 0x1d);
     uint32_t d6 = ((be16(img + A_TEXT_FORM_1) >> 1) - 1) & 0xffffu;
     do {
         textform_draw(img);
@@ -124,7 +124,7 @@ void textform_fwd(uint8_t *img, uint32_t a6, uint32_t d0) {
         uint32_t v = (be16(img + A_TEXT_FORM_0) * 4u) & 0xffffffffu;
         wr32(img + A_TEXT_FORM_2, be32(img + A_TEXT_FORM_2) + v);
     } while ((d6 = (d6 - 1) & 0xffffu) != 0xffffu);
-    func_18f7a(img, 0x31, 0x1f);
+    supexec_b(img, 0x31, 0x1f);
 }
 
 /* FUN_000141f4 @ 0x141f4: entrada con D0 = A6[1], A6 += 2 y cae en 0x141fa. */
@@ -139,7 +139,7 @@ void textform_fwd_entry(uint8_t *img, uint32_t a6) {
 void textform_rev(uint8_t *img, uint32_t a6, uint32_t d0) {
     (void)a6;
     textform_build(img, d0);
-    func_18f8e(img, 0x1d);
+    sound_play_a(img, 0x1d);
     uint32_t d6 = be16(img + A_TEXT_FORM_1);
     uint32_t d0w = (be16(img + A_TEXT_FORM_0) * 2u) & 0xffffffffu;   /* lsl.l #1 */
     uint32_t a0 = be32(img + A_TEXT_FORM_2);
@@ -160,7 +160,7 @@ void textform_rev(uint8_t *img, uint32_t a6, uint32_t d0) {
     wr32(img + A_TEXT_FORM_2, a0_saved);
     wr16(img + A_TEXT_FORM_1, (uint16_t)d6_saved);
     textform_draw(img);
-    func_18f8e(img, 0x1e);
+    sound_play_a(img, 0x1e);
 }
 
 /* FUN_00014246 @ 0x14246: entrada con D0 = A6[1], A6 += 2 y cae en 0x1424c. */

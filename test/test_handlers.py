@@ -31,8 +31,8 @@ def _hint_table():
 
 
 FUN_1228A = 0x1228A
-harness._lib.func_1228a.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_1228a.restype = ctypes.c_uint32
+harness._lib.prompt_wait_entry.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.prompt_wait_entry.restype = ctypes.c_uint32
 
 
 def test_fun_1228a():
@@ -47,14 +47,14 @@ def test_fun_1228a():
     }
     pokes.update(console_key("a"))
     diffs, info = differential(FUN_1228A, {"a6": 0x30000, "_pokes": pokes},
-                               lambda lib, buf: lib.func_1228a(buf, 0x30000))
+                               lambda lib, buf: lib.prompt_wait_entry(buf, 0x30000))
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
 
 
 FUN_121FA = 0x121FA
-harness._lib.func_121fa.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_121fa.restype = ctypes.c_uint32
+harness._lib.icon_blit_handler.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.icon_blit_handler.restype = ctypes.c_uint32
 
 
 def test_fun_121fa():
@@ -65,14 +65,14 @@ def test_fun_121fa():
         pokes[SCREEN + i] = bytes([(i * 3 + 1) & 0xFF])
         pokes[BACK + i] = bytes([(i * 11 + 7) & 0xFF])
     diffs, info = differential(FUN_121FA, {"a6": 0x30000, "_pokes": pokes},
-                               lambda lib, buf: lib.func_121fa(buf, 0x30000))
+                               lambda lib, buf: lib.icon_blit_handler(buf, 0x30000))
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
 
 
 FUN_12436 = 0x12436
-harness._lib.func_12436.argtypes = [_u8p]
-harness._lib.func_12436.restype = None
+harness._lib.mask_rows_handler.argtypes = [_u8p]
+harness._lib.mask_rows_handler.restype = None
 
 
 def test_fun_12436():
@@ -88,7 +88,7 @@ def test_fun_12436():
         pokes[0xd8f0 + i] = bytes([(i * 5 + 1) & 0xFF])
         pokes[SCREEN + i] = bytes([(i * 13 + 5) & 0xFF])
     diffs, _ = differential(
-        FUN_12436, {"_pokes": pokes}, lambda lib, buf: lib.func_12436(buf),
+        FUN_12436, {"_pokes": pokes}, lambda lib, buf: lib.mask_rows_handler(buf),
         schedule=[{"pc": VBL_SITE, "nth": 1, "addr": VBL_COUNTER, "width": 1, "value": 1}],
         wait_sites=[VBL_SITE])
     assert not diffs, report(diffs)
@@ -96,10 +96,10 @@ def test_fun_12436():
 
 FUN_127FA = 0x127FA
 FUN_127E0 = 0x127E0
-harness._lib.func_127fa.argtypes = [_u8p] + [ctypes.c_uint32] * 4
-harness._lib.func_127fa.restype = None
-harness._lib.func_127e0.argtypes = [_u8p] + [ctypes.c_uint32] * 5
-harness._lib.func_127e0.restype = None
+harness._lib.masked_save_row.argtypes = [_u8p] + [ctypes.c_uint32] * 4
+harness._lib.masked_save_row.restype = None
+harness._lib.masked_save.argtypes = [_u8p] + [ctypes.c_uint32] * 5
+harness._lib.masked_save.restype = None
 
 
 def _save_pokes():
@@ -116,7 +116,7 @@ def test_fun_127fa():
             pokes = _save_pokes()
             diffs, _ = differential(
                 FUN_127FA, {"a0": SCREEN, "d2": 0x10, "d3": d3, "d7": d7, "_pokes": pokes},
-                lambda lib, buf, h=d3, p=d7: lib.func_127fa(buf, SCREEN, 0x10, h, p))
+                lambda lib, buf, h=d3, p=d7: lib.masked_save_row(buf, SCREEN, 0x10, h, p))
             assert not diffs, f"d3={d3} d7={d7}\n{report(diffs)}"
 
 
@@ -125,15 +125,15 @@ def test_fun_127e0():
     diffs, _ = differential(
         FUN_127E0, {"a0": SCREEN, "a1": 0x40000, "d2": 0x10, "d3": 3, "d7": 0,
                     "_pokes": pokes},
-        lambda lib, buf: lib.func_127e0(buf, SCREEN, 0x40000, 0x10, 3, 0),
+        lambda lib, buf: lib.masked_save(buf, SCREEN, 0x40000, 0x10, 3, 0),
         schedule=[{"pc": VBL_SITE, "nth": 1, "addr": VBL_COUNTER, "width": 1, "value": 1}],
         wait_sites=[VBL_SITE])
     assert not diffs, report(diffs)
 
 
 FUN_134E4 = 0x134E4
-harness._lib.func_134e4.argtypes = [_u8p] + [ctypes.c_uint32] * 5
-harness._lib.func_134e4.restype = None
+harness._lib.copy_grid.argtypes = [_u8p] + [ctypes.c_uint32] * 5
+harness._lib.copy_grid.restype = None
 
 
 def test_fun_134e4():
@@ -145,13 +145,13 @@ def test_fun_134e4():
         diffs, _ = differential(
             FUN_134E4, {"d0": 4, "d1": 4, "d2": d2, "d3": d3, "a1": 0x40000,
                         "_pokes": pokes},
-            lambda lib, buf, w=d2, h=d3: lib.func_134e4(buf, 4, 4, w, h, 0x40000))
+            lambda lib, buf, w=d2, h=d3: lib.copy_grid(buf, 4, 4, w, h, 0x40000))
         assert not diffs, f"d2={d2} d3={d3}\n{report(diffs)}"
 
 
 FUN_13370 = 0x13370
-harness._lib.func_13370.argtypes = [_u8p] + [ctypes.c_uint32] * 4
-harness._lib.func_13370.restype = None
+harness._lib.reveal_diamond.argtypes = [_u8p] + [ctypes.c_uint32] * 4
+harness._lib.reveal_diamond.restype = None
 
 
 def test_fun_13370():
@@ -164,13 +164,13 @@ def test_fun_13370():
         diffs, _ = differential(
             FUN_13370, {"d0": d0, "d1": d1, "d2": d2, "d3": d3, "_pokes": pokes},
             lambda lib, buf, a=d0, b=d1, c=d2, e=d3:
-            lib.func_13370(buf, a, b, c, e))
+            lib.reveal_diamond(buf, a, b, c, e))
         assert not diffs, f"d0={d0} d1={d1} d2={d2} d3={d3}\n{report(diffs)}"
 
 
 FUN_13474 = 0x13474
-harness._lib.func_13474.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_13474.restype = ctypes.c_uint32
+harness._lib.icon_reveal.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.icon_reveal.restype = ctypes.c_uint32
 
 
 def test_fun_13474():
@@ -183,17 +183,17 @@ def test_fun_13474():
             pokes[SCREEN + i] = bytes([(i * 3 + 1) & 0xFF])
             pokes[BACK + i] = bytes([(i * 11 + 7) & 0xFF])
         diffs, info = differential(FUN_13474, {"a6": 0x30000, "_pokes": pokes},
-                                   lambda lib, buf: lib.func_13474(buf, 0x30000))
+                                   lambda lib, buf: lib.icon_reveal(buf, 0x30000))
         assert not diffs, f"skip={skip}\n{report(diffs)}"
         assert info["ret"] == info["regs"]["a6"], f"skip={skip} a6"
 
 
 FUN_12240 = 0x12240
 FUN_1224E = 0x1224E
-harness._lib.func_12240.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_12240.restype = ctypes.c_uint32
-harness._lib.func_1224e.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_1224e.restype = ctypes.c_uint32
+harness._lib.wait_button_a.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.wait_button_a.restype = ctypes.c_uint32
+harness._lib.wait_button_b.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.wait_button_b.restype = ctypes.c_uint32
 WF_SITE = 0x136b0
 PKT = 0x1a44f
 BUTTONS = 0x1a456
@@ -217,7 +217,7 @@ def test_fun_12240():
         pokes[0x1a84e] = base.to_bytes(2, "big")
         pokes[0x50000] = bytes([0x00, byte])
         diffs, info = differential(FUN_12240, {"a6": 0x50000, "_pokes": pokes},
-                                   lambda lib, buf: lib.func_12240(buf, 0x50000))
+                                   lambda lib, buf: lib.wait_button_a(buf, 0x50000))
         assert not diffs, f"base={base:#x} byte={byte:#x}\n{report(diffs)}"
         assert info["ret"] == info["regs"]["a6"]
     # boton en la espera k: N=1 da 0x33 (51) esperas; N=2, 0x67 (103)
@@ -227,7 +227,7 @@ def test_fun_12240():
         vals = [0x00] * (k - 1) + [0x01]
         diffs, info = differential(
             FUN_12240, {"a6": 0x50000, "_pokes": pokes},
-            lambda lib, buf: lib.func_12240(buf, 0x50000),
+            lambda lib, buf: lib.wait_button_a(buf, 0x50000),
             schedule=_sched(vals), wait_sites=[WF_SITE], max_insns=3_000_000)
         assert not diffs, f"n={n} k={k}\n{report(diffs)}"
         assert info["ret"] == info["regs"]["a6"], f"n={n} k={k}"
@@ -238,7 +238,7 @@ def test_fun_1224e():
         pokes = _wait_pokes()
         pokes[0x1a84e] = base.to_bytes(2, "big")
         diffs, info = differential(FUN_1224E, {"a6": 0x50000, "_pokes": pokes},
-                                   lambda lib, buf: lib.func_1224e(buf, 0x50000))
+                                   lambda lib, buf: lib.wait_button_b(buf, 0x50000))
         assert not diffs, f"base={base:#x}\n{report(diffs)}"
         assert info["ret"] == info["regs"]["a6"], f"base={base:#x} a6"
     for base, k in ((0xFFFD, 1), (0xFFFD, 3), (0xFFFD, 51), (0x0000, 204)):
@@ -247,7 +247,7 @@ def test_fun_1224e():
         vals = [0x00] * (k - 1) + [0x01]
         diffs, info = differential(
             FUN_1224E, {"a6": 0x50000, "_pokes": pokes},
-            lambda lib, buf: lib.func_1224e(buf, 0x50000),
+            lambda lib, buf: lib.wait_button_b(buf, 0x50000),
             schedule=_sched(vals), wait_sites=[WF_SITE], max_insns=3_000_000)
         assert not diffs, f"k={k}\n{report(diffs)}"
         assert info["ret"] == info["regs"]["a6"], f"k={k} a6"
@@ -255,10 +255,10 @@ def test_fun_1224e():
 
 FUN_11F02 = 0x11F02
 FUN_11F2E = 0x11F2E
-harness._lib.func_11f02.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_11f02.restype = ctypes.c_uint32
-harness._lib.func_11f2e.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_11f2e.restype = ctypes.c_uint32
+harness._lib.blit_dispatch_a.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.blit_dispatch_a.restype = ctypes.c_uint32
+harness._lib.blit_dispatch_b.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.blit_dispatch_b.restype = ctypes.c_uint32
 
 
 def _cmd_elem_pokes(w=4, h=3):
@@ -306,16 +306,16 @@ def _run_cmd(entry, fn):
 
 
 def test_fun_11f02():
-    _run_cmd(FUN_11F02, harness._lib.func_11f02)
+    _run_cmd(FUN_11F02, harness._lib.blit_dispatch_a)
 
 
 def test_fun_11f2e():
-    _run_cmd(FUN_11F2E, harness._lib.func_11f2e)
+    _run_cmd(FUN_11F2E, harness._lib.blit_dispatch_b)
 
 
 FUN_132AA = 0x132AA
-harness._lib.func_132aa.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_132aa.restype = ctypes.c_uint32
+harness._lib.reveal_box_build.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.reveal_box_build.restype = ctypes.c_uint32
 
 
 def test_fun_132aa():
@@ -326,7 +326,7 @@ def test_fun_132aa():
         pokes[0x1a570] = bytes([skip])
         diffs, info = differential(
             FUN_132AA, {"a6": 0x50000, "_pokes": pokes},
-            lambda lib, buf: lib.func_132aa(buf, 0x50000),
+            lambda lib, buf: lib.reveal_box_build(buf, 0x50000),
             schedule=_vbl_k(waits), wait_sites=[VBL_SITE])
         assert not diffs, f"skip={skip}\n{report(diffs)}"
         assert info["ret"] == info["regs"]["a6"], f"skip={skip} a6"
@@ -334,10 +334,10 @@ def test_fun_132aa():
 
 FUN_132EC = 0x132EC
 FUN_1332E = 0x1332E
-harness._lib.func_132ec.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_132ec.restype = ctypes.c_uint32
-harness._lib.func_1332e.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_1332e.restype = ctypes.c_uint32
+harness._lib.reveal_box_wait_a.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.reveal_box_wait_a.restype = ctypes.c_uint32
+harness._lib.reveal_box_wait_b.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.reveal_box_wait_b.restype = ctypes.c_uint32
 
 
 def test_fun_132ec():
@@ -348,7 +348,7 @@ def test_fun_132ec():
         pokes[0x1a570] = bytes([skip])
         diffs, info = differential(
             FUN_132EC, {"a6": 0x50000, "_pokes": pokes},
-            lambda lib, buf: lib.func_132ec(buf, 0x50000),
+            lambda lib, buf: lib.reveal_box_wait_a(buf, 0x50000),
             schedule=_vbl_k(waits), wait_sites=[VBL_SITE])
         assert not diffs, f"skip={skip}\n{report(diffs)}"
         assert info["ret"] == info["regs"]["a6"], f"skip={skip} a6"
@@ -362,7 +362,7 @@ def test_fun_1332e():
         pokes[0x1a570] = bytes([skip])
         diffs, info = differential(
             FUN_1332E, {"a6": 0x50000, "_pokes": pokes},
-            lambda lib, buf: lib.func_1332e(buf, 0x50000),
+            lambda lib, buf: lib.reveal_box_wait_b(buf, 0x50000),
             schedule=_vbl_k(waits), wait_sites=[VBL_SITE])
         assert not diffs, f"skip={skip}\n{report(diffs)}"
         assert info["ret"] == info["regs"]["a6"], f"skip={skip} a6"
@@ -420,8 +420,8 @@ def test_fun_1031c():
 
 
 FUN_147CE = 0x147CE
-harness._lib.func_147ce.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_147ce.restype = ctypes.c_uint32
+harness._lib.cursor_select_b.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.cursor_select_b.restype = ctypes.c_uint32
 
 
 def test_fun_147ce():
@@ -440,13 +440,13 @@ def test_fun_147ce():
             pokes[base + 2] = bytes([0x00])
             pokes[base + 3] = bytes([0xFF])
         diffs, _ = differential(FUN_147CE, {"a4": 0x19B06, "_pokes": pokes},
-                                lambda lib, buf: lib.func_147ce(buf, 0x19B06))
+                                lambda lib, buf: lib.cursor_select_b(buf, 0x19B06))
         assert not diffs, f"cx={cx:#x}\n{report(diffs)}"
 
 
 FUN_134DA = 0x134DA
-harness._lib.func_134da.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_134da.restype = ctypes.c_uint32
+harness._lib.elem_blit_vbl.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.elem_blit_vbl.restype = ctypes.c_uint32
 
 
 def test_fun_134da():
@@ -455,7 +455,7 @@ def test_fun_134da():
     pokes[0x1a570] = bytes([0x01])
     diffs, info = differential(
         FUN_134DA, {"a6": 0x50000, "_pokes": pokes},
-        lambda lib, buf: lib.func_134da(buf, 0x50000),
+        lambda lib, buf: lib.elem_blit_vbl(buf, 0x50000),
         schedule=_vbl_k(1), wait_sites=[VBL_SITE])
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
@@ -463,9 +463,9 @@ def test_fun_134da():
 
 # ---- dispatchers 0x11f64/0x11f98/0x11fd8/0x1200a/0x12044/0x12076 ----
 
-for _name, _entry in (("func_11f64", 0x11F64), ("func_11f98", 0x11F98),
-                      ("func_11fd8", 0x11FD8), ("func_1200a", 0x1200A),
-                      ("func_12044", 0x12044), ("func_12076", 0x12076)):
+for _name, _entry in (("overlay_dispatch_1", 0x11F64), ("overlay_dispatch_2", 0x11F98),
+                      ("overlay_dispatch_3", 0x11FD8), ("overlay_dispatch_4", 0x1200A),
+                      ("overlay_dispatch_5", 0x12044), ("overlay_dispatch_6", 0x12076)):
     _fn = getattr(harness._lib, _name)
     _fn.argtypes = [_u8p, ctypes.c_uint32]
     _fn.restype = ctypes.c_uint32
@@ -501,48 +501,48 @@ def test_fun_11f64():
     for skip, waits in ((0, 5), (1, 1)):
         pokes = _icon_pokes(2, 3)
         pokes[0x1a570] = bytes([skip])
-        _run_dispatch(0x11F64, harness._lib.func_11f64, pokes, waits)
+        _run_dispatch(0x11F64, harness._lib.overlay_dispatch_1, pokes, waits)
 
 
 def test_fun_11f98():
     for skip, waits in ((0, 5), (1, 1)):
         pokes = _icon_pokes(2, 3)
         pokes[0x1a570] = bytes([skip])
-        _run_dispatch(0x11F98, harness._lib.func_11f98, pokes, waits)
+        _run_dispatch(0x11F98, harness._lib.overlay_dispatch_2, pokes, waits)
 
 
 def test_fun_11fd8():
     for skip, waits in ((0, 3), (1, 0)):
         pokes = _icon_pokes(16, 3)
         pokes[0x1a570] = bytes([skip])
-        _run_dispatch(0x11FD8, harness._lib.func_11fd8, pokes, waits)
+        _run_dispatch(0x11FD8, harness._lib.overlay_dispatch_3, pokes, waits)
 
 
 def test_fun_1200a():
     for skip, waits in ((0, 3), (1, 0)):
         pokes = _icon_pokes(16, 3)
         pokes[0x1a570] = bytes([skip])
-        _run_dispatch(0x1200A, harness._lib.func_1200a, pokes, waits)
+        _run_dispatch(0x1200A, harness._lib.overlay_dispatch_4, pokes, waits)
 
 
 def test_fun_12044():
     for skip, waits in ((0, 8), (1, 0)):
         pokes = _icon_pokes(16, 3, d2=2)
         pokes[0x1a570] = bytes([skip])
-        _run_dispatch(0x12044, harness._lib.func_12044, pokes, waits)
+        _run_dispatch(0x12044, harness._lib.overlay_dispatch_5, pokes, waits)
 
 
 def test_fun_12076():
     for skip, waits in ((0, 8), (1, 0)):
         pokes = _icon_pokes(16, 3, d2=2)
         pokes[0x1a570] = bytes([skip])
-        _run_dispatch(0x12076, harness._lib.func_12076, pokes, waits)
+        _run_dispatch(0x12076, harness._lib.overlay_dispatch_6, pokes, waits)
 
 
-harness._lib.func_11dee.argtypes = [_u8p] + [ctypes.c_uint32] * 5
-harness._lib.func_11dee.restype = None
-harness._lib.func_11e5e.argtypes = [_u8p] + [ctypes.c_uint32] * 5
-harness._lib.func_11e5e.restype = None
+harness._lib.scroll_up.argtypes = [_u8p] + [ctypes.c_uint32] * 5
+harness._lib.scroll_up.restype = None
+harness._lib.scroll_down.argtypes = [_u8p] + [ctypes.c_uint32] * 5
+harness._lib.scroll_down.restype = None
 
 
 def test_fun_11dee():
@@ -552,7 +552,7 @@ def test_fun_11dee():
             diffs, _ = differential(
                 0x11DEE, {"d1": d1, "d2": 16, "d3": d3, "d7": 0,
                           "a0": 0x90000, "_pokes": pokes},
-                lambda lib, buf, a=d1, c=d3: lib.func_11dee(buf, a, 16, c, 0, 0x90000),
+                lambda lib, buf, a=d1, c=d3: lib.scroll_up(buf, a, 16, c, 0, 0x90000),
                 schedule=_vbl_k(d1 + 1), wait_sites=[VBL_SITE])
             assert not diffs, f"d1={d1} d3={d3}\n{report(diffs)}"
 
@@ -564,14 +564,14 @@ def test_fun_11e5e():
             diffs, _ = differential(
                 0x11E5E, {"d1": d1, "d2": 16, "d3": d3, "d7": 0,
                           "a0": 0x90000, "_pokes": pokes},
-                lambda lib, buf, a=d1, c=d3: lib.func_11e5e(buf, a, 16, c, 0, 0x90000),
+                lambda lib, buf, a=d1, c=d3: lib.scroll_down(buf, a, 16, c, 0, 0x90000),
                 schedule=_vbl_k(d1 + 1), wait_sites=[VBL_SITE])
             assert not diffs, f"d1={d1} d3={d3}\n{report(diffs)}"
 
 
 FUN_147C2 = 0x147C2
-harness._lib.func_147c2.argtypes = [_u8p]
-harness._lib.func_147c2.restype = ctypes.c_uint32
+harness._lib.cursor_select_a.argtypes = [_u8p]
+harness._lib.cursor_select_a.restype = ctypes.c_uint32
 
 
 def test_fun_147c2():
@@ -590,13 +590,13 @@ def test_fun_147c2():
             pokes[base + 2] = bytes([0x00])
             pokes[base + 3] = bytes([0xFF])
         diffs, _ = differential(FUN_147C2, {"_pokes": pokes},
-                                lambda lib, buf: lib.func_147c2(buf))
+                                lambda lib, buf: lib.cursor_select_a(buf))
         assert not diffs, f"cx={cx:#x}\n{report(diffs)}"
 
 
 FUN_14926 = 0x14926
-harness._lib.func_14926.argtypes = [_u8p]
-harness._lib.func_14926.restype = None
+harness._lib.class_find.argtypes = [_u8p]
+harness._lib.class_find.restype = None
 
 
 def test_fun_14926():
@@ -609,7 +609,7 @@ def test_fun_14926():
             cls = 3 if i == target else 0x0A
             pokes[base] = bytes([i & 0xFF, cls, 0x11, 0x22, 0x33])
         diffs, _ = differential(FUN_14926, {"_pokes": pokes},
-                                lambda lib, buf: lib.func_14926(buf))
+                                lambda lib, buf: lib.class_find(buf))
         assert not diffs, f"target={target}\n{report(diffs)}"
 
 
@@ -666,8 +666,8 @@ def test_fun_14966():
 
 
 FUN_1695A = 0x1695A
-harness._lib.func_1695a.argtypes = [_u8p]
-harness._lib.func_1695a.restype = None
+harness._lib.obj_name_table.argtypes = [_u8p]
+harness._lib.obj_name_table.restype = None
 
 
 def test_fun_1695a():
@@ -678,13 +678,13 @@ def test_fun_1695a():
         for a in range(0x19970, 0x19975):
             pokes[a] = bytes([0xAA])
         diffs, _ = differential(FUN_1695A, {"_pokes": pokes},
-                                lambda lib, buf: lib.func_1695a(buf))
+                                lambda lib, buf: lib.obj_name_table(buf))
         assert not diffs, f"cls={cls:#x}\n{report(diffs)}"
 
 
 FUN_155DC = 0x155DC
-harness._lib.func_155dc.argtypes = [_u8p]
-harness._lib.func_155dc.restype = None
+harness._lib.clock.argtypes = [_u8p]
+harness._lib.clock.restype = None
 
 
 def test_fun_155dc_reloj():
@@ -700,6 +700,6 @@ def test_fun_155dc_reloj():
     ]
     diffs, _ = differential(
         FUN_155DC, {"_pokes": pokes},
-        lambda lib, buf: lib.func_155dc(buf),
+        lambda lib, buf: lib.clock(buf),
         schedule=schedule, wait_sites=[VBL_SITE, 0x136B0])
     assert not diffs, report(diffs)

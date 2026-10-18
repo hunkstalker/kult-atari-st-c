@@ -1,6 +1,6 @@
 """Verifica el cableado del byte_handler (tabla 0x19f62) contra el binario.
 
-La VM `func_10630` despacha el byte b por la tabla de datos del binario:
+La VM `vm_run` despacha el byte b por la tabla de datos del binario:
 `b-1 -> offset desde 0x10000 -> direccion de la funcion`. La reconstruccion C
 usa un `switch` (`byte_handler`, en src/dispatch.c). Este test comprueba, byte a
 byte (1..0x6a), que cada entrada esta cableada y que apunta a la MISMA funcion
@@ -60,7 +60,7 @@ def _target_of(rest):
 def _switch_cases():
     src = open(os.path.join(ROOT, "src", "dispatch.c"), encoding="utf-8").read()
     i = src.index("static uint32_t byte_handler")
-    j = src.index("uint32_t func_10630")
+    j = src.index("uint32_t vm_run")
     body = src[i:j]
     cases = {}
     pending = []

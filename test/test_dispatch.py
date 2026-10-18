@@ -22,8 +22,8 @@ FRONT = 0x80000
 BACK = 0x78000
 
 _u8p = ctypes.POINTER(ctypes.c_uint8)
-harness._lib.func_10630.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_10630.restype = ctypes.c_uint32
+harness._lib.vm_run.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.vm_run.restype = ctypes.c_uint32
 harness._lib.run_command_keep_sp.argtypes = [_u8p]
 harness._lib.run_command_keep_sp.restype = None
 
@@ -42,14 +42,14 @@ def _screen_pokes():
 def test_vm_bytes_stop_on_zero():
     pokes = {SCRIPT: bytes([0]), SCRIPT_END: (SCRIPT + 100).to_bytes(4, "big")}
     diffs, _ = differential(VM_BYTES, {"a6": SCRIPT, "_pokes": pokes},
-                            lambda lib, buf: lib.func_10630(buf, SCRIPT))
+                            lambda lib, buf: lib.vm_run(buf, SCRIPT))
     assert not diffs, report(diffs)
 
 
 def test_vm_bytes_stop_on_end_pointer():
     pokes = {SCRIPT: bytes([1]), SCRIPT_END: SCRIPT.to_bytes(4, "big")}
     diffs, _ = differential(VM_BYTES, {"a6": SCRIPT, "_pokes": pokes},
-                            lambda lib, buf: lib.func_10630(buf, SCRIPT))
+                            lambda lib, buf: lib.vm_run(buf, SCRIPT))
     assert not diffs, report(diffs)
 
 
@@ -59,7 +59,7 @@ def test_vm_bytes_copy_screen_handler():
     pokes[SCRIPT] = bytes([68, 0])
     pokes[SCRIPT_END] = (SCRIPT + 100).to_bytes(4, "big")
     diffs, _ = differential(VM_BYTES, {"a6": SCRIPT, "_pokes": pokes},
-                            lambda lib, buf: lib.func_10630(buf, SCRIPT))
+                            lambda lib, buf: lib.vm_run(buf, SCRIPT))
     assert not diffs, report(diffs)
 
 
@@ -82,7 +82,7 @@ def test_vm_bytes_palette_handler():
     pokes[SCRIPT] = bytes([94, 5, 0])
     pokes[SCRIPT_END] = (SCRIPT + 100).to_bytes(4, "big")
     diffs, info = differential(VM_BYTES, {"a6": SCRIPT, "_pokes": pokes},
-                               lambda lib, buf: lib.func_10630(buf, SCRIPT))
+                               lambda lib, buf: lib.vm_run(buf, SCRIPT))
     assert not diffs, report(diffs)
     assert info["regs"]["events"] == [(harness.OS_EVENT_SETPALETTE, PAL_BUF)]
 
@@ -105,7 +105,7 @@ def test_vm_bytes_text_handler():
     for i in range(0x300):
         pokes[SCREEN - 0x8000 + i] = bytes([0x0F if i % 2 else 0xF0])
     diffs, _ = differential(VM_BYTES, {"a6": SCRIPT, "_pokes": pokes},
-                            lambda lib, buf: lib.func_10630(buf, SCRIPT))
+                            lambda lib, buf: lib.vm_run(buf, SCRIPT))
     assert not diffs, report(diffs)
 
 
@@ -186,7 +186,7 @@ def test_fun_10390():
     pokes[SCRIPT + 1] = bytes([0x10])
     pokes[SCRIPT + 2] = bytes([0x00])       # word = 0x1000 -> cmd 0xf010 -> idx 0x10-1
     diffs, _ = differential(0x10390, {"a6": SCRIPT, "_pokes": pokes},
-                            lambda lib, buf: lib.func_10390(buf, SCRIPT))
+                            lambda lib, buf: lib.dispatch_a6(buf, SCRIPT))
     assert not diffs, report(diffs)
 
 
@@ -215,7 +215,7 @@ def test_fun_186ee():
         pokes[0x30000 + i] = bytes([0xAA])
     pokes.update(console_key("a"))
     diffs, _ = differential(0x186EE, {"_pokes": pokes},
-                            lambda lib, buf: lib.func_186ee(buf))
+                            lambda lib, buf: lib.dispatch_cmd(buf))
     assert not diffs, report(diffs)
 
 
@@ -233,7 +233,7 @@ def test_vm_byte_1350c_jump():
     pokes[TEMPL + 0x100] = bytes([0])
     pokes[SCRIPT_END] = (SCRIPT + 100).to_bytes(4, "big")
     diffs, _ = differential(VM_BYTES, {"a6": SCRIPT, "_pokes": pokes},
-                            lambda lib, buf: lib.func_10630(buf, SCRIPT))
+                            lambda lib, buf: lib.vm_run(buf, SCRIPT))
     assert not diffs, report(diffs)
 
 
@@ -245,7 +245,7 @@ def test_vm_byte_13522_13552():
     pokes[SCRIPT] = bytes([52, 0])
     pokes[SCRIPT_END] = (SCRIPT + 100).to_bytes(4, "big")
     diffs, _ = differential(VM_BYTES, {"a6": SCRIPT, "_pokes": pokes},
-                            lambda lib, buf: lib.func_10630(buf, SCRIPT))
+                            lambda lib, buf: lib.vm_run(buf, SCRIPT))
     assert not diffs, f"52\n{report(diffs)}"
 
 
@@ -256,7 +256,7 @@ def test_vm_byte_162d8_palette():
     pokes[SCRIPT] = bytes([90, 0])
     pokes[SCRIPT_END] = (SCRIPT + 100).to_bytes(4, "big")
     diffs, info = differential(VM_BYTES, {"a6": SCRIPT, "_pokes": pokes},
-                               lambda lib, buf: lib.func_10630(buf, SCRIPT))
+                               lambda lib, buf: lib.vm_run(buf, SCRIPT))
     assert not diffs, report(diffs)
     assert info["regs"]["events"] == [(harness.OS_EVENT_SETPALETTE, PAL_BUF)]
 
@@ -270,7 +270,7 @@ def test_vm_byte_18c8e_clear():
     pokes[SCRIPT] = bytes([92, 0])
     pokes[SCRIPT_END] = (SCRIPT + 100).to_bytes(4, "big")
     diffs, _ = differential(VM_BYTES, {"a6": SCRIPT, "_pokes": pokes},
-                            lambda lib, buf: lib.func_10630(buf, SCRIPT))
+                            lambda lib, buf: lib.vm_run(buf, SCRIPT))
     assert not diffs, report(diffs)
 
 
@@ -297,7 +297,7 @@ def test_vm_byte_1222e_icons():
         pokes[SCRIPT] = bytes([b, 3, 0])
         pokes[SCRIPT_END] = (SCRIPT + 100).to_bytes(4, "big")
         diffs, _ = differential(VM_BYTES, {"a6": SCRIPT, "_pokes": pokes},
-                                lambda lib, buf: lib.func_10630(buf, SCRIPT))
+                                lambda lib, buf: lib.vm_run(buf, SCRIPT))
         assert not diffs, f"byte {b}\n{report(diffs)}"
 
 
@@ -333,7 +333,7 @@ def test_vm_byte_11f64_dispatch():
     pokes[SCRIPT] = bytes([5, 1, 8, 4, 0])
     pokes[SCRIPT_END] = (SCRIPT + 100).to_bytes(4, "big")
     diffs, _ = differential(VM_BYTES, {"a6": SCRIPT, "_pokes": pokes},
-                            lambda lib, buf: lib.func_10630(buf, SCRIPT),
+                            lambda lib, buf: lib.vm_run(buf, SCRIPT),
                             schedule=_vbl_k(5), wait_sites=[0x1359a])
     assert not diffs, report(diffs)
 
@@ -353,8 +353,8 @@ def test_run_command_ab_wired():
         assert not diffs, f"cmd={cmd:#x}\n{report(diffs)}"
 
 
-harness._lib.func_104f4.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_104f4.restype = ctypes.c_uint32
+harness._lib.inline_cmd_walk.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.inline_cmd_walk.restype = ctypes.c_uint32
 
 
 def test_fun_104f4():
@@ -365,7 +365,7 @@ def test_fun_104f4():
         pokes[COMMAND] = (0).to_bytes(2, "big")
         diffs, info = differential(
             0x104F4, {"a6": SCRIPT, "_pokes": pokes},
-            lambda lib, buf: lib.func_104f4(buf, SCRIPT))
+            lambda lib, buf: lib.inline_cmd_walk(buf, SCRIPT))
         assert not diffs, f"word={word}\n{report(diffs)}"
         assert info["ret"] == info["regs"]["a6"], "a6"
 
@@ -378,7 +378,7 @@ def test_run_command_ab_c35c():
     pokes[0x1D402 + 0x35B] = bytes([0])
     pokes[0x1D402 + 0x35C] = bytes([0])
     diffs, _ = differential(0x15588, {"_pokes": pokes},
-                            lambda lib, buf: lib.func_15588(buf))
+                            lambda lib, buf: lib.mode_flag_wrap(buf))
     assert not diffs, report(diffs)
 
 
@@ -390,5 +390,5 @@ def test_run_command_ab_c35d():
     pokes[0x1D402 + 0x35C] = bytes([0])
     pokes[0x1D402 + 0x35D] = bytes([0])
     diffs, _ = differential(0x155B8, {"_pokes": pokes},
-                            lambda lib, buf: lib.func_155b8(buf))
+                            lambda lib, buf: lib.mode_queue_wrap(buf))
     assert not diffs, report(diffs)

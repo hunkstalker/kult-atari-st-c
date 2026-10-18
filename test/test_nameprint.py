@@ -15,12 +15,12 @@ FUN_168A0 = 0x168A0
 FUN_168D4 = 0x168D4
 SCRIPT = 0x50000
 
-harness._lib.func_1687e.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_1687e.restype = None
-harness._lib.func_168a0.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_168a0.restype = None
-harness._lib.func_168d4.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_168d4.restype = None
+harness._lib.obj_name.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.obj_name.restype = None
+harness._lib.obj_name_snd.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.obj_name_snd.restype = None
+harness._lib.obj_name_clean.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.obj_name_clean.restype = None
 
 
 def _pokes(byte):
@@ -41,7 +41,7 @@ def test_fun_1687e_nombre():
     for byte in (5, 0x12, 0x81):
         diffs, _ = differential(
             FUN_1687E, {"a6": SCRIPT, "_pokes": _pokes(byte)},
-            lambda lib, buf: lib.func_1687e(buf, SCRIPT))
+            lambda lib, buf: lib.obj_name(buf, SCRIPT))
         assert not diffs, f"byte={byte:#x}\n{report(diffs)}"
 
 
@@ -49,7 +49,7 @@ def test_fun_168a0_nombre_con_sonido():
     for byte in (5, 0x12):
         diffs, _ = differential(
             FUN_168A0, {"a6": SCRIPT, "_pokes": _pokes(byte)},
-            lambda lib, buf: lib.func_168a0(buf, SCRIPT))
+            lambda lib, buf: lib.obj_name_snd(buf, SCRIPT))
         assert not diffs, f"byte={byte:#x}\n{report(diffs)}"
 
 
@@ -57,5 +57,5 @@ def test_fun_168d4_nombre_filtrado():
     for byte in (5, 0x12):
         diffs, _ = differential(
             FUN_168D4, {"a6": SCRIPT, "_pokes": _pokes(byte)},
-            lambda lib, buf: lib.func_168d4(buf, SCRIPT))
+            lambda lib, buf: lib.obj_name_clean(buf, SCRIPT))
         assert not diffs, f"byte={byte:#x}\n{report(diffs)}"

@@ -21,12 +21,12 @@ VBL_COUNTER = 0x1ACD4
 IKBD_SITE = 0x136B0
 IKBD_PACKET = 0x1A44F
 
-harness._lib.func_15052.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_15052.restype = ctypes.c_uint32
-harness._lib.func_15382.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_15382.restype = ctypes.c_uint32
-harness._lib.func_15530.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_15530.restype = ctypes.c_uint32
+harness._lib.obj_action_select.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.obj_action_select.restype = ctypes.c_uint32
+harness._lib.palette_cmd.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.palette_cmd.restype = ctypes.c_uint32
+harness._lib.mode_queue.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.mode_queue.restype = ctypes.c_uint32
 
 
 def _base_pokes(umbral=0x15, selec=0):
@@ -84,7 +84,7 @@ def test_fun_15052_directo():
     pokes[0x1AD09] = bytes([0x01])
     diffs, info = differential(
         FUN_15052, {"a6": SCRIPT, "_pokes": pokes},
-        lambda lib, buf: lib.func_15052(buf, SCRIPT))
+        lambda lib, buf: lib.obj_action_select(buf, SCRIPT))
     assert not diffs, report(diffs)
     assert info["ret"] == SCRIPT
 
@@ -96,7 +96,7 @@ def test_fun_15052_tabla():
     pokes[0x1AD09] = bytes([0x01])
     diffs, info = differential(
         FUN_15052, {"a6": SCRIPT, "_pokes": pokes},
-        lambda lib, buf: lib.func_15052(buf, SCRIPT))
+        lambda lib, buf: lib.obj_action_select(buf, SCRIPT))
     assert not diffs, report(diffs)
     assert info["ret"] == SCRIPT
 
@@ -106,7 +106,7 @@ def test_fun_15382_directo():
     pokes[0x1AD09] = bytes([0x01])
     diffs, info = differential(
         FUN_15382, {"a6": SCRIPT, "_pokes": pokes},
-        lambda lib, buf: lib.func_15382(buf, SCRIPT))
+        lambda lib, buf: lib.palette_cmd(buf, SCRIPT))
     assert not diffs, report(diffs)
     assert info["ret"] == SCRIPT
 
@@ -117,7 +117,7 @@ def test_fun_15530_basico():
     pokes[0x1ABF8] = (1).to_bytes(2, "big")
     diffs, info = differential(
         FUN_15530, {"a6": SCRIPT, "_pokes": pokes},
-        lambda lib, buf: lib.func_15530(buf, SCRIPT))
+        lambda lib, buf: lib.mode_queue(buf, SCRIPT))
     assert not diffs, report(diffs)
     assert info["ret"] == SCRIPT
 
@@ -128,8 +128,8 @@ FUN_150AE = 0x150AE
 A81A_OBJ = 0x40100
 OBJ_LIST = 0x40000
 
-harness._lib.func_150ae.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_150ae.restype = ctypes.c_uint32
+harness._lib.obj_action.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.obj_action.restype = ctypes.c_uint32
 
 
 def _ae_wait_pokes():
@@ -169,7 +169,7 @@ def test_fun_150ae_rts_12():
     pokes = {0x1AD20: bytes([0x15]), 0x1AD09: bytes([0x12])}
     diffs, info = differential(
         FUN_150AE, {"a6": SCRIPT, "_pokes": pokes},
-        lambda lib, buf: lib.func_150ae(buf, SCRIPT))
+        lambda lib, buf: lib.obj_action(buf, SCRIPT))
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
 
@@ -178,7 +178,7 @@ def test_fun_150ae_sin_seleccion():
     """$1acc9 == 0: comando de la tabla $1ab5c y dispatch (0 = no-op)."""
     diffs, info = differential(
         FUN_150AE, {"a6": SCRIPT, "_pokes": _ae_wait_pokes()},
-        lambda lib, buf: lib.func_150ae(buf, SCRIPT),
+        lambda lib, buf: lib.obj_action(buf, SCRIPT),
         schedule=_wait_schedule(), wait_sites=[IKBD_SITE, VBL_SITE])
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
@@ -196,7 +196,7 @@ def test_fun_150ae_tabla_cero():
         pokes[0x23EE8 + i] = bytes([0x01])
     diffs, info = differential(
         FUN_150AE, {"a6": SCRIPT, "_pokes": pokes},
-        lambda lib, buf: lib.func_150ae(buf, SCRIPT),
+        lambda lib, buf: lib.obj_action(buf, SCRIPT),
         schedule=_wait_schedule(), wait_sites=[IKBD_SITE, VBL_SITE])
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
@@ -214,7 +214,7 @@ def test_fun_150ae_tabla_con_comando():
         pokes[0x23EE8 + i] = bytes([0x01])
     diffs, info = differential(
         FUN_150AE, {"a6": SCRIPT, "_pokes": pokes},
-        lambda lib, buf: lib.func_150ae(buf, SCRIPT),
+        lambda lib, buf: lib.obj_action(buf, SCRIPT),
         schedule=_wait_schedule(), wait_sites=[IKBD_SITE, VBL_SITE])
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
@@ -253,7 +253,7 @@ def test_fun_150ae_directo_90aa():
     pokes[0x1A772] = (0x40020).to_bytes(4, "big")
     diffs, info = differential(
         FUN_150AE, {"a6": SCRIPT, "_pokes": pokes},
-        lambda lib, buf: lib.func_150ae(buf, SCRIPT))
+        lambda lib, buf: lib.obj_action(buf, SCRIPT))
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
 
@@ -261,8 +261,8 @@ def test_fun_150ae_directo_90aa():
 # ================= accion con espera de clic 0x152ee =================
 
 FUN_152EE = 0x152EE
-harness._lib.func_152ee.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_152ee.restype = ctypes.c_uint32
+harness._lib.cursor_anim_wait.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.cursor_anim_wait.restype = ctypes.c_uint32
 
 
 def _ee_pokes():
@@ -279,7 +279,7 @@ def test_fun_152ee_sin_seleccion():
     """$1acc9 == 0: despacha el comando por defecto $1ab5a."""
     diffs, info = differential(
         FUN_152EE, {"a6": SCRIPT, "_pokes": _ee_pokes()},
-        lambda lib, buf: lib.func_152ee(buf, SCRIPT),
+        lambda lib, buf: lib.cursor_anim_wait(buf, SCRIPT),
         schedule=_wait_schedule(), wait_sites=[IKBD_SITE, VBL_SITE])
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
@@ -292,7 +292,7 @@ def test_fun_152ee_tabla():
     pokes[0x1AB68] = bytes([0xA0, 0x35])
     diffs, info = differential(
         FUN_152EE, {"a6": SCRIPT, "_pokes": pokes},
-        lambda lib, buf: lib.func_152ee(buf, SCRIPT),
+        lambda lib, buf: lib.cursor_anim_wait(buf, SCRIPT),
         schedule=_wait_schedule(), wait_sites=[IKBD_SITE, VBL_SITE])
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
@@ -305,7 +305,7 @@ def test_fun_152ee_tabla_cero():
     pokes[0x1AB68] = bytes([0x00, 0x00])
     diffs, info = differential(
         FUN_152EE, {"a6": SCRIPT, "_pokes": pokes},
-        lambda lib, buf: lib.func_152ee(buf, SCRIPT),
+        lambda lib, buf: lib.cursor_anim_wait(buf, SCRIPT),
         schedule=_wait_schedule(), wait_sites=[IKBD_SITE, VBL_SITE])
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
@@ -320,7 +320,7 @@ def test_fun_152ee_directo():
     }
     diffs, info = differential(
         FUN_152EE, {"a6": SCRIPT, "_pokes": pokes},
-        lambda lib, buf: lib.func_152ee(buf, SCRIPT))
+        lambda lib, buf: lib.cursor_anim_wait(buf, SCRIPT))
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
 
@@ -328,8 +328,8 @@ def test_fun_152ee_directo():
 # ================= nombre + Cnecin 0x15428 =================
 
 FUN_15428 = 0x15428
-harness._lib.func_15428.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_15428.restype = ctypes.c_uint32
+harness._lib.name_prompt.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.name_prompt.restype = ctypes.c_uint32
 
 
 def _name_pokes(entries=140):
@@ -355,7 +355,7 @@ def test_fun_15428_nombre():
     pokes[0x1ACEC] = bytes([0x20])
     diffs, _ = differential(
         FUN_15428, {"a6": SCRIPT, "_pokes": pokes},
-        lambda lib, buf: lib.func_15428(buf, SCRIPT))
+        lambda lib, buf: lib.name_prompt(buf, SCRIPT))
     assert not diffs, report(diffs)
 
 
@@ -367,7 +367,7 @@ def test_fun_15428_nombre_override_113():
     pokes[0x1ACD2] = bytes([0x15])
     diffs, _ = differential(
         FUN_15428, {"a6": SCRIPT, "_pokes": pokes},
-        lambda lib, buf: lib.func_15428(buf, SCRIPT))
+        lambda lib, buf: lib.name_prompt(buf, SCRIPT))
     assert not diffs, report(diffs)
 
 
@@ -379,7 +379,7 @@ def test_fun_15428_nombre_breve():
     pokes[SCRIPT + 1] = bytes([0x07])        # el byte que se salta 0x10fb4
     diffs, _ = differential(
         FUN_15428, {"a6": SCRIPT, "_pokes": pokes},
-        lambda lib, buf: lib.func_15428(buf, SCRIPT))
+        lambda lib, buf: lib.name_prompt(buf, SCRIPT))
     assert not diffs, report(diffs)
 
 
@@ -390,7 +390,7 @@ def test_fun_15428_comando():
     pokes[0x1AC04] = bytes([0xA0, 0x35])
     diffs, info = differential(
         FUN_15428, {"a6": SCRIPT, "_pokes": pokes},
-        lambda lib, buf: lib.func_15428(buf, SCRIPT))
+        lambda lib, buf: lib.name_prompt(buf, SCRIPT))
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
 
@@ -401,8 +401,8 @@ FUN_151B0 = 0x151B0
 B0_SCREEN = 0x80000
 B0_OBJ = 0x40010
 
-harness._lib.func_151b0.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_151b0.restype = ctypes.c_uint32
+harness._lib.row_transition.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.row_transition.restype = ctypes.c_uint32
 
 
 def _b0_obj(cls=0x10, row=0, flags=0x00):
@@ -450,7 +450,7 @@ def test_fun_151b0_sin_objeto():
     """Ningun objeto coincide: las filas se intercambian y despacha $1ab54."""
     diffs, info = differential(
         FUN_151B0, {"a6": SCRIPT, "_pokes": _b0_pokes(_b0_obj(flags=0x00))},
-        lambda lib, buf: lib.func_151b0(buf, SCRIPT),
+        lambda lib, buf: lib.row_transition(buf, SCRIPT),
         schedule=B0_SCHEDULE, wait_sites=[VBL_SITE])
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
@@ -461,7 +461,7 @@ def test_fun_151b0_con_objeto():
     objs = _b0_obj(row=0, flags=0x28) + _b0_obj(row=1, flags=0x28)
     diffs, info = differential(
         FUN_151B0, {"a6": SCRIPT, "_pokes": _b0_pokes(objs)},
-        lambda lib, buf: lib.func_151b0(buf, SCRIPT),
+        lambda lib, buf: lib.row_transition(buf, SCRIPT),
         schedule=B0_SCHEDULE, wait_sites=[VBL_SITE])
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
@@ -473,7 +473,7 @@ def test_fun_151b0_directo():
              0x1AC08: bytes([0xA0, 0x35])}
     diffs, info = differential(
         FUN_151B0, {"a6": SCRIPT, "_pokes": pokes},
-        lambda lib, buf: lib.func_151b0(buf, SCRIPT))
+        lambda lib, buf: lib.row_transition(buf, SCRIPT))
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
 
@@ -481,8 +481,8 @@ def test_fun_151b0_directo():
 # ================= copia de pantalla de la familia (0x15934) =================
 
 FUN_15934 = 0x15934
-harness._lib.func_15934.argtypes = [_u8p]
-harness._lib.func_15934.restype = None
+harness._lib.copy_rows_a.argtypes = [_u8p]
+harness._lib.copy_rows_a.restype = None
 
 
 def test_fun_15934_copia_con_espera():
@@ -496,7 +496,7 @@ def test_fun_15934_copia_con_espera():
                 for k in range(1, 0x36)]
     diffs, _ = differential(
         FUN_15934, {"_pokes": pokes},
-        lambda lib, buf: lib.func_15934(buf),
+        lambda lib, buf: lib.copy_rows_a(buf),
         schedule=schedule, wait_sites=[VBL_SITE])
     assert not diffs, report(diffs)
 
@@ -504,8 +504,8 @@ def test_fun_15934_copia_con_espera():
 # ================= anillo de iconos 0x1566a =================
 
 FUN_1566A = 0x1566A
-harness._lib.func_1566a.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_1566a.restype = ctypes.c_uint32
+harness._lib.icon_ring.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.icon_ring.restype = ctypes.c_uint32
 
 
 def test_fun_1566a_anillo():
@@ -534,7 +534,7 @@ def test_fun_1566a_anillo():
     ]
     diffs, info = differential(
         FUN_1566A, {"a6": SCRIPT, "_pokes": pokes},
-        lambda lib, buf: lib.func_1566a(buf, SCRIPT),
+        lambda lib, buf: lib.icon_ring(buf, SCRIPT),
         schedule=schedule, wait_sites=[IKBD_SITE, VBL_SITE])
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
@@ -543,8 +543,8 @@ def test_fun_1566a_anillo():
 # ================= bucle del anillo 0x15888 =================
 
 FUN_15888 = 0x15888
-harness._lib.func_15888.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_15888.restype = ctypes.c_uint32
+harness._lib.icon_ring_loop.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.icon_ring_loop.restype = ctypes.c_uint32
 
 
 def test_fun_15888_sin_acierto():
@@ -574,7 +574,7 @@ def test_fun_15888_sin_acierto():
     ]
     diffs, info = differential(
         FUN_15888, {"a6": SCRIPT, "_pokes": pokes},
-        lambda lib, buf: lib.func_15888(buf, SCRIPT),
+        lambda lib, buf: lib.icon_ring_loop(buf, SCRIPT),
         schedule=schedule, wait_sites=[IKBD_SITE, VBL_SITE])
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]

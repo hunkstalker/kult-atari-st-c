@@ -114,7 +114,7 @@ uint32_t scene_mode_set(uint8_t *img, uint32_t a6, uint32_t *a4_out, uint32_t *a
     return a6;
 }
 
-uint32_t func_1442c(uint8_t *img, uint32_t a6) {
+uint32_t cmd74_wrap(uint8_t *img, uint32_t a6) {
     uint8_t saved = img[A_DAT_1ACC7];
     uint32_t a4, a5;
     a6 = scene_mode_set(img, a6, &a4, &a5);
@@ -134,25 +134,25 @@ uint32_t func_1442c(uint8_t *img, uint32_t a6) {
  *   0x1460a): restaura los iconos 1..3, transicion 0x15934/copy_screen, para el
  *   sonido, modo 0x16 -> sonido 0x83 + espera, 0x14748, paleta, 0x1857c/0x18944,
  *   formulario inverso 0x1424c con $1acc9 y los iconos de pista (0x16556). */
-void func_188ce(uint8_t *img, uint32_t a6);
-void func_1857c(uint8_t *img);
-void func_18944(uint8_t *img);
-void func_17480(uint8_t *img);
+void anim_mode(uint8_t *img, uint32_t a6);
+void sample_find_body(uint8_t *img);
+void icon_repeat(uint8_t *img);
+void rot_action(uint8_t *img);
 void scene_text_box(uint8_t *img);
 void run_text_table(uint8_t *img, uint32_t a6, uint32_t d0, uint32_t d1);
 void textform_fwd(uint8_t *img, uint32_t a6, uint32_t d0);
 void textform_rev(uint8_t *img, uint32_t a6, uint32_t d0);
-void func_16460(uint8_t *img);
-void func_17094(uint8_t *img, uint32_t a1);
-void func_172ca(uint8_t *img);
+void icon_table(uint8_t *img);
+void hint_state_a(uint8_t *img, uint32_t a1);
+void hint_state_b(uint8_t *img);
 void update_icon_list(uint8_t *img);
 void draw_hint_icons(uint8_t *img);
-void func_14748(uint8_t *img);
+void elem_mode_blit(uint8_t *img);
 void set_palette_current(uint8_t *img);
-void func_15934(uint8_t *img);
+void copy_rows_a(uint8_t *img);
 void copy_screen(uint8_t *img);
-void func_18f8e(uint8_t *img, uint32_t d4);
-void func_18fa4(uint8_t *img);
+void sound_play_a(uint8_t *img, uint32_t d4);
+void sound_stop(uint8_t *img);
 void hint_blit_2(uint8_t *img, uint32_t *a6);
 void hint_blit_stroke(uint8_t *img, uint32_t *a6);
 void hint_blit_3(uint8_t *img, uint32_t *a6);
@@ -171,7 +171,7 @@ uint32_t scene_mode_apply(uint8_t *img, uint32_t a6) {
         }
     }
     img[A_DAT_1ACC8] = (uint8_t)d1;
-    func_188ce(img, a6);
+    anim_mode(img, a6);
     uint32_t a4, a5;
     a6 = scene_mode_set(img, a6, &a4, &a5);
     img[A_DAT_1ACFE] = img[A_DAT_1ACD2];
@@ -199,10 +199,10 @@ uint32_t scene_mode_apply(uint8_t *img, uint32_t a6) {
         run_text_table(img, a6, 0, d1);
         img[A_DAT_1AD25] = 0;
     }
-    func_16460(img);
-    func_17094(img, 0);
-    func_172ca(img);
-    func_17480(img);
+    icon_table(img);
+    hint_state_a(img, 0);
+    hint_state_b(img);
+    rot_action(img);
     update_icon_list(img);
     img[A_DAT_1AD0F] = 0;
     return a6;
@@ -214,18 +214,18 @@ static void body_146d2(uint8_t *img, uint32_t a6) {
     hint_blit_stroke(img, &a6b);
     hint_blit_3(img, &a6b);
     if (img[A_DAT_1A572] == 0 && img[A_SKIP_TRANSITION] == 0)
-        func_15934(img);
+        copy_rows_a(img);
     copy_screen(img);
     img[A_FRAME_1AB4F] = 0;
-    func_18fa4(img);
+    sound_stop(img);
     if (img[A_DAT_1ACD2] == 0x16) {
-        func_18f8e(img, 0x83);
+        sound_play_a(img, 0x83);
         img[A_FRAME_1AB4F] = 1;
     }
-    func_14748(img);
+    elem_mode_blit(img);
     set_palette_current(img);
-    func_1857c(img);
-    func_18944(img);
+    sample_find_body(img);
+    icon_repeat(img);
     if (img[A_SEL_1ACC9] != 0)
         textform_rev(img, a6, img[A_SEL_1ACC9]);
     draw_hint_icons(img);
@@ -237,7 +237,7 @@ uint32_t scene_mode_draw(uint8_t *img, uint32_t a6) {
     return a6;
 }
 
-void func_14602(uint8_t *img, uint32_t a6) {
+void scene_mode_draw_wrap(uint8_t *img, uint32_t a6) {
     a6 = scene_mode_apply(img, a6);
     body_146d2(img, a6);
 }

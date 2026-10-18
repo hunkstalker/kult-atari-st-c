@@ -155,7 +155,7 @@ int32_t gemdos_fclose(uint8_t *img) {
 void copy_screen(uint8_t *img);
 void set_palette_current(uint8_t *img);
 void hint_table_relocate(uint8_t *img);
-void func_16460(uint8_t *img);
+void icon_table(uint8_t *img);
 void draw_hint_icons(uint8_t *img);
 
 int32_t load_scena(uint8_t *img) {
@@ -178,7 +178,7 @@ int32_t load_scena(uint8_t *img) {
     if (gemdos_fclose(img) < 0)
         goto error;
     hint_table_relocate(img);
-    func_16460(img);
+    icon_table(img);
     img[A_DAT_1AD0D] = 0;
     img[A_DAT_1A750] = 0;
     return 0;
@@ -226,7 +226,7 @@ error:
  * que exista (si falla lanza 0x918e); al exito reinicia la pila (A7 = 0x1d1fe), marca
  * $1ad0f, avanza la tabla 0x2741e y salta a 0x10158 (el test lo corta ahi). */
 void run_command_keep_sp(uint8_t *img, uint32_t a6);
-uint32_t func_16210(uint8_t *img);
+uint32_t pal_next_byte(uint8_t *img);
 
 void reset_clear(uint8_t *img) {
     wr32(img + A_LOAD_BUFFER, 0x1a752);
@@ -242,6 +242,6 @@ void reset_clear(uint8_t *img) {
     img[A_DAT_1AD0F] = 0xff;
     /* A7 = 0x1d1fe: el `bsr 0x16210` deja su direccion de retorno en 0x1d1fa */
     wr32(img + 0x1d1fa, 0x16862);
-    func_16210(img);
+    pal_next_byte(img);
     img[A_DAT_1ACD8] = 2;
 }

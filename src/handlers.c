@@ -24,16 +24,16 @@ void blit_mask_setup(uint8_t *img, uint32_t d2, uint32_t d7);
 void blit_mask_row(uint8_t *img, uint32_t a0, uint32_t a1);
 void blit_rect_vbl(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
                  uint32_t d7);
-void func_12d96(uint8_t *img);
-void func_12dd8(uint8_t *img);
+void elem_blit_pair(uint8_t *img);
+void elem_blit_pair_vbl(uint8_t *img);
 void hint_blit_entry(uint8_t *img, uint32_t a6, uint32_t *a6_out);
 
-uint32_t func_1228a(uint8_t *img, uint32_t a6) {
+uint32_t prompt_wait_entry(uint8_t *img, uint32_t a6) {
     prompt_wait(img);
     return a6 + 1;
 }
 
-uint32_t func_121fa(uint8_t *img, uint32_t a6) {
+uint32_t icon_blit_handler(uint8_t *img, uint32_t a6) {
     uint32_t o[8];
     hint_select_off(img, img[a6 + 1], o);
     mask_restore_rows(img, o[0], o[5], o[6], o[2]);
@@ -44,7 +44,7 @@ uint32_t func_121fa(uint8_t *img, uint32_t a6) {
     return a6 + 2;
 }
 
-void func_12436(uint8_t *img) {
+void mask_rows_handler(uint8_t *img) {
     wr16(img + A_BLIT_MASK_FIRST, be16(img + A_DAT_1A49E));
     wr16(img + A_BLIT_MASK_LAST, be16(img + A_ANIM_1A4A0));
     wr16(img + A_BLIT_GROUPS, be16(img + A_SAVE_1A4A2));
@@ -53,7 +53,7 @@ void func_12436(uint8_t *img) {
     blit_mask_rows(img, a0, A_SAVE_DESC, d3);
 }
 
-void func_127fa(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7) {
+void masked_save_row(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7) {
     wr32(img + A_DAT_1A4B2, a0);
     wr16(img + A_SAVE_1A4A4, d3 & 0xffff);
 
@@ -78,16 +78,16 @@ void func_127fa(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7
     }
 }
 
-void func_127e0(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
+void masked_save(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
                  uint32_t d7) {
     uint32_t ab = a0 - 0x8000;
-    func_127fa(img, ab, d2, d3, d7);
+    masked_save_row(img, ab, d2, d3, d7);
     blit_rect_vbl(img, ab, a1, d2, d3, d7);
 }
 
 /* FUN_000134e4 @ 0x134e4: copia una rejilla desde A1 a pantalla en (D0,D1)-0x8000:
  * (D3) filas de (D2>>2) celdas de 8 bytes. Depende de 0x10fec (screen_address). */
-void func_134e4(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3,
+void copy_grid(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3,
                  uint32_t a1) {
     d2 = (d2 >> 2) & 0xffff;
     d3 = (d3 - 1) & 0xffff;
@@ -117,7 +117,7 @@ void box_vline_copy(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d3);
 /* FUN_00013370 @ 0x13370: revela una caja (D0,D1,D2,D3) con cuatro corridas
  * (0x130a4/0x13162) que van cerrando un rombo; por iteracion actualiza los ocho
  * bordes 0x1a516/518/51a/51c/51e/520/522/524 y espera 0x3e8 ciclos (sin efecto). */
-void func_13370(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3) {
+void reveal_diamond(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3) {
     d0 = (d0 << 2) & 0xffff;
     d2 = (d2 << 2) & 0xffff;
     wr16(img + 0x1a516, d0 & 0xffff);
@@ -186,7 +186,7 @@ void func_13370(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3
 
 /* FUN_00013474 @ 0x13474: si 0x1a570 != 0 cae en 0x1222e; si no, revela la caja del
  * icono A6[1] (0x120e4 + 0x13370) y A6 += 2. */
-uint32_t func_13474(uint8_t *img, uint32_t a6) {
+uint32_t icon_reveal(uint8_t *img, uint32_t a6) {
     if (img[A_SKIP_TRANSITION] != 0) {
         uint32_t a6o;
         hint_blit_entry(img, a6, &a6o);
@@ -194,17 +194,17 @@ uint32_t func_13474(uint8_t *img, uint32_t a6) {
     }
     uint32_t o[8];
     hint_select_off(img, img[a6 + 1], o);
-    func_13370(img, o[3], o[4], o[5], o[6]);
+    reveal_diamond(img, o[3], o[4], o[5], o[6]);
     return a6 + 2;
 }
 
 /* FUN_00014748 @ 0x14748: segun el modo 0x1acc6 lanza 0x12d96 (0x09/0x66) o
  * 0x12dd8 (0x5f/0x67). */
-void func_14748(uint8_t *img) {
-    if (img[0x1acc6] == 0x09) func_12d96(img);
-    if (img[0x1acc6] == 0x66) func_12d96(img);
-    if (img[0x1acc6] == 0x5f) func_12dd8(img);
-    if (img[0x1acc6] == 0x67) func_12dd8(img);
+void elem_mode_blit(uint8_t *img) {
+    if (img[0x1acc6] == 0x09) elem_blit_pair(img);
+    if (img[0x1acc6] == 0x66) elem_blit_pair(img);
+    if (img[0x1acc6] == 0x5f) elem_blit_pair_vbl(img);
+    if (img[0x1acc6] == 0x67) elem_blit_pair_vbl(img);
 }
 
 void wait_frame(uint8_t *img);
@@ -234,12 +234,12 @@ static void wait_count(uint8_t *img, uint32_t d5) {
     }
 }
 
-uint32_t func_12240(uint8_t *img, uint32_t a6) {
+uint32_t wait_button_a(uint8_t *img, uint32_t a6) {
     wait_count(img, img[a6 + 1]);
     return a6 + 2;                 /* adda.l #1,a6 de entrada + addq.l #1,a6 de salida */
 }
 
-uint32_t func_1224e(uint8_t *img, uint32_t a6) {
+uint32_t wait_button_b(uint8_t *img, uint32_t a6) {
     wait_count(img, 4);
     return a6 + 1;                 /* addq.l #1,a6 de salida */
 }
@@ -254,9 +254,9 @@ uint32_t func_1224e(uint8_t *img, uint32_t a6) {
  */
 
 uint32_t func_128a4(uint8_t *img, uint32_t a6);
-void func_126e0(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t d7, uint32_t a1);
-void func_11ece(uint8_t *img, uint32_t d1, uint32_t a0, uint32_t a1);
-void func_11ee8(uint8_t *img, uint32_t d1, uint32_t a0, uint32_t a1);
+void grid_fill(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t d7, uint32_t a1);
+void row_blit_a(uint8_t *img, uint32_t d1, uint32_t a0, uint32_t a1);
+void row_blit_b(uint8_t *img, uint32_t d1, uint32_t a0, uint32_t a1);
 
 typedef struct {
     uint32_t a0, a1, d2, d3, d7;
@@ -275,42 +275,42 @@ static elem_regs elem_after_128a4(uint8_t *img) {
 /* FUN_00011f02 @ 0x11f02: con flag 0x1a570 se corta a 0x134da (128a4+124da); sin
  * el, 128a4 + 126e0 (compone el bitmap en 0xd8f0) y 11ece (d1=alto-1, a1=0xd8f0 +
  * (alto-1)*0x40). */
-uint32_t func_11f02(uint8_t *img, uint32_t a6) {
+uint32_t blit_dispatch_a(uint8_t *img, uint32_t a6) {
     a6 = func_128a4(img, a6);
     elem_regs r = elem_after_128a4(img);
     if (img[A_SKIP_TRANSITION] != 0) {
         blit_rect_vbl(img, r.a0, r.a1, r.d2, r.d3, r.d7);
         return a6;
     }
-    func_126e0(img, r.d2, r.d3, r.d7, r.a1);
+    grid_fill(img, r.d2, r.d3, r.d7, r.a1);
     uint32_t d4 = ((r.d3 & 0xffff) - 1u) << 6;         /* subq.l #1 + lsl.l #6 */
-    func_11ece(img, (r.d3 - 1) & 0xffff, r.a0, A_SAVE_DESC + d4);
+    row_blit_a(img, (r.d3 - 1) & 0xffff, r.a0, A_SAVE_DESC + d4);
     return a6;
 }
 
 /* FUN_00011f2e @ 0x11f2e: idem pero 11ee8; el segundo 0x10fec usa y = *(0x1a530)+alto-1
  * y a1 = 0xd8f0. */
-uint32_t func_11f2e(uint8_t *img, uint32_t a6) {
+uint32_t blit_dispatch_b(uint8_t *img, uint32_t a6) {
     a6 = func_128a4(img, a6);
     elem_regs r = elem_after_128a4(img);
     if (img[A_SKIP_TRANSITION] != 0) {
         blit_rect_vbl(img, r.a0, r.a1, r.d2, r.d3, r.d7);
         return a6;
     }
-    func_126e0(img, r.d2, r.d3, r.d7, r.a1);
+    grid_fill(img, r.d2, r.d3, r.d7, r.a1);
     uint32_t x = be16(img + A_ELEM_1A532);
     uint32_t y = (be16(img + A_ELEM_1A530) + r.d3 - 1) & 0xffff;
     uint32_t d7;
     uint32_t a0 = screen_address(img, x, y, &d7);
-    func_11ee8(img, (r.d3 - 1) & 0xffff, a0, A_SAVE_DESC);
+    row_blit_b(img, (r.d3 - 1) & 0xffff, a0, A_SAVE_DESC);
     return a6;
 }
 
 void wait_vbl(uint8_t *img);
-uint32_t func_134da(uint8_t *img, uint32_t a6);
-void func_11dee(uint8_t *img, uint32_t d1, uint32_t d2, uint32_t d3, uint32_t d7,
+uint32_t elem_blit_vbl(uint8_t *img, uint32_t a6);
+void scroll_up(uint8_t *img, uint32_t d1, uint32_t d2, uint32_t d3, uint32_t d7,
                  uint32_t a0);
-void func_11e5e(uint8_t *img, uint32_t d1, uint32_t d2, uint32_t d3, uint32_t d7,
+void scroll_down(uint8_t *img, uint32_t d1, uint32_t d2, uint32_t d3, uint32_t d7,
                  uint32_t a0);
 void overlay_compose_planes32_wrap(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3,
                  uint32_t d6, uint32_t a0, uint32_t a1);
@@ -324,7 +324,7 @@ void overlay_compose_shift_wrap(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t
 /* FUN_00011dee @ 0x11dee / FUN_00011e5e @ 0x11e5e: desplazan el elemento D1+1
  * pasadas copiando D3 filas con 0x123c0 (hacia arriba/abajo) y rebliteando la fila
  * del buffer trasero; 0x1a53e (long) controla el descenso por pasada. */
-void func_11dee(uint8_t *img, uint32_t d1in, uint32_t d2in, uint32_t d3in,
+void scroll_up(uint8_t *img, uint32_t d1in, uint32_t d2in, uint32_t d3in,
                  uint32_t d7in, uint32_t a0in) {
     uint32_t d1 = d1in & 0xffff, a0 = a0in;
     wr32(img + 0x1a53e, 1);
@@ -347,7 +347,7 @@ void func_11dee(uint8_t *img, uint32_t d1in, uint32_t d2in, uint32_t d3in,
     }
 }
 
-void func_11e5e(uint8_t *img, uint32_t d1in, uint32_t d2in, uint32_t d3in,
+void scroll_down(uint8_t *img, uint32_t d1in, uint32_t d2in, uint32_t d3in,
                  uint32_t d7in, uint32_t a0in) {
     uint32_t d1 = d1in & 0xffff, a0 = a0in;
     wr32(img + 0x1a53e, 1);
@@ -374,9 +374,9 @@ void func_11e5e(uint8_t *img, uint32_t d1in, uint32_t d2in, uint32_t d3in,
 
 /* FUN_00011f64 @ 0x11f64: 128a4 + 124da (a1 = bitmap + stride - 2, d2 = 1) + 111ac
  * (d0 = fase, d1 = ancho - 1) sobre a1 - 2. */
-uint32_t func_11f64(uint8_t *img, uint32_t a6) {
+uint32_t overlay_dispatch_1(uint8_t *img, uint32_t a6) {
     if (img[A_SKIP_TRANSITION] != 0)
-        return func_134da(img, a6);
+        return elem_blit_vbl(img, a6);
     a6 = func_128a4(img, a6);
     elem_regs r = elem_after_128a4(img);
     uint32_t a1 = r.a1 + be32(img + A_DAT_1A534) - 2;
@@ -388,9 +388,9 @@ uint32_t func_11f64(uint8_t *img, uint32_t a6) {
 
 /* FUN_00011f98 @ 0x11f98: como 0x11f64 pero el segundo blit es 114b0 y usa el borde
  * derecho del elemento (x + ancho - 1) recalculado con 0x10fec. */
-uint32_t func_11f98(uint8_t *img, uint32_t a6) {
+uint32_t overlay_dispatch_2(uint8_t *img, uint32_t a6) {
     if (img[A_SKIP_TRANSITION] != 0)
-        return func_134da(img, a6);
+        return elem_blit_vbl(img, a6);
     a6 = func_128a4(img, a6);
     elem_regs r = elem_after_128a4(img);
     uint32_t d7;
@@ -407,7 +407,7 @@ uint32_t func_11f98(uint8_t *img, uint32_t a6) {
 }
 
 /* FUN_00011fd8 @ 0x11fd8: icono A6[1] (0x120e4) + 11e5e + 123c0 sobre a0 - 0xa0. */
-uint32_t func_11fd8(uint8_t *img, uint32_t a6) {
+uint32_t overlay_dispatch_3(uint8_t *img, uint32_t a6) {
     if (img[A_SKIP_TRANSITION] != 0) {
         uint32_t a6o;
         hint_blit_entry(img, a6, &a6o);
@@ -415,7 +415,7 @@ uint32_t func_11fd8(uint8_t *img, uint32_t a6) {
     }
     uint32_t o[8];
     hint_select_off(img, img[a6 + 1], o);
-    func_11e5e(img, (o[6] - 1) & 0xffff, o[5], o[6], o[2], o[0]);
+    scroll_down(img, (o[6] - 1) & 0xffff, o[5], o[6], o[2], o[0]);
     uint32_t a0 = o[0] - 0xa0;
     blit_mask_row(img, a0, a0 - 0x8000);
     return a6 + 2;
@@ -423,7 +423,7 @@ uint32_t func_11fd8(uint8_t *img, uint32_t a6) {
 
 /* FUN_0001200a @ 0x1200a: icono + 11dee sobre el borde derecho (d1 = icono[10] +
  * alto - 1) recalculado con 0x10fec. */
-uint32_t func_1200a(uint8_t *img, uint32_t a6) {
+uint32_t overlay_dispatch_4(uint8_t *img, uint32_t a6) {
     if (img[A_SKIP_TRANSITION] != 0) {
         uint32_t a6o;
         hint_blit_entry(img, a6, &a6o);
@@ -434,7 +434,7 @@ uint32_t func_1200a(uint8_t *img, uint32_t a6) {
     uint32_t d1 = (o[4] + o[6] - 1) & 0xffff;
     uint32_t d7;
     uint32_t a0 = screen_address(img, o[3], d1, &d7);
-    func_11dee(img, (o[6] - 1) & 0xffff, o[5], o[6], o[2], a0);
+    scroll_up(img, (o[6] - 1) & 0xffff, o[5], o[6], o[2], a0);
     a0 += 0xa0;
     blit_mask_row(img, a0, a0 - 0x8000);
     return a6 + 2;
@@ -442,7 +442,7 @@ uint32_t func_1200a(uint8_t *img, uint32_t a6) {
 
 /* FUN_00012044 @ 0x12044: icono + 117de (d0 = cookie con d7 en la palabra baja,
  * d1 = d2 = icono[10], d3 = alto) + 1215e. */
-uint32_t func_12044(uint8_t *img, uint32_t a6) {
+uint32_t overlay_dispatch_5(uint8_t *img, uint32_t a6) {
     if (img[A_SKIP_TRANSITION] != 0) {
         uint32_t a6o;
         hint_blit_entry(img, a6, &a6o);
@@ -456,7 +456,7 @@ uint32_t func_12044(uint8_t *img, uint32_t a6) {
 }
 
 /* FUN_00012076 @ 0x12076: como 0x12044 pero con 11ada. */
-uint32_t func_12076(uint8_t *img, uint32_t a6) {
+uint32_t overlay_dispatch_6(uint8_t *img, uint32_t a6) {
     if (img[A_SKIP_TRANSITION] != 0) {
         uint32_t a6o;
         hint_blit_entry(img, a6, &a6o);
@@ -469,21 +469,21 @@ uint32_t func_12076(uint8_t *img, uint32_t a6) {
     return a6 + 2;
 }
 
-void func_127e0(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
+void masked_save(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
                  uint32_t d7);
-void func_13370(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
+void reveal_diamond(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
 void reveal_lines_h(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
 void reveal_lines_v(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
 
 /* Tras 0x127e0 el A0 real queda en a0-0x8000 (127e0 resta 0x8000 y 127fa/124da
  * preservan A0); los handlers que continuan con 0x12466 usan ese valor. */
 static uint32_t border_after_127e0(uint8_t *img, elem_regs r) {
-    func_127e0(img, r.a0, r.a1, r.d2, r.d3, r.d7);
+    masked_save(img, r.a0, r.a1, r.d2, r.d3, r.d7);
     return r.a0 - 0x8000;
 }
 
 /* 0x132aa: 128a4 + 127e0 + 13370 + 12466 (la rama 0x1a570!=0 es 0x134da). */
-uint32_t func_132aa(uint8_t *img, uint32_t a6) {
+uint32_t reveal_box_build(uint8_t *img, uint32_t a6) {
     a6 = func_128a4(img, a6);
     elem_regs r = elem_after_128a4(img);
     if (img[A_SKIP_TRANSITION] != 0) {
@@ -491,14 +491,14 @@ uint32_t func_132aa(uint8_t *img, uint32_t a6) {
         return a6;
     }
     uint32_t b0 = border_after_127e0(img, r);
-    func_13370(img, be16(img + A_ELEM_1A532), be16(img + A_ELEM_1A530),
+    reveal_diamond(img, be16(img + A_ELEM_1A532), be16(img + A_ELEM_1A530),
                 be16(img + A_ELEM_1A52E), be16(img + A_ELEM_1A52C));
     blit_mask_rows(img, b0, A_SAVE_DESC, be16(img + A_ELEM_1A52C));
     return a6;
 }
 
 /* 0x132ec: como 0x132aa pero con 0x13e14. */
-uint32_t func_132ec(uint8_t *img, uint32_t a6) {
+uint32_t reveal_box_wait_a(uint8_t *img, uint32_t a6) {
     a6 = func_128a4(img, a6);
     elem_regs r = elem_after_128a4(img);
     if (img[A_SKIP_TRANSITION] != 0) {
@@ -513,7 +513,7 @@ uint32_t func_132ec(uint8_t *img, uint32_t a6) {
 }
 
 /* 0x1332e: como 0x132aa pero con 0x13eae. */
-uint32_t func_1332e(uint8_t *img, uint32_t a6) {
+uint32_t reveal_box_wait_b(uint8_t *img, uint32_t a6) {
     a6 = func_128a4(img, a6);
     elem_regs r = elem_after_128a4(img);
     if (img[A_SKIP_TRANSITION] != 0) {
@@ -528,7 +528,7 @@ uint32_t func_1332e(uint8_t *img, uint32_t a6) {
 }
 
 /* 0x13490: revela la caja del icono A6[1] con 0x13e14. */
-uint32_t func_13490(uint8_t *img, uint32_t a6) {
+uint32_t icon_reveal_h(uint8_t *img, uint32_t a6) {
     if (img[A_SKIP_TRANSITION] != 0) {
         uint32_t a6o;
         hint_blit_entry(img, a6, &a6o);
@@ -542,7 +542,7 @@ uint32_t func_13490(uint8_t *img, uint32_t a6) {
 }
 
 /* 0x134b2: revela la caja del icono A6[1] con 0x13eae. */
-uint32_t func_134b2(uint8_t *img, uint32_t a6) {
+uint32_t icon_reveal_v(uint8_t *img, uint32_t a6) {
     if (img[A_SKIP_TRANSITION] != 0) {
         uint32_t a6o;
         hint_blit_entry(img, a6, &a6o);
@@ -599,7 +599,7 @@ void handle_frame_input(uint8_t *img) {
 
 /* FUN_00014798 @ 0x14798: devuelve el C si (d0b,d1b) cae en el rect [a4..a4+3]
  * (bytes). FUN_0001478a @ 0x1478a carga (cursor_x>>2, cursor_y) y cae en el. */
-int func_14798(uint8_t *img, uint32_t a4, uint32_t d0, uint32_t d1) {
+int rect_hit_test(uint8_t *img, uint32_t a4, uint32_t d0, uint32_t d1) {
     uint8_t x = (uint8_t)d0, y = (uint8_t)d1;
     if (x < img[a4] || x >= img[a4 + 1])
         return 0;
@@ -607,8 +607,8 @@ int func_14798(uint8_t *img, uint32_t a4, uint32_t d0, uint32_t d1) {
         return 0;
     return 1;
 }
-int func_1478a(uint8_t *img, uint32_t a4) {
-    return func_14798(img, a4, (be16(img + A_CURSOR_X) >> 2) & 0xff,
+int rect_hit_test_a(uint8_t *img, uint32_t a4) {
+    return rect_hit_test(img, a4, (be16(img + A_CURSOR_X) >> 2) & 0xff,
                        be16(img + A_CURSOR_Y) & 0xff);
 }
 
@@ -618,13 +618,13 @@ int func_1478a(uint8_t *img, uint32_t a4) {
 static uint32_t action_select(uint8_t *img, uint32_t a4, uint32_t d2) {
     uint32_t d0 = (be16(img + A_CURSOR_X) >> 2) & 0xff;
     uint32_t d1 = be16(img + A_CURSOR_Y) & 0xff;
-    int found = func_14798(img, a4, d0, d1);
+    int found = rect_hit_test(img, a4, d0, d1);
     if (!found) {
         uint32_t d3 = 6;
         for (;;) {
             a4 += 4;
             d2 = (d2 + 1) & 0xffff;
-            found = func_14798(img, a4, d0, d1);
+            found = rect_hit_test(img, a4, d0, d1);
             if (found)
                 break;                 /* dbcs: condicion verdadera -> cae */
             d3 = (d3 - 1) & 0xffff;    /* condicion falsa -> decrementa y salta */
@@ -648,20 +648,20 @@ static uint32_t action_select(uint8_t *img, uint32_t a4, uint32_t d2) {
     return 0;
 }
 
-uint32_t func_147ce(uint8_t *img, uint32_t a4) {
+uint32_t cursor_select_b(uint8_t *img, uint32_t a4) {
     return action_select(img, a4, 1);
 }
 
 /* FUN_000147c2 @ 0x147c2: variante de 0x147ce sobre la tabla 0x19b26 con el
  * contador inicial D2 = 0xa. */
-uint32_t func_147c2(uint8_t *img) {
+uint32_t cursor_select_a(uint8_t *img) {
     return action_select(img, 0x19b26, 0xa);
 }
 
 /* FUN_00014926 @ 0x14926: busca en la tabla de clases 0x1aa72 (5 B/entrada, 0x29
  * entradas) la primera cuyo byte 1 & 0xf == 0x1acc9; si la encuentra deja
  * 0x1a772 = entrada y 0x1ace6 = indice (1-based); si no, 0x1ace6 = 0. */
-void func_14926(uint8_t *img) {
+void class_find(uint8_t *img) {
     uint32_t d2 = 1;
     uint32_t d4 = img[A_SEL_1ACC9];
     uint32_t a0 = A_OBJ_TBL;
@@ -685,14 +685,14 @@ void func_14926(uint8_t *img) {
  * 0x1ab46 = 0x64, 0x1a48a = 1. D3 < 2 falla sin probar la segunda entrada. */
 void action_bar_hit_test(uint8_t *img, uint32_t d3) {
     uint32_t a4 = A_TBL_1A6AE;
-    int found = func_1478a(img, a4);
+    int found = rect_hit_test_a(img, a4);
     if (!found) {
         uint32_t count = d3 & 0xffff;
         if (count >= 2) {
             uint32_t n = count - 2;
             for (;;) {
                 a4 += 10;
-                found = func_14798(img, a4, (be16(img + A_CURSOR_X) >> 2) & 0xff,
+                found = rect_hit_test(img, a4, (be16(img + A_CURSOR_X) >> 2) & 0xff,
                                     be16(img + A_CURSOR_Y) & 0xff);
                 if (found || n == 0)
                     break;
@@ -718,18 +718,18 @@ void action_bar_hit_test(uint8_t *img, uint32_t d3) {
 /* FUN_00015588 @ 0x15588 (cmd idx 5) y FUN_000155b8 @ 0x155b8 (idx 6): fijan
  * the_command a 0xc35c/0xc35d y entran al despacho. */
 void run_command_keep_sp(uint8_t *img, uint32_t a6);
-void func_15588(uint8_t *img) {
+void mode_flag_wrap(uint8_t *img) {
     wr16(img + A_THE_COMMAND, 0xc35c);
     run_command_keep_sp(img, 0);
 }
-void func_155b8(uint8_t *img) {
+void mode_queue_wrap(uint8_t *img) {
     wr16(img + A_THE_COMMAND, 0xc35d);
     run_command_keep_sp(img, 0);
 }
 
 /* FUN_000134da @ 0x134da: rama compartida por los dispatchers 0x11xxx con
  * 0x1a570 != 0: 0x128a4 y rebliteo (0x124da). */
-uint32_t func_134da(uint8_t *img, uint32_t a6) {
+uint32_t elem_blit_vbl(uint8_t *img, uint32_t a6) {
     a6 = func_128a4(img, a6);
     elem_regs r = elem_after_128a4(img);
     blit_rect_vbl(img, r.a0, r.a1, r.d2, r.d3, r.d7);
@@ -752,7 +752,7 @@ void set_cursor_clip(uint8_t *img, uint32_t a0, uint32_t d0);
  * repinta cursor). No toca A6; lo comparten 0x167aa, 0x1680c y varios comandos.
  * OJO: 0x10522 dibuja el cursor SIN restaurar; si se llamara dentro del bucle
  * dejaria una replica del cursor por VBL (rastro). */
-void func_167be(uint8_t *img, uint32_t d2, uint32_t d3) {
+void obj_wait_hit(uint8_t *img, uint32_t d2, uint32_t d3) {
     img[A_DAT_1A74E] = (uint8_t)d2;
     img[A_DAT_1A74F] = (uint8_t)d3;
     wait_frame_cursor(img);           /* 0x167ca: espera frame + dibuja cursor (una vez) */
@@ -771,27 +771,27 @@ void func_167be(uint8_t *img, uint32_t d2, uint32_t d3) {
 
 /* FUN_000167aa @ 0x167aa (cmd idx 77): A6[1] elige origen/cursor (0x14a98),
  * A6[2]/A6[3] son D2/D3, A6 += 4 y cae en el bucle de espera. */
-uint32_t func_167aa(uint8_t *img, uint32_t a6) {
+uint32_t obj_wait(uint8_t *img, uint32_t a6) {
     set_cursor_clip(img, 0, img[a6 + 1]);
     uint32_t d2 = img[a6 + 2];
     uint32_t d3 = img[a6 + 3];
     a6 += 4;
-    func_167be(img, d2, d3);
+    obj_wait_hit(img, d2, d3);
     return a6;
 }
 
 /* FUN_0001680c @ 0x1680c: espera con origen/cursor 6 y (0xb8,0x90); devuelve A0 =
  * puntero de clase 0x1a772 (lo consume 0x169b4). */
-uint32_t func_1680c(uint8_t *img) {
+uint32_t obj_wait_a0(uint8_t *img) {
     set_cursor_clip(img, 0, 6);
-    func_167be(img, 0xb8, 0x90);
+    obj_wait_hit(img, 0xb8, 0x90);
     return be32(img + A_ELEM_CLASS);
 }
 
 /* FUN_0001695a @ 0x1695a: formatea el nombre del objeto seleccionado en 0x19970.
  * Con clase (a0[0]) < 0x23 usa a0[1] tal cual y marca 0xf4 en 0x19973; si no,
  * a0[1]-0x14 y 0xd4. Fila = a0[2]-0x28 en 0x19972 y a0[1] ajustado en 0x19971. */
-void func_1695a(uint8_t *img) {
+void obj_name_table(uint8_t *img) {
     uint32_t a0 = be32(img + A_SELECTED_OBJECT);
     uint32_t d0;
     if (img[a0] < 0x23) {
@@ -814,10 +814,10 @@ void func_1695a(uint8_t *img) {
 uint32_t text_index_arg(uint8_t *img, uint32_t a5, uint32_t d4, uint32_t *a6);
 void text_window(uint8_t *img, uint32_t a5, uint32_t a6);
 void hint_blit_stroke(uint8_t *img, uint32_t *a6);
-void func_18f7a(uint8_t *img, uint32_t d1, uint32_t d4);
+void supexec_b(uint8_t *img, uint32_t d1, uint32_t d4);
 
 /* FUN_0001687e @ 0x1687e: nombre del objeto sin sonido ni filtro. */
-void func_1687e(uint8_t *img, uint32_t a6) {
+void obj_name(uint8_t *img, uint32_t a6) {
     a6 += 1;
     uint32_t a5 = text_index_arg(img, 0x3c534, img[a6], &a6);
     text_window(img, a5, 0x1996c);
@@ -825,13 +825,13 @@ void func_1687e(uint8_t *img, uint32_t a6) {
 }
 
 /* FUN_000168a0 @ 0x168a0: nombre con sonido (0xe6) y espera de tecla. */
-void func_168a0(uint8_t *img, uint32_t a6) {
-    func_18f7a(img, 0xe6, 0x18);
+void obj_name_snd(uint8_t *img, uint32_t a6) {
+    supexec_b(img, 0xe6, 0x18);
     a6 += 1;
     uint32_t a5 = text_index_arg(img, 0x3c534, img[a6], &a6);
-    func_1695a(img);
+    obj_name_table(img);
     text_window(img, a5, 0x19970);
-    (void)func_1228a(img, 0x19970);
+    (void)prompt_wait_entry(img, 0x19970);
     uint32_t a6b = 0x19970;
     hint_blit_stroke(img, &a6b);
     a6 += 1;
@@ -839,13 +839,13 @@ void func_168a0(uint8_t *img, uint32_t a6) {
 
 /* FUN_000168d4 @ 0x168d4: como 0x168a0 pero sin sonido y con el bit 6 de 0x19973
  * (el color del nombre) limpio. */
-void func_168d4(uint8_t *img, uint32_t a6) {
+void obj_name_clean(uint8_t *img, uint32_t a6) {
     a6 += 1;
     uint32_t a5 = text_index_arg(img, 0x3c534, img[a6], &a6);
-    func_1695a(img);
+    obj_name_table(img);
     img[0x19973] &= (uint8_t)~0x40u;
     text_window(img, a5, 0x19970);
-    (void)func_1228a(img, 0x19970);
+    (void)prompt_wait_entry(img, 0x19970);
     uint32_t a6b = 0x19970;
     hint_blit_stroke(img, &a6b);
     a6 += 1;

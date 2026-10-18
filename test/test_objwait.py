@@ -22,12 +22,12 @@ PACKET = 0x1A44F
 OBJ = 0x40000
 A6 = 0x40010
 
-harness._lib.func_167aa.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_167aa.restype = ctypes.c_uint32
-harness._lib.func_167be.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32]
-harness._lib.func_167be.restype = None
-harness._lib.func_1680c.argtypes = [_u8p]
-harness._lib.func_1680c.restype = ctypes.c_uint32
+harness._lib.obj_wait.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.obj_wait.restype = ctypes.c_uint32
+harness._lib.obj_wait_hit.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32]
+harness._lib.obj_wait_hit.restype = None
+harness._lib.obj_wait_a0.argtypes = [_u8p]
+harness._lib.obj_wait_a0.restype = ctypes.c_uint32
 
 
 def _pokes():
@@ -61,7 +61,7 @@ def _schedule():
 def test_fun_167be():
     diffs, _ = differential(
         FUN_167BE, {"d2": 0xFF, "d3": 0x10, "_pokes": _pokes()},
-        lambda lib, buf: lib.func_167be(buf, 0xFF, 0x10),
+        lambda lib, buf: lib.obj_wait_hit(buf, 0xFF, 0x10),
         schedule=_schedule(), wait_sites=[IKBD_SITE, VBL_SITE])
     assert not diffs, report(diffs)
 
@@ -71,7 +71,7 @@ def test_fun_167aa():
     pokes[A6] = bytes([0x00, 0x05, 0xFF, 0x10])
     diffs, info = differential(
         FUN_167AA, {"a6": A6, "_pokes": pokes},
-        lambda lib, buf: lib.func_167aa(buf, A6),
+        lambda lib, buf: lib.obj_wait(buf, A6),
         schedule=_schedule(), wait_sites=[IKBD_SITE, VBL_SITE])
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
@@ -80,7 +80,7 @@ def test_fun_167aa():
 def test_fun_1680c():
     diffs, info = differential(
         FUN_1680C, {"_pokes": _pokes()},
-        lambda lib, buf: lib.func_1680c(buf),
+        lambda lib, buf: lib.obj_wait_a0(buf),
         schedule=_schedule(), wait_sites=[IKBD_SITE, VBL_SITE])
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a0"]

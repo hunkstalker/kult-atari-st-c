@@ -12,26 +12,26 @@
 #include "addrs.h"
 
 uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
-void func_1276c(uint8_t *img, uint32_t d2w, uint32_t d3w, uint32_t d7w,
+void pattern_fill(uint8_t *img, uint32_t d2w, uint32_t d3w, uint32_t d7w,
                  uint32_t d6w, uint32_t a0);
-void func_18f8e(uint8_t *img, uint32_t d4);
-void func_11020(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4);
+void sound_play_a(uint8_t *img, uint32_t d4);
+void text_blit_ovl_b(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4);
 
 /* FUN_00015510 @ 0x15510: imprime el registro A2 (nombre en A2[0], fila en A2[2])
  * con 0x11020 y D4; avanza A2 0xa y devuelve D6 incrementado (el original lo hace
  * en los registros, y 0x15492 encadena registros de 10 bytes). */
-uint32_t func_15510(uint8_t *img, uint32_t *a2_io, uint32_t d4, uint32_t d6) {
+uint32_t sample_select2(uint8_t *img, uint32_t *a2_io, uint32_t d4, uint32_t d6) {
     uint32_t a2 = *a2_io;
     uint32_t d0 = img[a2];
     uint32_t d1 = img[a2 + 2];
-    func_11020(img, d0, d1, d4);
+    text_blit_ovl_b(img, d0, d1, d4);
     *a2_io = (a2 + 0xa) & 0xffffffffu;
     return (d6 + 1) & 0xffff;
 }
 
 /* FUN_00015492 @ 0x15492: recorre la tabla 0x1a8f0 y publica el registro elegido.
  * Devuelve D6 (el contador que el original deja en el registro y en $1a510). */
-uint32_t func_15492(uint8_t *img, uint32_t d2, uint32_t d3) {
+uint32_t sample_select(uint8_t *img, uint32_t d2, uint32_t d3) {
     uint32_t d5 = 0x3e;
     uint32_t a1 = 0x1a8f0;
     uint32_t a2 = 0x1a6ae;
@@ -45,13 +45,13 @@ uint32_t func_15492(uint8_t *img, uint32_t d2, uint32_t d3) {
                 uint32_t win = be16(img + 0x1a488);
                 uint32_t d7 = 0;
                 uint32_t a0 = screen_address(img, 0x3a, 0x38, &d7);
-                func_1276c(img, 0x10, 0x40, d7, win, a0);
-                func_18f8e(img, 0x14);
+                pattern_fill(img, 0x10, 0x40, d7, win, a0);
+                sound_play_a(img, 0x14);
             }
             img[a2 + 4] = img[a1 + 3];
             wr16(img + a2 + 6, be16(img + a1 + 4));
             img[a2 + 8] = (uint8_t)((0x3f - (d5 & 0xff)) & 0xff);
-            d6 = func_15510(img, &a2, img[a1 + 2], d6);
+            d6 = sample_select2(img, &a2, img[a1 + 2], d6);
         }
         a1 += 6;
     } while ((d5 = (d5 - 1) & 0xffff) != 0xffff);
@@ -71,23 +71,23 @@ uint32_t func_15492(uint8_t *img, uint32_t d2, uint32_t d3) {
 uint32_t save_rect(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t a0, uint32_t d7);
 void restore_rect(uint8_t *img);
 void cursor_restore(uint8_t *img);
-void func_18f98(uint8_t *img, uint32_t d4);
+void sound_play_b(uint8_t *img, uint32_t d4);
 void wait_frame_cursor(uint8_t *img);
 void wait_frame(uint8_t *img);
 void set_cursor_clip(uint8_t *img, uint32_t a0, uint32_t d0);
 void action_bar_hit_test(uint8_t *img, uint32_t d3);
 void overlay_b_draw(uint8_t *img, uint32_t a6);
 void handle_frame_input(uint8_t *img);
-void func_10768(uint8_t *img);
+void text_end(uint8_t *img);
 void run_command_keep_sp(uint8_t *img, uint32_t a6);
 
 /* FUN_00014db2 @ 0x14db2: marco + lista de samples + bucle de espera + Timer A. */
-void func_14db2(uint8_t *img, uint32_t a6, uint32_t d2, uint32_t d3) {
+void sample_menu(uint8_t *img, uint32_t a6, uint32_t d2, uint32_t d3) {
     wr16(img + 0x1a50e, 0);
     uint32_t d7 = 0;
     uint32_t a0 = screen_address(img, 0x3a, 0x38, &d7);
     save_rect(img, 0x10, 0x40, a0, d7);
-    func_15492(img, d2, d3);
+    sample_select(img, d2, d3);
     if (be16(img + 0x1a510) != 0) {
         wait_frame_cursor(img);
         for (;;) {
@@ -104,7 +104,7 @@ void func_14db2(uint8_t *img, uint32_t a6, uint32_t d2, uint32_t d3) {
         }
     }
     restore_rect(img);
-    func_18f98(img, 0x14);
+    sound_play_b(img, 0x14);
     img[0x1ad29] = 0x01;
     {
         uint32_t sel = be32(img + 0x1a75e);
@@ -115,32 +115,32 @@ void func_14db2(uint8_t *img, uint32_t a6, uint32_t d2, uint32_t d3) {
 }
 
 /* FUN_00014d76 @ 0x14d76: entrada del menu (D2/D3 = 0x8000, filtro 0x00ff). */
-void func_14d76(uint8_t *img, uint32_t a6) {
+void sample_menu_entry_a(uint8_t *img, uint32_t a6) {
     cursor_restore(img);
     wr16(img + 0x1a488, 0x00ff);
-    func_14db2(img, a6, 0x8000, 0x8000);
+    sample_menu(img, a6, 0x8000, 0x8000);
     run_command_keep_sp(img, a6);
 }
 
 /* FUN_00014d90 @ 0x14d90: entrada del menu con el filtro de $1acd2. */
-void func_14d90(uint8_t *img, uint32_t a6) {
+void sample_menu_entry_b(uint8_t *img, uint32_t a6) {
     cursor_restore(img);
     uint32_t d3 = 0x4000u | img[0x1acd2];
     wr16(img + 0x1a488, 0x000f);
-    func_14db2(img, a6, 0x40ff, d3);
+    sample_menu(img, a6, 0x40ff, d3);
     run_command_keep_sp(img, a6);
 }
 
 /* FUN_000149da @ 0x149da: entrada del menu de acciones; devuelve el A6 avanzado (el
  * original lo deja en el registro). */
-uint32_t func_149da(uint8_t *img, uint32_t a6) {
+uint32_t action_menu(uint8_t *img, uint32_t a6) {
     if (img[0x1acec] >= 0x3f) {
-        func_10768(img);
+        text_end(img);
         return a6;
     }
     uint32_t a5 = be32(img + 0x1a4e0);
     wr16(img + 0x1a488, 0xf0ff);
-    func_14db2(img, a6, 0xff00, 0x8000);
+    sample_menu(img, a6, 0xff00, 0x8000);
     uint32_t d0 = 1;
     if (be16(img + 0x1a510) == 0)
         goto stored;
@@ -158,7 +158,7 @@ uint32_t func_149da(uint8_t *img, uint32_t a6) {
         uint32_t sel = be32(img + 0x1a75e);
         img[sel] = 0;
     }
-    func_14db2(img, a6, 0xff00, 0x1000);
+    sample_menu(img, a6, 0xff00, 0x1000);
     d0 = 4;
     if (be16(img + 0x1a50e) == 0)
         goto stored;
@@ -184,14 +184,14 @@ stored:
  * 0xc1bd repite el bucle. Cierra con 0x14bdc y devuelve A6 = entry+1. */
 void run_command_keep_sp(uint8_t *img, uint32_t a6);
 void fix_sample_flag(uint8_t *img);
-void func_14db2(uint8_t *img, uint32_t a6, uint32_t d2, uint32_t d3);
+void sample_menu(uint8_t *img, uint32_t a6, uint32_t d2, uint32_t d3);
 
-uint32_t func_14ac6(uint8_t *img, uint32_t a6) {
+uint32_t sample_menu_a(uint8_t *img, uint32_t a6) {
     uint32_t a5 = be32(img + 0x1a4e0);
     uint32_t d2 = 0xfe00, d3 = 0x8000;
     wr16(img + 0x1a488, 0xf0ff);
     for (;;) {
-        func_14db2(img, a6, d2, d3);
+        sample_menu(img, a6, d2, d3);
         if (be16(img + 0x1a510) == 0) {
             wr16(img + 0x1a50e, 0xc1bc);
             goto L_14ac6_d58;
@@ -257,14 +257,14 @@ uint32_t func_14ac6(uint8_t *img, uint32_t a6) {
 /* FUN_00014bfa @ 0x14bfa: variante del menu de samples (comando inicial 0x9099).
  * Como 0x14ac6 pero exige que la entrada elegida este en {0x68,0x7a,0x6b,0x69},
  * corre 0xc1c6 (que puede fijar $1ad04) y comparte las colas. A6 = entry+1. */
-uint32_t func_14bfa(uint8_t *img, uint32_t a6) {
+uint32_t sample_menu_b(uint8_t *img, uint32_t a6) {
     uint32_t a5 = be32(img + 0x1a4e0);
     uint32_t d2 = 0xfe00, d3 = 0x8000;
     wr16(img + 0x1a50e, 0x9099);
     run_command_keep_sp(img, a6);
     wr16(img + 0x1a488, 0xf0ff);
     for (;;) {
-        func_14db2(img, a6, d2, d3);
+        sample_menu(img, a6, d2, d3);
         if (be16(img + 0x1a510) == 0) {
             wr16(img + 0x1a50e, 0xc1c5);
             goto L_14bfa_d58;

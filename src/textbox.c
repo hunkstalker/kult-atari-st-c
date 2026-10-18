@@ -169,7 +169,7 @@ uint32_t draw_text_box(uint8_t *img, uint32_t a6) {
  * direccion de pantalla de (x,y) y entrada de icono en 0x120a8. Devuelve A6 + 4. */
 void hint_slot_alloc(uint8_t *img, uint32_t d4, uint32_t a0, uint32_t d7,
                  uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
-uint32_t func_10dfa(uint8_t *img, uint32_t a6) {
+uint32_t text_box_icon(uint8_t *img, uint32_t a6) {
     a6 += 1;
     uint32_t d4 = img[a6];
     uint32_t a5 = text_index_arg(img, 0x3ec8a, d4, &a6);
@@ -199,8 +199,8 @@ void print_char(uint8_t *img, uint32_t d0);
 uint32_t print_line(uint8_t *img, uint32_t a5);
 void box_hline(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
 void box_vline(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
-void func_11020(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4);
-void func_110da(uint8_t *img, uint32_t d4, uint32_t d0, uint32_t d1);
+void text_blit_ovl_b(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4);
+void text_blit_rev_entry(uint8_t *img, uint32_t d4, uint32_t d0, uint32_t d1);
 void hint_slot_alloc(uint8_t *img, uint32_t d4, uint32_t a0, uint32_t d7,
                  uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
 
@@ -301,29 +301,29 @@ void text_window(uint8_t *img, uint32_t a5, uint32_t a6) {
     if (b6 == 0) {
         d0 = (bx + 1) & 0xffff;
         d1 = (by - 7) & 0xffff;
-        func_11020(img, d0, d1, 0x12);
+        text_blit_ovl_b(img, d0, d1, 0x12);
     } else if (b6 == 0x20) {
         d0 = (bx + be16(img + A_TEXT_BOX_W)) & 0xffff;
         d1 = (by - 7) & 0xffff;
-        func_110da(img, 0x12, d0, d1);
+        text_blit_rev_entry(img, 0x12, d0, d1);
         d0 = (d0 - 1) & 0xffff;
     } else if (b6 == 0x80) {
         d0 = (bx + be16(img + A_TEXT_BOX_W)) & 0xffff;
         d1 = (be16(img + A_CURSOR_TEXT_Y) + 1) & 0xffff;
-        func_110da(img, 0x15, d0, d1);
+        text_blit_rev_entry(img, 0x15, d0, d1);
         d0 = (d0 - 1) & 0xffff;
     } else if (b6 == 0xa0) {
         d0 = (bx + 1) & 0xffff;
         d1 = (be16(img + A_CURSOR_TEXT_Y) + 1) & 0xffff;
-        func_11020(img, d0, d1, 0x15);
+        text_blit_ovl_b(img, d0, d1, 0x15);
     } else if (b6 == 0xc0) {
         d0 = (bx + be16(img + A_TEXT_BOX_W)) & 0xffff;
         d1 = (be16(img + A_CURSOR_TEXT_Y) + 4) & 0xffff;
-        func_11020(img, d0, d1, 0x14);
+        text_blit_ovl_b(img, d0, d1, 0x14);
     } else if (b6 == 0xe0) {
         d0 = (bx + 1) & 0xffff;
         d1 = (be16(img + A_CURSOR_TEXT_Y) + 4) & 0xffff;
-        func_11020(img, d0, d1, 0x13);
+        text_blit_ovl_b(img, d0, d1, 0x13);
     }
     uint32_t fa0 = be32(img + A_ELEM_1A528);
     uint32_t fd7 = be16(img + A_DAT_1A49E);
@@ -334,7 +334,7 @@ void text_window(uint8_t *img, uint32_t a5, uint32_t a6) {
 
 /* FUN_00010b52 @ 0x10b52 (cmd idx 78): text index de A6[1] sobre el banco 0x3c534,
  * copia 0x1a482 a 0x1a484 y dibuja la ventana (0x10b6c). Devuelve A6 + 5. */
-uint32_t func_10b52(uint8_t *img, uint32_t a6) {
+uint32_t text_window_entry(uint8_t *img, uint32_t a6) {
     a6 += 1;
     uint32_t a5 = text_index_arg(img, 0x3c534, img[a6], &a6);
     wr16(img + A_DAT_1A484, be16(img + A_TEXT_INDEX));
@@ -348,7 +348,7 @@ uint32_t func_10b52(uint8_t *img, uint32_t a6) {
  * el resto se blitea (0x14138) y actualiza la caja 0x1ab40..43 con comparaciones de
  * byte (x = a6[1], y*2 = a6[2]<<1, + d2/d3). Cierra con cursores, print_char y los
  * bordes 0x12fee/0x1320a. */
-void func_15944(uint8_t *img);
+void copy_rows(uint8_t *img);
 void walk_entry(uint8_t *img, uint32_t a4, uint32_t d1, uint32_t *a4o,
                   uint32_t *a5o);
 void run_text_entry_ex(uint8_t *img, uint32_t a6, uint32_t *a0o, uint32_t *d2o,
@@ -359,7 +359,7 @@ void box_hline_back(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_
 void box_vline_back(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
 
 void scene_text_box(uint8_t *img) {
-    func_15944(img);
+    copy_rows(img);
     wr16(img + A_DAT_1A49E, img[0x1acf1]);
     uint32_t a4o, a5o;
     walk_entry(img, 0x24982, (img[0x1acc7] - 1) & 0xffff, &a4o, &a5o);

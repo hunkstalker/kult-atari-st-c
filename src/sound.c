@@ -39,7 +39,7 @@ void ym_write(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d0_out,
  * registros 0xd..0 y luego 0x18 en el mixer (registro 7). D1 NO se recarga en el
  * bucle: ym_write lo pisa con el resultado del RMW al pasar por el registro 7, y los
  * registros 6..0 reciben ese valor (el ledger del oraculo lo confirma). */
-void func_19282(uint8_t *img) {
+void ym_reset(uint8_t *img) {
     uint32_t d1 = 0;
     for (uint32_t d0 = 0xd;; d0 = (d0 - 1) & 0xffff) {
         ym_write(img, d0, d1, 0, &d1);
@@ -95,7 +95,7 @@ void sound_timer_start(uint8_t *img, uint32_t d4) {
 }
 
 /* FUN_00018fc6 @ 0x18fc6: entrada con D1 explicito (la usa 0x18f7a). */
-void func_18fc6(uint8_t *img, uint32_t d1, uint32_t d4) {
+void sound_timer_start_body(uint8_t *img, uint32_t d1, uint32_t d4) {
     sound_start_body(img, d1, d4);
 }
 
@@ -110,16 +110,16 @@ void sound_timer_stop(uint8_t *img) {
 
 /* FUN_0001909e @ 0x1909e: apaga el sonido: limpia 0x484, resetea el PSG (0x19282),
  * silencia el mixer (ym_write 7 con 0x3f) y para el Timer A (0x19084). */
-void func_1909e(uint8_t *img) {
+void sound_off(uint8_t *img) {
     img[0x484] = 0;
-    func_19282(img);
+    ym_reset(img);
     ym_write(img, 7, 0x3f, 0, 0);
     sound_timer_stop(img);
 }
 
 /* FUN_0001906a @ 0x1906a: arranca el Timer A (0x18fc4), apunta el vector $134 a la
  * variante 0x190f6 y reinicia el puntero de sample a 0x192ca. */
-void func_1906a(uint8_t *img, uint32_t d4) {
+void sound_vector(uint8_t *img, uint32_t d4) {
     sound_timer_start(img, d4);
     wr32(img + 0x134, 0x190f6);
     wr32(img + 0x192c6, be32(img + 0x192ca));
@@ -130,39 +130,39 @@ void func_1906a(uint8_t *img, uint32_t d4) {
  * Todos saltan el `trap #14/$26` cuando 0x1ab4f != 0 (el original tambien): el
  * candidato ejecuta la rutina destino directamente. Cada envoltorio elige una
  * entrada distinta; 0x18f7a usa 0x18fc6 (D1 explicito) y 0x18f8e la canonica 0x18fc4. */
-void func_18f7a(uint8_t *img, uint32_t d1, uint32_t d4) {
+void supexec_b(uint8_t *img, uint32_t d1, uint32_t d4) {
     if (img[A_FRAME_1AB4F] == 0)
-        func_18fc6(img, d1, d4);
+        sound_timer_start_body(img, d1, d4);
 }
-void func_18f84(uint8_t *img) {
+void sound_stop_supexec(uint8_t *img) {
     if (img[A_FRAME_1AB4F] == 0)
-        func_1909e(img);
+        sound_off(img);
 }
-void func_18f8e(uint8_t *img, uint32_t d4) {
+void sound_play_a(uint8_t *img, uint32_t d4) {
     if (img[A_FRAME_1AB4F] == 0)
         sound_timer_start(img, d4);
 }
-void func_18f98(uint8_t *img, uint32_t d4) {
+void sound_play_b(uint8_t *img, uint32_t d4) {
     if (img[A_FRAME_1AB4F] == 0)
-        func_1906a(img, d4);
+        sound_vector(img, d4);
 }
-void func_18fa2(uint8_t *img, uint32_t *a6) {
+void supexec_a(uint8_t *img, uint32_t *a6) {
     if (img[A_FRAME_1AB4F] == 0)
         sound_timer_stop(img);
     *a6 += 1;
 }
-void func_18fa4(uint8_t *img) {
+void sound_stop(uint8_t *img) {
     if (img[A_FRAME_1AB4F] == 0)
         sound_timer_stop(img);
 }
 
 /* FUN_00018f6e @ 0x18f6e: handler de byte que lee D4/D1 de A6[1]/A6[2], A6 += 3 y cae
  * en 0x18f7a. */
-uint32_t func_18f6e(uint8_t *img, uint32_t a6) {
+uint32_t supexec_wrap(uint8_t *img, uint32_t a6) {
     uint32_t d4 = img[a6 + 1];
     uint32_t d1 = img[a6 + 2];
     a6 += 3;
-    func_18f7a(img, d1, d4);
+    supexec_b(img, d1, d4);
     return a6;
 }
 
@@ -219,13 +219,13 @@ static void pcm_tail(uint8_t *img) {
 }
 
 /* FUN_000190b8 @ 0x190b8: carga el siguiente bloque de samples (entrada propia). */
-void func_190b8(uint8_t *img) {
+void sound_isr_load(uint8_t *img) {
     pcm_body_190b8(img);
     hw_bclr8(0xfffa0f, 5);
 }
 
 /* FUN_0001910e @ 0x1910e: ISR PCM hacia delante (vector $134). */
-void func_1910e(uint8_t *img) {
+void sound_isr_fwd(uint8_t *img) {
     uint32_t a0 = be32(img + 0x192c6);
     if (a0 < be32(img + 0x192ca)) {
         uint32_t d0 = img[a0++];
@@ -238,7 +238,7 @@ void func_1910e(uint8_t *img) {
 }
 
 /* FUN_000190f6 @ 0x190f6: ISR PCM hacia atras (vector $134, variante 0x1906a). */
-void func_190f6(uint8_t *img) {
+void sound_isr_back(uint8_t *img) {
     uint32_t a0 = be32(img + 0x192c6);
     if (a0 >= be32(img + 0x192c2)) {
         uint32_t d0 = img[--a0];

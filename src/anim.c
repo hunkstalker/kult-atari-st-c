@@ -28,13 +28,13 @@ void text_blit_fwd(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t a3,
                      uint32_t d2w, uint32_t d3w, uint32_t d7w);
 void wait_vbl(uint8_t *img);
 
-void func_18f8e(uint8_t *img, uint32_t d4);
-void func_18f98(uint8_t *img, uint32_t d4);
-void func_18fa4(uint8_t *img);
+void sound_play_a(uint8_t *img, uint32_t d4);
+void sound_play_b(uint8_t *img, uint32_t d4);
+void sound_stop(uint8_t *img);
 void reveal_region(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
 uint32_t advance_text_entry(uint8_t *img, uint32_t a1, uint32_t d4);
-void func_12ad6(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3, uint32_t a3);
-void func_12b04(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3, uint32_t a3);
+void elem_blit(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3, uint32_t a3);
+void elem_blit_rev(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3, uint32_t a3);
 
 /* FUN_00015a90 @ 0x15a90: elige el banco de sprites activo. A0 = 0xd8f0 + (bit7 ?
  * 0xc80 : 0) + (bit6 ? 0x640 : 0) y lo guarda en $1a4c6; devuelve A0. */
@@ -114,7 +114,7 @@ void anim_counter(uint8_t *img, uint32_t d0, uint32_t d2, uint32_t d3,
  * aplica un retardo calibrado y una espera de VBL (FUN_00013594), dibuja con
  * FUN_00012e2e (reveal) o restaura con FUN_0001215e según $1a578, y finalmente
  * devuelve el respaldo al buffer trasero y actualiza $1a472/4/6/8. */
-void func_15da6(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2,
+void anim_engine_entry(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2,
                  uint32_t d3, uint32_t d5, uint32_t a1) {
     /* El original salva D0-D3 con `movem` al entrar y los restaura antes de
      * escribir los globales: $1a472/4/6/8 reciben los valores de ENTRADA del
@@ -254,7 +254,7 @@ static uint32_t anim_engine(uint8_t *img, uint32_t a6) {
             uint32_t d3 = img[a1++];
             uint32_t d0o, d2o, d3o, a1o;
             anim_counter(img, d0, d2, d3, d4, d5, a1, &d0o, &d2o, &d3o, &a1o);
-            func_15da6(img, d0o, d1, d2o, d3o, d2, a1o);
+            anim_engine_entry(img, d0o, d1, d2o, d3o, d2, a1o);
             uint32_t fl = img[A_ANIM_1A574];
             int stop = 0;
             if (fl & 4) {
@@ -276,7 +276,7 @@ static uint32_t anim_engine(uint8_t *img, uint32_t a6) {
 
 /* FUN_00012b40 @ 0x12b40: permutación de bits de un byte (D1 -> D6), usada por el
  * blitter 0x12b04 (orientación invertida). */
-uint32_t func_12b40(uint32_t d1) {
+uint32_t bit_permute_byte(uint32_t d1) {
     uint8_t b = (uint8_t)d1;
     b = (uint8_t)((b >> 1) | (b << 7));          /* ror.b #1 */
     uint8_t d6 = (uint8_t)(b & 0x22);
@@ -290,7 +290,7 @@ uint32_t func_12b40(uint32_t d1) {
 }
 
 /* FUN_00012ad6 @ 0x12ad6: blitter de bytes directo (D2+1 columnas x D3+1 filas). */
-void func_12ad6(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3, uint32_t a3) {
+void elem_blit(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3, uint32_t a3) {
     { FILE *fl = kult_dbgfile();
       if (fl) { fprintf(fl, "12ad6 a0=%x d2=%u d3=%u a3=%x\n", a0, d2, d3, a3); fflush(fl); } }
     uint32_t cols = (d2 - 1) & 0xffff, rows = (d3 - 1) & 0xffff;
@@ -315,7 +315,7 @@ void func_12ad6(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3
 
 /* FUN_00012b04 @ 0x12b04: variante invertida (permuta el byte con 0x12b40 y escribe
  * hacia atrás desde A0+2*D2). */
-void func_12b04(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3, uint32_t a3) {
+void elem_blit_rev(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3, uint32_t a3) {
     { FILE *fl = kult_dbgfile();
       if (fl) { fprintf(fl, "12b04 a0=%x d2=%u d3=%u a3=%x\n", a0, d2, d3, a3); fflush(fl); } }
     a0 = addr_add(a0, d2);
@@ -324,8 +324,8 @@ void func_12b04(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3
     do {
         uint32_t a2 = a0, c = cols;
         do {
-            uint8_t d5 = (uint8_t)func_12b40(img[a1++]);
-            uint8_t d6 = (uint8_t)func_12b40(img[a1++]);
+            uint8_t d5 = (uint8_t)bit_permute_byte(img[a1++]);
+            uint8_t d6 = (uint8_t)bit_permute_byte(img[a1++]);
             uint8_t d0 = d5, d1 = d6;
             d0 |= d1;
             d1 = d0;
@@ -369,26 +369,26 @@ uint32_t anim_bank_build(uint8_t *img, uint32_t a6) {
         uint32_t a3 = (uint32_t)(img[a0] << 1);
         a0 += 2;
         a0 = addr_add(a0, off << 1);
-        if (img[a5 + 2] & 0x80) func_12b04(img, a0, a1, d2b, d3, a3);
-        else func_12ad6(img, a0, a1, d2b, d3, a3);
+        if (img[a5 + 2] & 0x80) elem_blit_rev(img, a0, a1, d2b, d3, a3);
+        else elem_blit(img, a0, a1, d2b, d3, a3);
         a5 += 3;
         if (a5 == a4) break;
     }
     return a6;
 }
 
-uint32_t func_15b94(uint8_t *img, uint32_t a6) { wr16(img + A_ANIM_1A46E, 0xffff); img[A_ANIM_1A578] = 1; return anim_engine(img, a6); }
-uint32_t func_15bcc(uint8_t *img, uint32_t a6) { wr16(img + A_ANIM_1A46E, 0xffff); img[A_ANIM_1A578] = 0; return anim_engine(img, a6); }
-uint32_t func_15ba6(uint8_t *img, uint32_t a6) { wr16(img + A_ANIM_1A46E, be16(img + A_ANIM_1A478)); img[A_ANIM_1A578] = 0; return anim_engine(img, a6); }
-uint32_t func_15bb2(uint8_t *img, uint32_t a6) { wr16(img + A_ANIM_1A46E, 1); img[A_ANIM_1A578] = 0; return anim_engine(img, a6); }
-uint32_t func_15bbc(uint8_t *img, uint32_t a6) { wr16(img + A_ANIM_1A46E, (uint16_t)(be16(img + A_ANIM_1A476) - 1)); img[A_ANIM_1A578] = 0; return anim_engine(img, a6); }
+uint32_t anim_h7(uint8_t *img, uint32_t a6) { wr16(img + A_ANIM_1A46E, 0xffff); img[A_ANIM_1A578] = 1; return anim_engine(img, a6); }
+uint32_t anim_h1(uint8_t *img, uint32_t a6) { wr16(img + A_ANIM_1A46E, 0xffff); img[A_ANIM_1A578] = 0; return anim_engine(img, a6); }
+uint32_t anim_h6(uint8_t *img, uint32_t a6) { wr16(img + A_ANIM_1A46E, be16(img + A_ANIM_1A478)); img[A_ANIM_1A578] = 0; return anim_engine(img, a6); }
+uint32_t anim_h2(uint8_t *img, uint32_t a6) { wr16(img + A_ANIM_1A46E, 1); img[A_ANIM_1A578] = 0; return anim_engine(img, a6); }
+uint32_t anim_h4(uint8_t *img, uint32_t a6) { wr16(img + A_ANIM_1A46E, (uint16_t)(be16(img + A_ANIM_1A476) - 1)); img[A_ANIM_1A578] = 0; return anim_engine(img, a6); }
 
 uint32_t anim_bank_build(uint8_t *img, uint32_t a6);
-uint32_t func_15b94(uint8_t *img, uint32_t a6);
-uint32_t func_15bcc(uint8_t *img, uint32_t a6);
-uint32_t func_15ba6(uint8_t *img, uint32_t a6);
-uint32_t func_15bb2(uint8_t *img, uint32_t a6);
-uint32_t func_15bbc(uint8_t *img, uint32_t a6);
+uint32_t anim_h7(uint8_t *img, uint32_t a6);
+uint32_t anim_h1(uint8_t *img, uint32_t a6);
+uint32_t anim_h6(uint8_t *img, uint32_t a6);
+uint32_t anim_h2(uint8_t *img, uint32_t a6);
+uint32_t anim_h4(uint8_t *img, uint32_t a6);
 
 /* Cuerpo compartido por 0x159d2 y 0x159e2 (entradas gemelas, como 0x11016/0x11020).
  * D1 = índice 1-based de la tabla 0x23ee8, D0/D2 van a 0x1a472/0x1a474. El A6
@@ -416,32 +416,32 @@ static void anim_run(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2) {
              * (el envoltorio salta el trap con el bypass $1ab4f; luego A6 += 3). */
             uint32_t d4s = img[a5 + 1];
             if (img[a5 + 2] != 0)
-                func_18f98(img, d4s);
+                sound_play_b(img, d4s);
             else
-                func_18f8e(img, d4s);
+                sound_play_a(img, d4s);
             a5 = addr_add(a5, 3);
         } else if (b == 0xfc) {
             /* 0x15a86: XBIOS Supexec (0x18fa4, no-op con el bypass $1ab4f); A6 += 1. */
-            func_18fa4(img);
+            sound_stop(img);
             a5 = addr_add(a5, 1);
         } else {
             /* Despacho por (byte & 7) a la tabla 0x19eaa (handlers del motor 0x15bde). */
             switch (b & 7) {
             case 0: a5 = anim_bank_build(img, a5); break;
-            case 1: a5 = func_15bcc(img, a5); break;
-            case 2: a5 = func_15bb2(img, a5); break;
-            case 3: a5 = func_15bb2(img, a5); break;
-            case 4: a5 = func_15bbc(img, a5); break;
-            case 5: a5 = func_15bbc(img, a5); break;
-            case 6: a5 = func_15ba6(img, a5); break;
-            default: a5 = func_15b94(img, a5); break;
+            case 1: a5 = anim_h1(img, a5); break;
+            case 2: a5 = anim_h2(img, a5); break;
+            case 3: a5 = anim_h2(img, a5); break;
+            case 4: a5 = anim_h4(img, a5); break;
+            case 5: a5 = anim_h4(img, a5); break;
+            case 6: a5 = anim_h6(img, a5); break;
+            default: a5 = anim_h7(img, a5); break;
             }
         }
     }
 }
 
 /* FUN_000159d2 @ 0x159d2: prólogo que lee D1/D0/D2 del script y cae en el cuerpo. */
-void func_159d2(uint8_t *img, uint32_t a6) {
+void anim_entry_a(uint8_t *img, uint32_t a6) {
     uint32_t d1 = img[a6 + 1] & 0xff;
     a6 += 2;
     uint32_t d0 = img[a6] & 0xff; a6++;
@@ -450,7 +450,7 @@ void func_159d2(uint8_t *img, uint32_t a6) {
 }
 
 /* FUN_000159e2 @ 0x159e2: entrada gemela con D0/D1/D2 ya en registros; conserva A6. */
-uint32_t func_159e2(uint8_t *img, uint32_t a6, uint32_t d0, uint32_t d1, uint32_t d2) {
+uint32_t anim_entry_b(uint8_t *img, uint32_t a6, uint32_t d0, uint32_t d1, uint32_t d2) {
     anim_run(img, d0, d1, d2);
     return a6;
 }
@@ -459,17 +459,17 @@ uint32_t func_159e2(uint8_t *img, uint32_t a6, uint32_t d0, uint32_t d1, uint32_
  * cuando cambia el nibble alto (o 0x1ad20 < D0), dispara la animacion 0x159e2 con
  * D0/D1/D2 = 0x4a/0x44/0x47. La rama de disparo hace `addq.l #4,a7` en el original
  * (se salta el resto de su llamante), asi que su test usa stop_pc=0x14f5c. */
-uint32_t func_14f24(uint8_t *img, uint32_t a6, uint32_t d0) {
+uint32_t anim_threshold(uint8_t *img, uint32_t a6, uint32_t d0) {
     uint32_t d2 = img[A_DAT_1AD20];
     if ((d2 & 0xff) < (d0 & 0xff)) {
-        func_159e2(img, a6, 0x4a, 0x44, 0x47);
+        anim_entry_b(img, a6, 0x4a, 0x44, 0x47);
         return 2;                        /* ademas el original salta al llamante */
     }
     uint32_t d1 = d2 & 0xf0;
     d2 = (d2 - (d0 & 0xff)) & 0xff;
     img[A_DAT_1AD20] = (uint8_t)d2;
     if ((d2 & 0xf0) != d1) {
-        func_159e2(img, a6, 0x4a, 0x44, 0x47);
+        anim_entry_b(img, a6, 0x4a, 0x44, 0x47);
         return 1;                        /* dispara pero el llamante continua */
     }
     return 0;

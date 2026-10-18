@@ -247,14 +247,14 @@ void run_text_entry(uint8_t *img, uint32_t a6) {
     run_text_entry_ex(img, a6, 0, 0, 0, 0);
 }
 
-void func_126e0(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t d7, uint32_t a1);
+void grid_fill(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t d7, uint32_t a1);
 
 /* FUN_00016dbc @ 0x16dbc: `a6 += 1`; calcula la direccion de pantalla de (D0,D1)
  * (0x10fec), avanza la entrada del banco A_TEXT_TABLE por D4 (0x10f8e), lee
  * [rows][cols], fija el stride 0x1a534 = cols*2 y dibuja el elemento (0x126e0).
  * Devuelve A0 (direccion de pantalla) y deja A5 = 0 (lo que los llamantes esperan:
  * 0x16abe/0x16d3c lo usan como offset del descriptor y lo incrementan). */
-uint32_t func_16dbc(uint8_t *img, uint32_t *a6, uint32_t d0, uint32_t d1, uint32_t d4,
+uint32_t text_transition(uint8_t *img, uint32_t *a6, uint32_t d0, uint32_t d1, uint32_t d4,
                      uint32_t *a5_out) {
     *a6 += 1;
     uint32_t d7;
@@ -263,13 +263,13 @@ uint32_t func_16dbc(uint8_t *img, uint32_t *a6, uint32_t d0, uint32_t d1, uint32
     uint32_t d3 = img[a1++];
     uint32_t d2 = img[a1++];
     wr32(img + A_DAT_1A534, (d2 << 1) & 0xffff);
-    func_126e0(img, d2, d3, d7, a1);
+    grid_fill(img, d2, d3, d7, a1);
     *a5_out = 0;
     return a0;
 }
 
-void func_16b2e(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t a3, uint32_t a5);
-void func_16b76(uint8_t *img, uint32_t a3, uint32_t d2, uint32_t d3);
+void or_rows(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t a3, uint32_t a5);
+void row_blit(uint8_t *img, uint32_t a3, uint32_t d2, uint32_t d3);
 void wait_vbl_even(uint8_t *img);
 void reveal_region(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
 
@@ -277,7 +277,7 @@ void reveal_region(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t
  * de pantalla (de 0x16dbc), D2/D3 grupos/filas, A5 = offset del descriptor. Rota D3
  * filas y reblitea (0x16b76/0x16b2e) esperando una VBL por iteracion (D7+1 = 4, o 3
  * si A6[0] != 0); al final reblitea la ultima fila si A6[0] != 0 y A6 += 1. */
-uint32_t func_16c6c(uint8_t *img, uint32_t a6, uint32_t a0, uint32_t d2, uint32_t d3,
+uint32_t wipe_rows(uint8_t *img, uint32_t a6, uint32_t a0, uint32_t d2, uint32_t d3,
                      uint32_t a5) {
     uint32_t a3 = a0;
     uint32_t d7 = 3;
@@ -288,36 +288,36 @@ uint32_t func_16c6c(uint8_t *img, uint32_t a6, uint32_t a0, uint32_t d2, uint32_
     uint32_t n = d7;
     for (;;) {
         wait_vbl_even(img);
-        func_16b76(img, a3, d2, d3);
+        row_blit(img, a3, d2, d3);
         a3 += 0xa0;
         d3 = (d3 - 1) & 0xffff;
-        func_16b2e(img, d2, d3, a3, a5);
+        or_rows(img, d2, d3, a3, a5);
         if (n == 0) break;
         n--;
     }
     if (img[a6] != 0)
-        func_16b76(img, a3, d2, d3);
+        row_blit(img, a3, d2, d3);
     return a6 + 1;
 }
 
 /* FUN_00016c48 @ 0x16c48: wipe de texto (d4 = 3, x = 0x23, y = 0xad o 0x31 segun
  * A6[1]); cae en el cuerpo 0x16c6c con D2 = 2, D3 = 8. Devuelve A6 = entrada+2
  * (0x16dbc + el addq final de 0x16c6c): el VM original continua 2 bytes mas alla. */
-uint32_t func_16c48(uint8_t *img, uint32_t a6) {
+uint32_t wipe_b(uint8_t *img, uint32_t a6) {
     uint32_t d1 = 0xad;
     if (img[a6 + 1] != 0)
         d1 += 4;
     uint32_t a5;
-    uint32_t a0 = func_16dbc(img, &a6, 0x23, d1, 3, &a5);
-    return func_16c6c(img, a6, a0, 2, 8, a5);
+    uint32_t a0 = text_transition(img, &a6, 0x23, d1, 3, &a5);
+    return wipe_rows(img, a6, a0, 2, 8, a5);
 }
 
 /* FUN_00016c00 @ 0x16c00: transicion de texto (d4 = 0x77); blitea un bloque y luego
  * prepara el revelado (0x12e2e) con x=0x1c,y=0x8b. Devuelve A6 = entrada+1 (0x16dbc). */
-uint32_t func_16c00(uint8_t *img, uint32_t a6) {
+uint32_t wipe_a(uint8_t *img, uint32_t a6) {
     uint32_t a5;
-    uint32_t a0 = func_16dbc(img, &a6, 0x20, 0x8b, 0x77, &a5);
-    func_16b2e(img, 3, 0x14, a0 - 0x8000, a5);
+    uint32_t a0 = text_transition(img, &a6, 0x20, 0x8b, 0x77, &a5);
+    or_rows(img, 3, 0x14, a0 - 0x8000, a5);
     wr16(img + 0x1a56a, 1);
     img[0x1a577] = 0x11;
     reveal_region(img, 0x1c, 0x8b, 0x12, 0x28);
@@ -334,7 +334,7 @@ static void wipe_vbl(uint8_t *img, uint32_t a0, uint32_t a5, uint32_t d2, uint32
     uint32_t n = d7;
     for (;;) {
         wait_vbl_even(img);
-        func_16b76(img, a3, d2, d3);
+        row_blit(img, a3, d2, d3);
         if (mode == 0) {
             a3 += 0xa0;
             d3 = (d3 - 1) & 0xffff;
@@ -348,7 +348,7 @@ static void wipe_vbl(uint8_t *img, uint32_t a0, uint32_t a5, uint32_t d2, uint32
             a5 -= 0x40;
             d3 = (d3 + 1) & 0xffff;
         }
-        func_16b2e(img, d2, d3, a3, a5);
+        or_rows(img, d2, d3, a3, a5);
         if (n == 0) break;
         n--;
     }
@@ -356,36 +356,36 @@ static void wipe_vbl(uint8_t *img, uint32_t a0, uint32_t a5, uint32_t d2, uint32
 
 /* FUN_00016ca6 @ 0x16ca6: wipe hacia abajo (34 VBL), D2 = 4, D3 0x43->...
  * Devuelve A6 = entrada+1 (0x16dbc). */
-uint32_t func_16ca6(uint8_t *img, uint32_t a6) {
+uint32_t wipe_c(uint8_t *img, uint32_t a6) {
     uint32_t a5;
-    uint32_t a0 = func_16dbc(img, &a6, 0x1c, 0x6a, 0x76, &a5);
+    uint32_t a0 = text_transition(img, &a6, 0x1c, 0x6a, 0x76, &a5);
     wipe_vbl(img, a0, a5, 4, 0x43, 0x21, 0);
     return a6;
 }
 
 /* FUN_00016ce2 @ 0x16ce2: wipe hacia arriba (68 VBL), D2 = 4, D3 0->...
  * Devuelve A6 = entrada+1 (0x16dbc). */
-uint32_t func_16ce2(uint8_t *img, uint32_t a6) {
+uint32_t wipe_d(uint8_t *img, uint32_t a6) {
     uint32_t a5;
-    uint32_t a0 = func_16dbc(img, &a6, 0x1c, 0xae, 0x76, &a5);
+    uint32_t a0 = text_transition(img, &a6, 0x1c, 0xae, 0x76, &a5);
     wipe_vbl(img, a0, a5, 4, 0, 0x43, 1);
     return a6;
 }
 
 /* FUN_00016d3c @ 0x16d3c: wipe con A5 +0x40 por pasada (16 VBL), A3 fijo.
  * Devuelve A6 = entrada+1 (0x16dbc). */
-uint32_t func_16d3c(uint8_t *img, uint32_t a6) {
+uint32_t wipe_e(uint8_t *img, uint32_t a6) {
     uint32_t a5;
-    uint32_t a0 = func_16dbc(img, &a6, 0x23, 0x12, 0x60, &a5);
+    uint32_t a0 = text_transition(img, &a6, 0x23, 0x12, 0x60, &a5);
     wipe_vbl(img, a0, a5, 1, 0x10, 0x0f, 2);
     return a6;
 }
 
 /* FUN_00016d78 @ 0x16d78: wipe con A5 -0x40 por pasada (15 VBL) desde 0x3c0.
  * Devuelve A6 = entrada+1 (0x16dbc). */
-uint32_t func_16d78(uint8_t *img, uint32_t a6) {
+uint32_t wipe_f(uint8_t *img, uint32_t a6) {
     uint32_t a5;
-    uint32_t a0 = func_16dbc(img, &a6, 0x23, 0x12, 0x60, &a5);
+    uint32_t a0 = text_transition(img, &a6, 0x23, 0x12, 0x60, &a5);
     wipe_vbl(img, a0, 0x3c0, 1, 0, 0x0e, 3);
     return a6;
 }
@@ -393,7 +393,7 @@ uint32_t func_16d78(uint8_t *img, uint32_t a6) {
 /* FUN_000141dc @ 0x141dc: run FUN_00014138 on A6+1, then the masked row blit
  * (FUN_0001215e) with the A0/D2/D3/D7 that FUN_00014138 left behind. */
 void mask_restore_rows(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7);
-void func_141dc(uint8_t *img, uint32_t a6) {
+void text_entry_blit(uint8_t *img, uint32_t a6) {
     uint32_t a0, d2, d3, d7;
     run_text_entry_ex(img, a6 + 1, &a0, &d2, &d3, &d7);
     mask_restore_rows(img, a0, d2, d3, d7);
@@ -412,7 +412,7 @@ void noop_11014(uint8_t *img) {
 /* FUN_00011016 @ 0x11016 (A4 = 0x8000) y FUN_00011020 @ 0x11020 (A4 = 0), cuerpo comun
  * FUN_00011026: avanza la entrada de texto de 0x28ad2 D4 posiciones, lee [rows][cols] y
  * dibuja con el blit de texto hacia delante (stride cols*2) restando A4 a la dirección. */
-void func_11026(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4, uint32_t a4off) {
+void text_blit_entry(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4, uint32_t a4off) {
     uint32_t a1 = advance_text_entry(img, 0x28ad2, d4);
     uint32_t d7;
     uint32_t a0 = screen_address(img, d0, d1, &d7);
@@ -424,17 +424,17 @@ void func_11026(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4, uint32_t a4
     text_blit_fwd(img, a0, a1, a3, d2, d3, d7);
 }
 
-void func_11016(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4) {
-    func_11026(img, d0, d1, d4, 0x8000);
+void text_blit_ovl_a(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4) {
+    text_blit_entry(img, d0, d1, d4, 0x8000);
 }
 
-void func_11020(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4) {
-    func_11026(img, d0, d1, d4, 0);
+void text_blit_ovl_b(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4) {
+    text_blit_entry(img, d0, d1, d4, 0);
 }
 
 /* FUN_00011030 @ 0x11030: cuerpo de 0x11026 sin el avance de entrada (A1 ya apunta a
  * [rows][cols]); direccion de pantalla menos A4 y blit hacia delante. */
-void func_11030(uint8_t *img, uint32_t a1, uint32_t d0, uint32_t d1, uint32_t a4off) {
+void text_blit_body_a(uint8_t *img, uint32_t a1, uint32_t d0, uint32_t d1, uint32_t a4off) {
     uint32_t d7;
     uint32_t a0 = screen_address(img, d0, d1, &d7);
     a0 -= a4off;
@@ -447,7 +447,7 @@ void func_11030(uint8_t *img, uint32_t a1, uint32_t d0, uint32_t d1, uint32_t a4
 
 /* FUN_000110da @ 0x110da: como 0x11026 pero con el blit inverso (0x11102) y SIN
  * restar A4; D4 = indice de la entrada de texto en 0x28ad2. */
-void func_110da(uint8_t *img, uint32_t d4, uint32_t d0, uint32_t d1) {
+void text_blit_rev_entry(uint8_t *img, uint32_t d4, uint32_t d0, uint32_t d1) {
     uint32_t a1 = advance_text_entry(img, 0x28ad2, d4);
     uint32_t d7;
     uint32_t a0 = screen_address(img, d0, d1, &d7);
@@ -459,18 +459,18 @@ void func_110da(uint8_t *img, uint32_t d4, uint32_t d0, uint32_t d1) {
 }
 
 /* FUN_00010768 @ 0x10768: `rts` pelado (destino del modo sin overlay, $1acc6 == 0x87). */
-void func_10768(uint8_t *img) { (void)img; }
+void text_end(uint8_t *img) { (void)img; }
 
 /* FUN_000122ee @ 0x122ee: espera un frame (0x13594) y dibuja el prompt parpadeante con el
  * overlay 0x11020 en (0x4b, 0x9b); alterna el flag 0x1a74e (el color 0x16/0x17). */
 void wait_vbl(uint8_t *img);
-void func_11020(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4);
-void func_122ee(uint8_t *img) {
+void text_blit_ovl_b(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4);
+void prompt(uint8_t *img) {
     if (img[0x1acc6] == 0x87)
         return;
     wait_vbl(img);
     uint32_t d4 = img[0x1a74e] ? 0x17 : 0x16;
-    func_11020(img, 0x4b, 0x9b, d4);
+    text_blit_ovl_b(img, 0x4b, 0x9b, d4);
     img[0x1a74e] = (uint8_t)~img[0x1a74e];
 }
 
@@ -478,7 +478,7 @@ void func_122ee(uint8_t *img) {
  * parpadeando el prompt (0x122ee) cada 16 frames. En modo $1acc6 == 0x87 (sin overlay)
  * sale por GEMDOS Cnecin (trap #1/$8). A5/A6 los preserva el `movem.l` de entrada. */
 void wait_frame(uint8_t *img);
-void func_122ee(uint8_t *img);
+void prompt(uint8_t *img);
 void prompt_wait(uint8_t *img) {
     if (img[0x1acc6] == 0x87) {
         uint32_t key;
@@ -493,24 +493,24 @@ void prompt_wait(uint8_t *img) {
     }
     while (!(img[A_INPUT_BUTTONS] & 0x04)) {         /* 0x122b8 */
         if ((img[A_DAT_1ACD4] & 0x0f) == 0)
-            func_122ee(img);                        /* parpadeo cada 16 frames */
+            prompt(img);                        /* parpadeo cada 16 frames */
         wait_frame(img);
     }
     if (img[0x1a74e] != 0)
-        func_122ee(img);
+        prompt(img);
 }
 
 /* FUN_00016abe @ 0x16abe: rejilla de texto sobre la caja ($1ab40..43): 16dbc prepara
  * (d4=0x50) y por cada banda de 0x1e filas (d3 = alto/0x1e) blitea D2+1 grupos de
  * 0x1d filas con 0x16b2e. Devuelve A6 (avanzado por 16dbc). */
-uint32_t func_16dbc(uint8_t *img, uint32_t *a6, uint32_t d0, uint32_t d1, uint32_t d4,
+uint32_t text_transition(uint8_t *img, uint32_t *a6, uint32_t d0, uint32_t d1, uint32_t d4,
                      uint32_t *a5_out);
 
-uint32_t func_16abe(uint8_t *img, uint32_t a6) {
+uint32_t grid_bands(uint8_t *img, uint32_t a6) {
     uint32_t d0 = img[A_DAT_1AB40];
     uint32_t d1 = img[A_DAT_1AB42];
     uint32_t a5;
-    uint32_t a0 = func_16dbc(img, &a6, d0, d1, 0x50, &a5);
+    uint32_t a0 = text_transition(img, &a6, d0, d1, 0x50, &a5);
     uint32_t d2 = (((uint32_t)img[A_DAT_1AB41] - d0) & 0xff) >> 2;
     uint32_t d3 = ((uint32_t)img[A_DAT_1AB43] - d1) & 0xff;
     d3 = d3 / 0x1e;
@@ -521,7 +521,7 @@ uint32_t func_16abe(uint8_t *img, uint32_t a6) {
         uint32_t base = a3;
         uint32_t cnt = d2;
         for (;;) {
-            func_16b2e(img, 0, 0x1d, a3, a5);
+            or_rows(img, 0, 0x1d, a3, a5);
             a3 += 8;
             if (cnt == 0)
                 break;
@@ -542,26 +542,26 @@ uint32_t func_16abe(uint8_t *img, uint32_t a6) {
  * A6 = entrada+1 (16dbc +1, subq -1, 16dbc +1). */
 void prompt_wait(uint8_t *img);
 void wait_vbl_even(uint8_t *img);
-void func_16b76(uint8_t *img, uint32_t a3, uint32_t d2, uint32_t d3);
+void row_blit(uint8_t *img, uint32_t a3, uint32_t d2, uint32_t d3);
 
-uint32_t func_16b9c(uint8_t *img, uint32_t a6) {
+uint32_t wipe_72(uint8_t *img, uint32_t a6) {
     uint32_t a5;
-    uint32_t a0 = func_16dbc(img, &a6, 0x23, 0xad, 3, &a5);
+    uint32_t a0 = text_transition(img, &a6, 0x23, 0xad, 3, &a5);
     a6 = (a6 - 1) & 0xffffffff;
-    func_16b2e(img, 2, 7, a0, a5);
-    a0 = func_16dbc(img, &a6, 0x20, 0x5e, 0x77, &a5);
+    or_rows(img, 2, 7, a0, a5);
+    a0 = text_transition(img, &a6, 0x20, 0x5e, 0x77, &a5);
     uint32_t d3 = 0x47, d2 = 3, a3 = a0;
-    func_16b2e(img, d2, d3, a3, a5);
+    or_rows(img, d2, d3, a3, a5);
     prompt_wait(img);
     for (;;) {
         wait_vbl_even(img);
-        func_16b76(img, a3, d2, (d3 + 1) & 0xffff);
+        row_blit(img, a3, d2, (d3 + 1) & 0xffff);
         a3 = (a3 + 0xa0) & 0xffffffff;
-        func_16b2e(img, d2, d3, a3, a5);
+        or_rows(img, d2, d3, a3, a5);
         if (d3 == 0)
             break;
         d3 = (d3 - 1) & 0xffff;
     }
-    func_16b76(img, a3, d2, 0);
+    row_blit(img, a3, d2, 0);
     return a6;
 }

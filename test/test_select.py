@@ -19,10 +19,10 @@ RECORD = 0x1A6AE
 VBL_SITE = 0x1359A
 VBL_COUNTER = 0x1ACD4
 
-harness._lib.func_15492.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32]
-harness._lib.func_15492.restype = ctypes.c_uint32
-harness._lib.func_15510.argtypes = [_u8p, _u32p, ctypes.c_uint32, ctypes.c_uint32]
-harness._lib.func_15510.restype = ctypes.c_uint32
+harness._lib.sample_select.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32]
+harness._lib.sample_select.restype = ctypes.c_uint32
+harness._lib.sample_select2.argtypes = [_u8p, _u32p, ctypes.c_uint32, ctypes.c_uint32]
+harness._lib.sample_select2.restype = ctypes.c_uint32
 
 
 def _table_pokes(matches):
@@ -47,7 +47,7 @@ def test_fun_15510_dibuja():
     a2 = ctypes.c_uint32(RECORD)
     diffs, info = differential(
         FUN_15510, {"a2": RECORD, "d4": 0x20, "d6": 7, "_pokes": _table_pokes(())},
-        lambda lib, buf: lib.func_15510(buf, ctypes.byref(a2), 0x20, 7))
+        lambda lib, buf: lib.sample_select2(buf, ctypes.byref(a2), 0x20, 7))
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["d6"] == 8
     assert a2.value == info["regs"]["a2"] == RECORD + 0xA
@@ -57,7 +57,7 @@ def test_fun_15492_selecciona():
     for matches in ((4,), (4, 10), (0, 0x3E)):
         diffs, info = differential(
             FUN_15492, {"d2": 0x000F, "d3": 0x0002, "_pokes": _table_pokes(matches)},
-            lambda lib, buf: lib.func_15492(buf, 0x000F, 0x0002),
+            lambda lib, buf: lib.sample_select(buf, 0x000F, 0x0002),
             schedule=[{"pc": VBL_SITE, "nth": 1, "addr": VBL_COUNTER,
                        "width": 1, "value": 1}],
             wait_sites=[VBL_SITE])
@@ -74,15 +74,15 @@ FUN_149DA = 0x149DA
 IKBD_SITE = 0x136B0
 IKBD_PACKET = 0x1A44F
 
-harness._lib.func_14db2.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32,
+harness._lib.sample_menu.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32,
                                      ctypes.c_uint32]
-harness._lib.func_14db2.restype = None
-harness._lib.func_14d76.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_14d76.restype = None
-harness._lib.func_14d90.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_14d90.restype = None
-harness._lib.func_149da.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_149da.restype = ctypes.c_uint32
+harness._lib.sample_menu.restype = None
+harness._lib.sample_menu_entry_a.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.sample_menu_entry_a.restype = None
+harness._lib.sample_menu_entry_b.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.sample_menu_entry_b.restype = None
+harness._lib.action_menu.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.action_menu.restype = ctypes.c_uint32
 
 SCRIPT = 0x51000
 
@@ -129,7 +129,7 @@ def test_fun_14db2_sin_matches():
     diffs, _ = differential(
         FUN_14DB2, {"a6": SCRIPT, "d2": 0x8000, "d3": 0x8000,
                     "_pokes": _menu_pokes(())},
-        lambda lib, buf: lib.func_14db2(buf, SCRIPT, 0x8000, 0x8000))
+        lambda lib, buf: lib.sample_menu(buf, SCRIPT, 0x8000, 0x8000))
     assert not diffs, report(diffs)
 
 
@@ -138,7 +138,7 @@ def test_fun_14db2_con_clic():
     diffs, _ = differential(
         FUN_14DB2, {"a6": SCRIPT, "d2": 0x000F, "d3": 0x0002,
                     "_pokes": _menu_pokes((4,))},
-        lambda lib, buf: lib.func_14db2(buf, SCRIPT, 0x000F, 0x0002),
+        lambda lib, buf: lib.sample_menu(buf, SCRIPT, 0x000F, 0x0002),
         schedule=_click_schedule(), wait_sites=[VBL_SITE, IKBD_SITE])
     assert not diffs, report(diffs)
 
@@ -146,14 +146,14 @@ def test_fun_14db2_con_clic():
 def test_fun_14d76_entrada():
     diffs, _ = differential(
         FUN_14D76, {"a6": SCRIPT, "_pokes": _menu_pokes(())},
-        lambda lib, buf: lib.func_14d76(buf, SCRIPT))
+        lambda lib, buf: lib.sample_menu_entry_a(buf, SCRIPT))
     assert not diffs, report(diffs)
 
 
 def test_fun_14d90_entrada():
     diffs, _ = differential(
         FUN_14D90, {"a6": SCRIPT, "_pokes": _menu_pokes(())},
-        lambda lib, buf: lib.func_14d90(buf, SCRIPT))
+        lambda lib, buf: lib.sample_menu_entry_b(buf, SCRIPT))
     assert not diffs, report(diffs)
 
 
@@ -163,7 +163,7 @@ def test_fun_149da_corta():
     pokes[0x1ACEC] = bytes([0x3F])
     diffs, info = differential(
         FUN_149DA, {"a6": SCRIPT, "_pokes": pokes},
-        lambda lib, buf: lib.func_149da(buf, SCRIPT))
+        lambda lib, buf: lib.action_menu(buf, SCRIPT))
     assert not diffs, report(diffs)
     assert info["ret"] == SCRIPT
 
@@ -172,6 +172,6 @@ def test_fun_149da_sin_muestra():
     """Sin muestras: $1ad0e = 1 y restaura $1a4e0."""
     diffs, info = differential(
         FUN_149DA, {"a6": SCRIPT, "_pokes": _menu_pokes(())},
-        lambda lib, buf: lib.func_149da(buf, SCRIPT))
+        lambda lib, buf: lib.action_menu(buf, SCRIPT))
     assert not diffs, report(diffs)
     assert info["ret"] == SCRIPT + 1

@@ -8,7 +8,7 @@
  *
  * La semantica del trap es del CPU (TRAP #n -> vector n+32) y el handler vive en la
  * imagen: el candidato no tiene traps, asi que llama a la reconstruccion del handler
- * (func_3aa38), exactamente como el oraculo llega a el via vector.
+ * (psg_trap3), exactamente como el oraculo llega a el via vector.
  *
  * Los accesos PSG van por psg_port_write/psg_port_read (ledger + fichero del kit). El
  * read-back del write-verify sale de lo recien escrito, asi que el bucle siempre da una
@@ -24,13 +24,13 @@
 #define MUSIC_SHADOW 0x3ae7c
 #define MUSIC_STATE  0x3ae8c
 
-void func_3aa38(uint8_t *img, uint32_t d0, uint32_t d2, uint32_t d7,
+void psg_trap3(uint8_t *img, uint32_t d0, uint32_t d2, uint32_t d7,
                  uint32_t *d0_out);
 
 /* FUN_0003aa7c @ 0x3aa7c: escribe el registro D6 con D0 y verifica releyendo $ff8800.
  * En el modelo el chip devuelve lo escrito, asi que la verificacion pasa a la primera;
  * aun asi el READ es un evento del ledger y hay que emitirlo. */
-void func_3aa7c(uint8_t *img, uint32_t d6, uint32_t d0) {
+void psg_write_verify(uint8_t *img, uint32_t d6, uint32_t d0) {
     (void)img;
     psg_port_write(d6 & 0xff, (uint8_t)d0);
     (void)psg_port_read(d6 & 0xff);
@@ -41,7 +41,7 @@ void func_3aa7c(uint8_t *img, uint32_t d6, uint32_t d0) {
  * RMW del mixer: lee el registro, conserva D0[0..5] y los bits 6-7 leidos.
  *
  * D0 se restaura al final (el original lo salva en la pila); D5/D6/A5 son scratch. */
-void func_3aa38(uint8_t *img, uint32_t d0, uint32_t d2, uint32_t d7,
+void psg_trap3(uint8_t *img, uint32_t d0, uint32_t d2, uint32_t d7,
                  uint32_t *d0_out) {
     uint32_t d0_in = d0;
     uint32_t d6;
@@ -49,10 +49,10 @@ void func_3aa38(uint8_t *img, uint32_t d0, uint32_t d2, uint32_t d7,
         d6 = d7;
         d6 = (d6 & 0xffff0000u) | ((d6 << 1) & 0xffffu);          /* lsl.w #1,d6 */
         d6 = (d6 & 0xffffff00u) | ((d6 + (d2 & 0xffu)) & 0xffu);  /* add.b d2,d6 */
-        func_3aa7c(img, d6, d0);                                 /* low byte */
+        psg_write_verify(img, d6, d0);                                 /* low byte */
         d0 = (d0 & 0xffff0000u) | (((d0 & 0xffffu) >> 8) & 0xffffu); /* lsr.w #8,d0 */
         d6 = (d6 & 0xffff0000u) | ((d6 + 1) & 0xffffu);           /* addq.w #1,d6 */
-        func_3aa7c(img, d6, d0);                                 /* high byte */
+        psg_write_verify(img, d6, d0);                                 /* high byte */
     } else {
         d6 = d2;
         d6 = (d6 & 0xffffff00u) | ((d6 + (d7 & 0xffu)) & 0xffu);  /* add.b d7,d6 */
@@ -61,14 +61,14 @@ void func_3aa38(uint8_t *img, uint32_t d0, uint32_t d2, uint32_t d7,
             d0 = (d0 & 0xffffff00u)
                | (((d0 & 0x3fu) | (old & 0xc0u)) & 0xffu);
         }
-        func_3aa7c(img, d6, d0);
+        psg_write_verify(img, d6, d0);
     }
     if (d0_out) *d0_out = d0_in;
 }
 
 /* FUN_0003aa8a @ 0x3aa8a: gemelo del handler que escribe la tabla sombra $3ae7c en vez
  * del chip. Modo par relativo: word de D0 en 0(a5,d6.w); si no, byte. */
-void func_3aa8a(uint8_t *img, uint32_t d0, uint32_t d2, uint32_t d7,
+void psg_shadow(uint8_t *img, uint32_t d0, uint32_t d2, uint32_t d7,
                  uint32_t *d0_out) {
     uint32_t d6;
     if (d2 & 0x8000) {
@@ -88,11 +88,11 @@ void func_3aa8a(uint8_t *img, uint32_t d0, uint32_t d2, uint32_t d7,
 /* FUN_0003a85e @ 0x3a85e: silencia los tres canales emitiendo `trap #3` con D0=0 y
  * D2=8 (registros de volumen 8/9/10), D7 de 0 a 2. El original fija D2 con `move.w`
  * (conserva la mitad alta) y D0/D7 con `moveq` (32 bits). */
-void func_3a85e(uint8_t *img, uint32_t d2_in, uint32_t *d0_out, uint32_t *d2_out,
+void music_silence(uint8_t *img, uint32_t d2_in, uint32_t *d0_out, uint32_t *d2_out,
                  uint32_t *d7_out) {
     uint32_t d0 = 0, d2 = (d2_in & 0xffff0000u) | 8u, d7 = 0;
     for (int i = 0; i < 3; i++) {
-        func_3aa38(img, d0, d2, d7, 0);
+        psg_trap3(img, d0, d2, d7, 0);
         if (i != 2)
             d7 = (d7 + 1) & 0xffffffffu;   /* addq.w #1,d7 entre traps */
     }
@@ -123,7 +123,7 @@ void mfp_setup(uint8_t *img) {
 
 /* FUN_0003a5c2 @ 0x3a5c2: Supexec(0x3a604) y Setexc(0x23,0x3aa38)/Setexc(0x24,0x3aab6).
  * Devuelve en D0 el handler anterior del ultimo vector (0x90). */
-uint32_t func_3a5c2(uint8_t *img, uint32_t *d0_out) {
+uint32_t music_install(uint8_t *img, uint32_t *d0_out) {
     mfp_setup(img);
     wr32(img + 0x8c, 0x3aa38);
     uint32_t old = be32(img + 0x90);
@@ -148,7 +148,7 @@ static void disp_3a5b8(uint8_t *img, uint32_t a6, uint32_t d5) {
 /* FUN_0003a57c @ 0x3a57c: recorre la tabla A0 ({word clave, long handler}, fin en 0) y
  * salta al handler cuya clave es D1. Devuelve el carry resultante: 0 encontrado, 1
  * agotada la tabla (`ori.b #1,ccr`). */
-uint32_t func_3a57c(uint8_t *img, uint32_t a0, uint32_t d1, uint32_t d5,
+uint32_t music_cmd_table(uint8_t *img, uint32_t a0, uint32_t d1, uint32_t d5,
                      uint32_t a6) {
     for (;;) {
         uint32_t d3 = be16(img + a0);
@@ -173,7 +173,7 @@ uint32_t func_3a57c(uint8_t *img, uint32_t a0, uint32_t d1, uint32_t d5,
  * (0x3b1ac): word de offset al bloque; de ahi salen la duracion, las tablas del estado
  * (4/8/0xc/0x10), el puntero de cancion (canal[0]) y los flags/volumenes iniciales.
  * Termina silenciando (0x3a85e) y limpiando el contador de estado. D2 entra sin tocar. */
-void func_3a62e(uint8_t *img, uint32_t selector, uint32_t base, uint32_t d2) {
+void music_load(uint8_t *img, uint32_t selector, uint32_t base, uint32_t d2) {
     uint32_t a6 = MUSIC_STATE;
     uint32_t d0 = selector & 0xffffu;
     img[a6 + 0x1a] = 0;
@@ -204,18 +204,18 @@ void func_3a62e(uint8_t *img, uint32_t selector, uint32_t base, uint32_t d2) {
         img[a2 + 0x2b] = 0x0f;
         img[a2 + 0x2f] = 0x0f;
     }
-    func_3a85e(img, d2, 0, 0, 0);
+    music_silence(img, d2, 0, 0, 0);
     wr16(img + a6 + 0x18, 0);
 }
 
 /* FUN_0003a734 @ 0x3a734: procesa el comando D1 (word) con valor D5 (word) sobre los
  * canales que seleccionan D1[0..2] (si son 0, los tres). Devuelve D0 = 0xffff o el
  * minimo 0x24 visto. Antes despacha D1 a 0x3a57c (comandos 0x400/0x800/0x1000). */
-uint32_t func_3a734(uint8_t *img, uint32_t d5, uint32_t d1) {
+uint32_t music_cmd(uint8_t *img, uint32_t d5, uint32_t d1) {
     uint32_t d0 = 0xffff;
     d5 &= 0xffffu;
     d1 &= 0xffffu;
-    if (func_3a57c(img, 0x3afa8, d1, d5, MUSIC_STATE) == 0)
+    if (music_cmd_table(img, 0x3afa8, d1, d5, MUSIC_STATE) == 0)
         return d0;
     uint32_t d2 = d1 & 0x0fu;
     if (d2 == 0)
@@ -272,15 +272,15 @@ uint32_t func_3a734(uint8_t *img, uint32_t d5, uint32_t d1) {
 
 /* FUN_0003a556 @ 0x3a556: init_hardware. D2 entra sin tocar y llega hasta 0x3a85e. */
 uint32_t init_hardware(uint8_t *img, uint32_t d2) {
-    func_3a5c2(img, 0);
-    func_3a62e(img, 0, 0x3b1ac, d2);
-    return func_3a734(img, 0, 0x00a7);
+    music_install(img, 0);
+    music_load(img, 0, 0x3b1ac, d2);
+    return music_cmd(img, 0, 0x00a7);
 }
 
 /* FUN_0003a712 @ 0x3a712: para el Timer A (TACR=0) y deshabilita su interrupcion. El
  * `tst.b $fffa19` del original espera a que el chip tome el 0; el modelo lo sirve 0 en
  * la primera lectura, asi que no se transcribe. */
-void func_3a712(uint8_t *img) {
+void music_stop2(uint8_t *img) {
     (void)img;
     hw_write8(0xfffa19, 0);
     hw_write8(0xfffa13, 0);
@@ -288,9 +288,9 @@ void func_3a712(uint8_t *img) {
 }
 
 /* FUN_0003a6f4 @ 0x3a6f4: Supexec(0x3a712) + silenciar. D2 entra sin tocar. */
-void func_3a6f4(uint8_t *img, uint32_t d2) {
-    func_3a712(img);
-    func_3a85e(img, d2, 0, 0, 0);
+void music_stop(uint8_t *img, uint32_t d2) {
+    music_stop2(img);
+    music_silence(img, d2, 0, 0, 0);
 }
 
 /* ================= generador de notas y tick del tracker (0x3a992/0x3aab6) ============ */
@@ -299,7 +299,7 @@ void func_3a6f4(uint8_t *img, uint32_t d2) {
  * indice del instrumento (A0[0xa]), acumula la modulacion (A0[0] += byte con signo) y el
  * acumulador A0[2]; devuelve el periodo ajustado (D0 - A0[0]) con suelo en 0. Los flags
  * A0[0xb]: bit0 = aplica modulacion, bit2 = ciclo terminado. */
-uint32_t func_3a992(uint8_t *img, uint32_t a0, uint32_t d0) {
+uint32_t music_note(uint8_t *img, uint32_t a0, uint32_t d0) {
     uint32_t d3 = img[a0 + 0xa];
     uint32_t a1 = be32(img + a0 + 4) + (d3 & 0xffffu);
     uint8_t f = img[a0 + 0xb];
@@ -344,7 +344,7 @@ uint32_t func_3a992(uint8_t *img, uint32_t a0, uint32_t d0) {
  * 0x3ab3a (por eso el tick los llama y salta); 0x3ae68 termina con rts. */
 
 /* cmd 0 (0x3ad5a): transposicion desde el stream. */
-void func_3ad5a(uint8_t *img, uint32_t a3) {
+void music_h1(uint8_t *img, uint32_t a3) {
     uint32_t a0 = be32(img + a3 + 8);
     img[a3 + 0x2a] = img[a0];
     wr32(img + a3 + 8, a0 + 1);
@@ -352,7 +352,7 @@ void func_3ad5a(uint8_t *img, uint32_t a3) {
 
 /* cmd 2 (0x3ad6a): cambia el instrumento de la voz 2 (channel[0x14]) con la tabla del
  * estado [8]; flag 0. */
-void func_3ad6a(uint8_t *img, uint32_t a3, uint32_t a6) {
+void music_h2(uint8_t *img, uint32_t a3, uint32_t a6) {
     uint32_t a0 = be32(img + a3 + 8);
     uint32_t d0 = img[a0];
     a0 += 1;
@@ -371,7 +371,7 @@ void func_3ad6a(uint8_t *img, uint32_t a3, uint32_t a6) {
 }
 
 /* cmd 1 (0x3adb4): como el anterior pero con el flag 0x80 (loop) en la voz 2. */
-void func_3adb4(uint8_t *img, uint32_t a3, uint32_t a6) {
+void music_h3(uint8_t *img, uint32_t a3, uint32_t a6) {
     uint32_t a0 = be32(img + a3 + 8);
     uint32_t d0 = img[a0];
     a0 += 1;
@@ -393,7 +393,7 @@ void func_3adb4(uint8_t *img, uint32_t a3, uint32_t a6) {
 
 /* cmd 3 (0x3ae00): envolvente/volumen de la voz (channel[0x18]) a partir de dos bytes;
  * limpia el bit de canal en A0[6] via la tabla de bits. */
-void func_3ae00(uint8_t *img, uint32_t a3, uint32_t d7) {
+void music_h4(uint8_t *img, uint32_t a3, uint32_t d7) {
     uint32_t a0 = be32(img + a3 + 8);
     uint32_t d0 = img[a0];
     uint32_t d1 = img[a0 + 1];
@@ -423,7 +423,7 @@ void func_3ae00(uint8_t *img, uint32_t a3, uint32_t d7) {
 
 /* cmd 4 (0x3ae68): volumen directo (channel[0x2b]) y lo refleja en el stream. No
  * reescribe channel[8] (el original consume el byte con (a0)+ sin guardarlo). */
-void func_3ae68(uint8_t *img, uint32_t a3) {
+void music_h5(uint8_t *img, uint32_t a3) {
     uint32_t a0 = be32(img + a3 + 8);
     uint32_t d0 = img[a0] & 0x0fu;
     a0 += 1;
@@ -435,7 +435,7 @@ void func_3ae68(uint8_t *img, uint32_t a3) {
  * fade de volumen, nota o comando (transposicion, instrumentos, envolvente, duracion),
  * fin de patron/cancion y el bloque de canal enlazado. A3 = canal, A6 = estado global,
  * D7 = indice de canal. Termina en el `rte` 0x3ad58 (aqui, return). */
-void func_3aab6(uint8_t *img, uint32_t a3, uint32_t a6, uint32_t d7) {
+void music_tick(uint8_t *img, uint32_t a3, uint32_t a6, uint32_t d7) {
     uint32_t a0 = 0, d0 = 0, d2, d4;
     img[0x484] &= (uint8_t)~0x01u;
     img[0x484] &= (uint8_t)~0x04u;
@@ -488,7 +488,7 @@ L3ab48:
         img[a1 + 0x27] = (uint8_t)(img[a1 + 0x27] & ~0x02u);
         wr16(img + a3 + 0x26, (uint16_t)(be16(img + a3 + 0x26) | 0x0040u));
         d4 = img[0x3aec0 + d7];
-        func_3aa8a(img, 0, 8, d7, 0);
+        psg_shadow(img, 0, 8, d7, 0);
         d4 = (uint8_t)((d4 << 3) | d4);
         img[be32(img + a3 + 0x18) + 6] |= (uint8_t)d4;
     }
@@ -556,11 +556,11 @@ L3ac68:
 L3acb2:
     if (d0 & 0x20u) {
         uint32_t idx = d0 & 7u;
-        if (idx == 0) { func_3ad5a(img, a3); goto L3ab3a; }
-        if (idx == 1) { func_3adb4(img, a3, a6); goto L3ab3a; }
-        if (idx == 2) { func_3ad6a(img, a3, a6); goto L3ab3a; }
-        if (idx == 3) { func_3ae00(img, a3, d7); goto L3ab3a; }
-        if (idx == 4) { func_3ae68(img, a3); return; }
+        if (idx == 0) { music_h1(img, a3); goto L3ab3a; }
+        if (idx == 1) { music_h3(img, a3, a6); goto L3ab3a; }
+        if (idx == 2) { music_h2(img, a3, a6); goto L3ab3a; }
+        if (idx == 3) { music_h4(img, a3, d7); goto L3ab3a; }
+        if (idx == 4) { music_h5(img, a3); return; }
         return;   /* fuera de la tabla de 5 entradas */
     }
     /* instrumento de la voz 1 (channel[0x10]) con la tabla del estado [4] */
@@ -584,7 +584,7 @@ L3acb2:
 L3ad14:
     d0 = 0;
     a0 = be32(img + a3 + 0x10);
-    d0 = func_3a992(img, a0, d0);
+    d0 = music_note(img, a0, d0);
     d2 = img[a3 + 0x2b];
     if (d2 > img[a6 + 0x1d])
         d2 = img[a6 + 0x1d];
@@ -593,10 +593,10 @@ L3ad14:
         d0 = 0;
     else
         d0 = (d0 - d2) & 0xffffu;
-    func_3aa8a(img, d0, 8, d7, 0);
+    psg_shadow(img, d0, 8, d7, 0);
     a0 = be32(img + a3 + 0x14);
     d0 = be16(img + a3 + 0x20);
-    d0 = func_3a992(img, a0, d0);
-    func_3aa8a(img, d0, 0x8000, d7, 0);
+    d0 = music_note(img, a0, d0);
+    psg_shadow(img, d0, 0x8000, d7, 0);
     (void)0;
 }

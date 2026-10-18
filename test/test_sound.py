@@ -36,14 +36,14 @@ def test_ym_write():
 
 
 FUN_19282 = 0x19282
-harness._lib.func_19282.argtypes = [_u8p]
-harness._lib.func_19282.restype = None
+harness._lib.ym_reset.argtypes = [_u8p]
+harness._lib.ym_reset.restype = None
 
 
 def test_fun_19282():
     """Reset PSG: registros 0xd..0 a 0 y mixer (7) a 0x18 (con su RMW)."""
     diffs, _ = differential(FUN_19282, {"_pokes": {}},
-                            lambda lib, buf: lib.func_19282(buf))
+                            lambda lib, buf: lib.ym_reset(buf))
     assert not diffs, report(diffs)
 
 
@@ -59,17 +59,17 @@ FUN_18F6E = 0x18F6E
 FUN_1906A = 0x1906A
 FUN_19084 = 0x19084
 FUN_1909E = 0x1909E
-for _n, _nargs in (("sound_timer_start", 2), ("func_18fc6", 3), ("func_18f7a", 3),
-                   ("func_18f84", 1), ("func_18f8e", 2), ("func_18f98", 2),
-                   ("func_1906a", 2), ("sound_timer_stop", 1), ("func_1909e", 1)):
+for _n, _nargs in (("sound_timer_start", 2), ("sound_timer_start_body", 3), ("supexec_b", 3),
+                   ("sound_stop_supexec", 1), ("sound_play_a", 2), ("sound_play_b", 2),
+                   ("sound_vector", 2), ("sound_timer_stop", 1), ("sound_off", 1)):
     getattr(harness._lib, _n).argtypes = [_u8p] + [ctypes.c_uint32] * (_nargs - 1)
     getattr(harness._lib, _n).restype = None
-harness._lib.func_18fa2.argtypes = [_u8p, ctypes.POINTER(ctypes.c_uint32)]
-harness._lib.func_18fa2.restype = None
-harness._lib.func_18fa4.argtypes = [_u8p]
-harness._lib.func_18fa4.restype = None
-harness._lib.func_18f6e.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_18f6e.restype = ctypes.c_uint32
+harness._lib.supexec_a.argtypes = [_u8p, ctypes.POINTER(ctypes.c_uint32)]
+harness._lib.supexec_a.restype = None
+harness._lib.sound_stop.argtypes = [_u8p]
+harness._lib.sound_stop.restype = None
+harness._lib.supexec_wrap.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.supexec_wrap.restype = ctypes.c_uint32
 
 # Banco sintetico de samples: entrada [len=8][cnt=3][tadr][datos...]
 BANK = 0x55B0A
@@ -102,7 +102,7 @@ def test_fun_18fc6():
         pokes = _bank_pokes()
         diffs, _ = differential(
             FUN_18FC6, {"d1": d1, "d4": 0, "_pokes": pokes},
-            lambda lib, buf, v=d1: lib.func_18fc6(buf, v, 0))
+            lambda lib, buf, v=d1: lib.sound_timer_start_body(buf, v, 0))
         assert not diffs, f"d1={d1}\n{report(diffs)}"
 
 
@@ -130,7 +130,7 @@ def test_fun_18f7a():
             p[base] = bytes([0x00, 0x08, 0x03, 0x55, 0x11, 0x22, 0x33, 0x44])
         diffs, _ = differential(
             FUN_18F7A, {"d1": d1, "d4": d4, "_pokes": p},
-            lambda lib, buf, a=d1, b=d4: lib.func_18f7a(buf, a, b))
+            lambda lib, buf, a=d1, b=d4: lib.supexec_b(buf, a, b))
         assert not diffs, f"d1={d1} d4={d4}\n{report(diffs)}"
 
 
@@ -140,7 +140,7 @@ def test_fun_18f8e():
     pokes[0x1AB4F] = bytes([0x00])
     diffs, _ = differential(
         FUN_18F8E, {"d4": 0, "_pokes": pokes},
-        lambda lib, buf: lib.func_18f8e(buf, 0))
+        lambda lib, buf: lib.sound_play_a(buf, 0))
     assert not diffs, report(diffs)
 
 
@@ -150,7 +150,7 @@ def test_fun_18f98():
     pokes[0x1AB4F] = bytes([0x00])
     diffs, _ = differential(
         FUN_18F98, {"d4": 0, "_pokes": pokes},
-        lambda lib, buf: lib.func_18f98(buf, 0))
+        lambda lib, buf: lib.sound_play_b(buf, 0))
     assert not diffs, report(diffs)
 
 
@@ -159,7 +159,7 @@ def test_fun_1906a():
     pokes = _bank_pokes()
     diffs, _ = differential(
         FUN_1906A, {"d4": 0, "_pokes": pokes},
-        lambda lib, buf: lib.func_1906a(buf, 0))
+        lambda lib, buf: lib.sound_vector(buf, 0))
     assert not diffs, report(diffs)
 
 
@@ -174,12 +174,12 @@ def test_fun_18fa2_18fa4():
     """Envoltorios Supexec -> 0x19084; 0x18fa2 avanza A6."""
     pokes = {0x1AB4F: bytes([0x00])}
     diffs, _ = differential(FUN_18FA4, {"_pokes": dict(pokes)},
-                            lambda lib, buf: lib.func_18fa4(buf))
+                            lambda lib, buf: lib.sound_stop(buf))
     assert not diffs, report(diffs)
     a6 = ctypes.c_uint32(0x50000)
     diffs, info = differential(
         FUN_18FA2, {"a6": 0x50000, "_pokes": dict(pokes)},
-        lambda lib, buf: lib.func_18fa2(buf, ctypes.byref(a6)))
+        lambda lib, buf: lib.supexec_a(buf, ctypes.byref(a6)))
     assert not diffs, report(diffs)
     assert a6.value == info["regs"]["a6"]
 
@@ -191,7 +191,7 @@ def test_fun_18f6e():
     pokes[0x50000] = bytes([0x00, 0x00, 0x77])
     diffs, info = differential(
         FUN_18F6E, {"a6": 0x50000, "_pokes": pokes},
-        lambda lib, buf: lib.func_18f6e(buf, 0x50000))
+        lambda lib, buf: lib.supexec_wrap(buf, 0x50000))
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
 
@@ -200,17 +200,17 @@ def test_fun_18f84_1909e():
     """Envoltorio Supexec -> 0x1909e (apagado: PSG + Timer A)."""
     pokes = {0x1AB4F: bytes([0x00])}
     diffs, _ = differential(FUN_18F84, {"_pokes": dict(pokes)},
-                            lambda lib, buf: lib.func_18f84(buf))
+                            lambda lib, buf: lib.sound_stop_supexec(buf))
     assert not diffs, report(diffs)
     diffs, _ = differential(FUN_1909E, {"_pokes": {}},
-                            lambda lib, buf: lib.func_1909e(buf))
+                            lambda lib, buf: lib.sound_off(buf))
     assert not diffs, report(diffs)
 
 
 FUN_190B8 = 0x190B8
 FUN_190F6 = 0x190F6
 FUN_1910E = 0x1910E
-for _n in ("func_190b8", "func_190f6", "func_1910e"):
+for _n in ("sound_isr_load", "sound_isr_back", "sound_isr_fwd"):
     getattr(harness._lib, _n).argtypes = [_u8p]
     getattr(harness._lib, _n).restype = None
 
@@ -237,7 +237,7 @@ def test_fun_1910e():
     """ISR PCM hacia delante: lee un byte, escribe 2 registros PSG y bclr+rte."""
     pokes = _isr_pokes(SAMPLE_BASE + 1, SAMPLE_BASE + 8)
     diffs, _ = differential(FUN_1910E, {"_pokes": pokes},
-                            lambda lib, buf: lib.func_1910e(buf), stop_pc=RTE_PC)
+                            lambda lib, buf: lib.sound_isr_fwd(buf), stop_pc=RTE_PC)
     assert not diffs, report(diffs)
 
 
@@ -245,7 +245,7 @@ def test_fun_190f6():
     """ISR PCM hacia atras (variante 0x1906a)."""
     pokes = _isr_pokes(SAMPLE_BASE + 4, SAMPLE_BASE + 8)
     diffs, _ = differential(FUN_190F6, {"_pokes": pokes},
-                            lambda lib, buf: lib.func_190f6(buf), stop_pc=RTE_PC)
+                            lambda lib, buf: lib.sound_isr_back(buf), stop_pc=RTE_PC)
     assert not diffs, report(diffs)
 
 
@@ -262,7 +262,7 @@ def test_fun_190b8_bloque():
     """Carga un bloque de la lista de samples y actualiza los punteros."""
     pokes = _isr_list_pokes(SAMPLE_BASE)
     diffs, _ = differential(FUN_190B8, {"_pokes": pokes},
-                            lambda lib, buf: lib.func_190b8(buf), stop_pc=RTE_PC)
+                            lambda lib, buf: lib.sound_isr_load(buf), stop_pc=RTE_PC)
     assert not diffs, report(diffs)
 
 
@@ -273,7 +273,7 @@ def test_fun_1910e_repeticion():
     pokes[0x192CF] = bytes([0x01])
     pokes[0x192D0] = bytes([0x01])
     diffs, _ = differential(FUN_1910E, {"_pokes": pokes},
-                            lambda lib, buf: lib.func_1910e(buf), stop_pc=RTE_PC)
+                            lambda lib, buf: lib.sound_isr_fwd(buf), stop_pc=RTE_PC)
     assert not diffs, report(diffs)
 
 
@@ -281,5 +281,5 @@ def test_fun_1910e_parada():
     """Sin datos y sin repeticion: para el Timer A (0x19084)."""
     pokes = _isr_pokes(SAMPLE_BASE + 8, SAMPLE_BASE + 8)
     diffs, _ = differential(FUN_1910E, {"_pokes": pokes},
-                            lambda lib, buf: lib.func_1910e(buf), stop_pc=RTE_PC)
+                            lambda lib, buf: lib.sound_isr_fwd(buf), stop_pc=RTE_PC)
     assert not diffs, report(diffs)

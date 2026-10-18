@@ -63,8 +63,8 @@ def test_fun_13bc2():
 
 
 FUN_13702 = 0x13702
-harness._lib.func_13702.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_13702.restype = ctypes.c_uint32
+harness._lib.scale_prep.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.scale_prep.restype = ctypes.c_uint32
 
 
 def _elem_pokes(w, h):
@@ -104,7 +104,7 @@ def test_fun_13702():
         pokes[0x50000] = bytes([0x00, 1, 8, 4, r, c])
         diffs, info = differential(
             FUN_13702, {"a6": 0x50000, "_pokes": pokes},
-            lambda lib, buf: lib.func_13702(buf, 0x50000))
+            lambda lib, buf: lib.scale_prep(buf, 0x50000))
         assert not diffs, f"r={r} c={c}\n{report(diffs)}"
         assert info["ret"] == info["regs"]["a6"], "a6"
 
@@ -132,8 +132,8 @@ def test_fun_1398e():
 
 
 FUN_138A6 = 0x138A6
-harness._lib.func_138a6.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_138a6.restype = ctypes.c_uint32
+harness._lib.scale_anim.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.scale_anim.restype = ctypes.c_uint32
 
 
 def test_fun_138a6():
@@ -155,15 +155,15 @@ def test_fun_138a6():
         pokes[0x1acd4] = bytes([0])
         diffs, info = differential(
             FUN_138A6, {"a6": 0x50000, "_pokes": pokes},
-            lambda lib, buf: lib.func_138a6(buf, 0x50000),
+            lambda lib, buf: lib.scale_anim(buf, 0x50000),
             schedule=sched, wait_sites=[0x1359a])
         assert not diffs, f"skip={skip}\n{report(diffs)}"
         assert info["ret"] == info["regs"]["a6"], "a6"
 
 
 FUN_13740 = 0x13740
-harness._lib.func_13740.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_13740.restype = ctypes.c_uint32
+harness._lib.scale_loop.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.scale_loop.restype = ctypes.c_uint32
 
 
 def test_fun_13740():
@@ -176,7 +176,7 @@ def test_fun_13740():
             pokes[0x1acd4] = bytes([0])
             diffs, info = differential(
                 FUN_13740, {"a6": 0x50000, "_pokes": pokes},
-                lambda lib, buf: lib.func_13740(buf, 0x50000),
+                lambda lib, buf: lib.scale_loop(buf, 0x50000),
                 schedule=sched, wait_sites=[0x1359a])
             assert not diffs, f"skip={skip} w={w} h={h}\n{report(diffs)}"
             assert info["ret"] == info["regs"]["a6"], "a6"

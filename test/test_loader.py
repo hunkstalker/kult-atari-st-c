@@ -24,10 +24,10 @@ _u8p = ctypes.POINTER(ctypes.c_uint8)
 _u32p = ctypes.POINTER(ctypes.c_uint32)
 harness._lib.func_1350c.argtypes = [_u8p, _u32p]
 harness._lib.func_1350c.restype = None
-harness._lib.func_13522.argtypes = [_u8p, _u32p]
-harness._lib.func_13522.restype = None
-harness._lib.func_13552.argtypes = [_u8p, _u32p]
-harness._lib.func_13552.restype = None
+harness._lib.script_pop.argtypes = [_u8p, _u32p]
+harness._lib.script_pop.restype = None
+harness._lib.script_call.argtypes = [_u8p, _u32p]
+harness._lib.script_call.restype = None
 harness._lib.load_fond.argtypes = [_u8p]
 harness._lib.load_fond.restype = None
 harness._lib.load_named_screen.argtypes = [_u8p]
@@ -62,7 +62,7 @@ def test_fun_13522():
     pokes[SCRIPT_END] = (0x12345678).to_bytes(4, "big")
     diffs, info = differential(FUN_13522, {"a6": SCRIPTP, "_pokes": pokes},
                                lambda lib, buf, p=a6:
-                               lib.func_13522(buf, ctypes.byref(p)))
+                               lib.script_pop(buf, ctypes.byref(p)))
     assert not diffs, report(diffs)
     assert a6.value == info["regs"]["a6"], "A6 nuevo"
 
@@ -76,7 +76,7 @@ def test_fun_13552():
     a6 = ctypes.c_uint32(0)
     diffs, info = differential(FUN_13552, {"a6": 0, "_pokes": pokes},
                                lambda lib, buf, p=a6:
-                               lib.func_13552(buf, ctypes.byref(p)))
+                               lib.script_call(buf, ctypes.byref(p)))
     assert not diffs, report(diffs)
     assert a6.value == 0x000abcde
     assert a6.value == info["regs"]["a6"], "A6 restaurado"

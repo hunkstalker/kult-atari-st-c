@@ -36,7 +36,7 @@
 /* FUN_00016210 @ 0x16210: bump the byte at 0x1a579, index the byte table at 0x2741e
  * by the new value, and store that byte into 0x1acd7. Devuelve el byte en D0 (lo usan
  * 0x17a1a y compania); los llamantes que no lo necesitan lo ignoran. */
-uint32_t func_16210(uint8_t *img) {
+uint32_t pal_next_byte(uint8_t *img) {
     uint32_t i = (uint8_t)(img[A_DAT_1A579] + 1);
     img[A_DAT_1A579] = (uint8_t)i;
     uint32_t v = img[A_TBL_2741E + i];
@@ -46,7 +46,7 @@ uint32_t func_16210(uint8_t *img) {
 
 /* FUN_00016230 @ 0x16230: same bump, but read a big-endian word from 0x2741e[index]
  * and return it in D0. */
-uint32_t func_16230(uint8_t *img) {
+uint32_t pal_next_word(uint8_t *img) {
     uint32_t i = (uint8_t)(img[A_DAT_1A579] + 1);
     img[A_DAT_1A579] = (uint8_t)i;
     uint32_t a0 = A_TBL_2741E + i;
@@ -56,7 +56,7 @@ uint32_t func_16230(uint8_t *img) {
 /* FUN_0001627a @ 0x1627a: only when the low byte of (0x1ab60 - 0x1a526) reaches
  * 0xb4, latch 0x1a526 = 0x1ab60 and clear bit 6 of each of the 63 six-byte entries
  * at 0x1a8f0 whose byte0 has bit 6 set, byte1 != 0x1acd2 and byte1 < 0x34. */
-void func_1627a(uint8_t *img) {
+void pal_threshold(uint8_t *img) {
     uint32_t d0 = (be16(img + A_DAT_1AB60) - be16(img + A_DAT_1A526)) & 0xffff;
     if ((d0 & 0xff) < 0xb4)
         return;
@@ -87,13 +87,13 @@ void set_palette_current(uint8_t *img);
  * 0x1a10a[$1acf4] (decrementando componentes, VBL + Setpalette por pasada) hasta
  * igualarlo. */
 uint32_t advance_text_entry(uint8_t *img, uint32_t a1, uint32_t d4);
-void func_18f98(uint8_t *img, uint32_t d4);
+void sound_play_b(uint8_t *img, uint32_t d4);
 void set_palette(uint8_t *img);
 void wait_vbl(uint8_t *img);
 void run_command_keep_sp(uint8_t *img, uint32_t a6);
 
-void func_16310(uint8_t *img) {
-    func_18f98(img, 0x17);
+void palette_cycle(uint8_t *img) {
+    sound_play_b(img, 0x17);
     {
         uint32_t a0 = be32(img + A_PALETTE_PTR);
         uint32_t a1 = 0xd8f0;
@@ -128,7 +128,7 @@ void func_16310(uint8_t *img) {
         }
         set_palette(img);
     }
-    func_18f98(img, 0x17);
+    sound_play_b(img, 0x17);
     wr16(img + A_THE_COMMAND, be16(img + A_DAT_1ABFA));
     run_command_keep_sp(img, 0);
     for (;;) {                                   /* fase 2: acercar al target */

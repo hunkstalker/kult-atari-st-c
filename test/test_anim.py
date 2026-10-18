@@ -12,13 +12,24 @@ import ctypes
 import harness
 from harness import differential, report
 
+import os as _os, re as _re
+_NAME = {}
+for _ln in open(_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "work", "names.txt")):
+    _m = _re.match(r"fn\s+0x([0-9a-fA-F]+)\s+(\S+)", _ln)
+    if _m:
+        _NAME[int(_m.group(1), 16)] = _m.group(2)
+
+
+def _sym(addr, lib=None):
+    return getattr(lib if lib is not None else harness._lib, _NAME[addr])
+
 ANIM = 0x159d2
 TABLE = 0x23ee8       # tabla de animación real en la imagen
 SCRIPT = 0x30000      # qword sintético: [x][index][d0][d2]
 
 _u8p = ctypes.POINTER(ctypes.c_uint8)
-harness._lib.func_159d2.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_159d2.restype = None
+harness._lib.anim_entry_a.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.anim_entry_a.restype = None
 
 
 def _entry(data):
@@ -45,7 +56,7 @@ def _run(pokes, index):
     pokes = dict(pokes)
     pokes[SCRIPT] = bytes([0x00, index, 0x12, 0x34])
     return differential(ANIM, {"a6": SCRIPT, "_pokes": pokes},
-                        lambda lib, buf: lib.func_159d2(buf, SCRIPT))
+                        lambda lib, buf: lib.anim_entry_a(buf, SCRIPT))
 
 
 def test_prologue_params_and_zeroing():
@@ -197,9 +208,9 @@ FUN_15DA6 = 0x15da6
 VBL_SITE = 0x1359a
 VBL_COUNTER = 0x1acd4
 
-harness._lib.func_15da6.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32,
+harness._lib.anim_engine_entry.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32,
                                      ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32]
-harness._lib.func_15da6.restype = None
+harness._lib.anim_engine_entry.restype = None
 
 
 def test_fun_15da6_draw_element():
@@ -226,7 +237,7 @@ def test_fun_15da6_draw_element():
             FUN_15DA6,
             {"d0": x, "d1": y, "d2": w, "d3": h, "d5": st, "a1": SRC2, "_pokes": pokes},
             lambda lib, buf, a=x, b=y, c=w, d=h, e=st:
-            lib.func_15da6(buf, a, b, c, d, e, SRC2),
+            lib.anim_engine_entry(buf, a, b, c, d, e, SRC2),
             schedule=[{"pc": VBL_SITE, "nth": 1, "addr": VBL_COUNTER, "width": 1, "value": 0x11}],
             wait_sites=[VBL_SITE])
         assert not diffs, f"x={x} y={y} w={w} h={h} st={st} reveal={reveal}\n{report(diffs)}"
@@ -265,7 +276,7 @@ def test_fun_15da6_clip_with_previous_rect():
             FUN_15DA6,
             {"d0": x, "d1": y, "d2": w, "d3": h, "d5": st, "a1": SRC2, "_pokes": pokes},
             lambda lib, buf, a=x, b=y, c=w, d=h, e=st:
-            lib.func_15da6(buf, a, b, c, d, e, SRC2),
+            lib.anim_engine_entry(buf, a, b, c, d, e, SRC2),
             schedule=[{"pc": VBL_SITE, "nth": 1, "addr": VBL_COUNTER, "width": 1, "value": 0x11}],
             wait_sites=[VBL_SITE])
         assert not diffs, (f"x={x} y={y} w={w} h={h} st={st} reveal={reveal} "
@@ -279,7 +290,7 @@ SPR_BANK = 0xD8F0
 # camino reveal ya se cubre en 0x15da6 (reveal=1) y en test_reveal.py.
 HANDLERS = {0x15bcc: 1, 0x15ba6: 6, 0x15bb2: 2, 0x15bbc: 4}
 for _addr, _idx in HANDLERS.items():
-    _fn = getattr(harness._lib, "func_%x" % _addr)
+    _fn = _sym(_addr)
     _fn.argtypes = [_u8p, ctypes.c_uint32]
     _fn.restype = None
 
@@ -312,7 +323,7 @@ def test_engine_handlers():
         pokes[SCRIPT] = script
         diffs, _ = differential(
             addr, {"a6": SCRIPT, "_pokes": pokes},
-            lambda lib, buf, f=getattr(harness._lib, "func_%x" % addr), s=script:
+            lambda lib, buf, f=_sym(addr), s=script:
             f(buf, SCRIPT),
             schedule=[{"pc": VBL_SITE, "nth": 1, "addr": VBL_COUNTER, "width": 1, "value": 0x11}],
             wait_sites=[VBL_SITE])
@@ -325,20 +336,20 @@ SHUF = 0x12b40
 BLIT_FWD = 0x12ad6
 BLIT_REV = 0x12b04
 
-harness._lib.func_12b40.argtypes = [ctypes.c_uint32]
-harness._lib.func_12b40.restype = ctypes.c_uint32
-harness._lib.func_12ad6.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32,
+harness._lib.bit_permute_byte.argtypes = [ctypes.c_uint32]
+harness._lib.bit_permute_byte.restype = ctypes.c_uint32
+harness._lib.elem_blit.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32,
                                      ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32]
-harness._lib.func_12ad6.restype = None
-harness._lib.func_12b04.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32,
+harness._lib.elem_blit.restype = None
+harness._lib.elem_blit_rev.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32,
                                      ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32]
-harness._lib.func_12b04.restype = None
+harness._lib.elem_blit_rev.restype = None
 
 
 def test_fun_12b40_bit_shuffle():
     for d1 in range(256):
         diffs, info = differential(SHUF, {"d1": d1},
-                                   lambda lib, buf, v=d1: lib.func_12b40(v))
+                                   lambda lib, buf, v=d1: lib.bit_permute_byte(v))
         assert not diffs, f"d1={d1:#x}\n{report(diffs)}"
         assert info["ret"] == info["regs"]["d6"], f"d1={d1:#x}"
 
@@ -357,14 +368,14 @@ def test_byte_blitters():
         regs = {"a0": DEST, "a1": SRC, "d2": d2, "d3": d3, "a3": a3, "_pokes": pokes}
         diffs, _ = differential(
             BLIT_FWD, regs,
-            lambda lib, buf, a=d2, b=d3, c=a3: lib.func_12ad6(buf, DEST, SRC, a, b, c))
+            lambda lib, buf, a=d2, b=d3, c=a3: lib.elem_blit(buf, DEST, SRC, a, b, c))
         assert not diffs, f"fwd d2={d2} d3={d3} a3={a3:#x}\n{report(diffs)}"
         # `differential` CONSUMES `_pokes` from the dict (regs.pop), so the reversed pass
         # needs its own copy or it would run on an empty image and verify nothing.
         regs = {"a0": DEST, "a1": SRC, "d2": d2, "d3": d3, "a3": a3, "_pokes": _blit8_pokes()}
         diffs, _ = differential(
             BLIT_REV, regs,
-            lambda lib, buf, a=d2, b=d3, c=a3: lib.func_12b04(buf, DEST, SRC, a, b, c))
+            lambda lib, buf, a=d2, b=d3, c=a3: lib.elem_blit_rev(buf, DEST, SRC, a, b, c))
         assert not diffs, f"rev d2={d2} d3={d3} a3={a3:#x}\n{report(diffs)}"
 
 
@@ -411,7 +422,7 @@ def test_fun_159d2_dispatches_handler():
     pokes[SCRIPT] = bytes([0x00, 0x01, 0x00, 0x00])   # index=1
     diffs, _ = differential(
         ANIM, {"a6": SCRIPT, "_pokes": pokes},
-        lambda lib, buf: lib.func_159d2(buf, SCRIPT),
+        lambda lib, buf: lib.anim_entry_a(buf, SCRIPT),
         schedule=[{"pc": VBL_SITE, "nth": 1, "addr": VBL_COUNTER, "width": 1, "value": 0x11}],
         wait_sites=[VBL_SITE])
     assert not diffs, report(diffs)
@@ -544,9 +555,9 @@ def test_fun_16088_160aa():
 
 
 ANIM_BODY = 0x159E2
-harness._lib.func_159e2.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32,
+harness._lib.anim_entry_b.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32,
                                      ctypes.c_uint32, ctypes.c_uint32]
-harness._lib.func_159e2.restype = ctypes.c_uint32
+harness._lib.anim_entry_b.restype = ctypes.c_uint32
 
 
 def test_fun_159e2():
@@ -557,14 +568,14 @@ def test_fun_159e2():
                         _entry(bytes([0xFE, 0x7F, 0x80])))
         diffs, info = differential(
             ANIM_BODY, {"a6": SCRIPT, "d0": d0, "d1": d1, "d2": d2, "_pokes": pokes},
-            lambda lib, buf, a=d0, b=d1, c=d2: lib.func_159e2(buf, SCRIPT, a, b, c))
+            lambda lib, buf, a=d0, b=d1, c=d2: lib.anim_entry_b(buf, SCRIPT, a, b, c))
         assert not diffs, f"d0={d0:#x} d1={d1:#x} d2={d2:#x}\n{report(diffs)}"
         assert info["ret"] == info["regs"]["a6"]
 
 
 FUN_14F24 = 0x14F24
-harness._lib.func_14f24.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32]
-harness._lib.func_14f24.restype = None
+harness._lib.anim_threshold.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32]
+harness._lib.anim_threshold.restype = None
 
 
 def _umbral_table():
@@ -578,20 +589,20 @@ def test_fun_14f24():
     pokes = _umbral_table()
     pokes[0x1AD20] = bytes([0x12])
     diffs, _ = differential(0x14F24, {"a6": 0x50000, "d0": 1, "_pokes": pokes},
-                            lambda lib, buf: lib.func_14f24(buf, 0x50000, 1))
+                            lambda lib, buf: lib.anim_threshold(buf, 0x50000, 1))
     assert not diffs, report(diffs)
     # disparo por cambio de nibble: 0x1ad20 = 0x10, d0 = 1 -> 0x0f
     pokes = _umbral_table()
     pokes[0x1AD20] = bytes([0x10])
     diffs, _ = differential(0x14F24, {"a6": 0x50000, "d0": 1, "_pokes": pokes},
-                            lambda lib, buf: lib.func_14f24(buf, 0x50000, 1),
+                            lambda lib, buf: lib.anim_threshold(buf, 0x50000, 1),
                             stop_pc=0x14F5C)
     assert not diffs, report(diffs)
     # disparo por subdesbordamiento: 0x1ad20 = 2, d0 = 5
     pokes = _umbral_table()
     pokes[0x1AD20] = bytes([2])
     diffs, _ = differential(0x14F24, {"a6": 0x50000, "d0": 5, "_pokes": pokes},
-                            lambda lib, buf: lib.func_14f24(buf, 0x50000, 5),
+                            lambda lib, buf: lib.anim_threshold(buf, 0x50000, 5),
                             stop_pc=0x14F5C)
     assert not diffs, report(diffs)
 
@@ -626,7 +637,7 @@ def test_engine_multi_block_elements():
             pokes[SCRIPT] = script
             diffs, _ = differential(
                 addr, {"a6": SCRIPT, "_pokes": pokes},
-                lambda lib, buf, f=getattr(harness._lib, "func_%x" % addr), s=script:
+                lambda lib, buf, f=_sym(addr), s=script:
                 f(buf, SCRIPT),
                 schedule=_vbl_schedule(waits),
                 wait_sites=[VBL_SITE])
@@ -648,13 +659,13 @@ def test_engine_returns_a6_like_the_oracle():
         (bytes([0x11, 0x0a, 0x10, 0x30, 0x12, 0x20, 0x40, 0x00]), 4),  # 2 bloques x 2
     ]
     for addr in (0x15bcc, 0x15bb2, 0x15bbc):
-        getattr(harness._lib, "func_%x" % addr).restype = ctypes.c_uint32
+        _sym(addr).restype = ctypes.c_uint32
         for script, waits in cases:
             pokes = _engine_pokes()
             pokes[SCRIPT] = script
             diffs, info = differential(
                 addr, {"a6": SCRIPT, "_pokes": pokes},
-                lambda lib, buf, a=addr: getattr(lib, "func_%x" % a)(buf, SCRIPT),
+                lambda lib, buf, a=addr: _sym(a, lib)(buf, SCRIPT),
                 stop_pc=0x15CC2,
                 schedule=_vbl_schedule(waits),
                 wait_sites=[VBL_SITE])

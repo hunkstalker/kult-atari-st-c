@@ -103,11 +103,11 @@ void func_12fb6(uint8_t *img, uint32_t a0, uint32_t d0, uint32_t d7) {
  * x/ancho <<2, fija el total (alto*ancho) en 0x1a49e y recorre las posiciones en
  * pasos de 0x11 (mod total) pintando el bit (0x12fb6) con retardo entre pasos. */
 uint32_t func_128a4(uint8_t *img, uint32_t a6);
-uint32_t func_134da(uint8_t *img, uint32_t a6);
+uint32_t elem_blit_vbl(uint8_t *img, uint32_t a6);
 
 uint32_t reveal_pixel(uint8_t *img, uint32_t a6) {
     if (img[A_SKIP_TRANSITION] != 0)
-        return func_134da(img, a6);
+        return elem_blit_vbl(img, a6);
     a6 = func_128a4(img, a6);
     uint32_t x = be16(img + A_ELEM_1A532);
     uint32_t w = be16(img + A_ELEM_1A52E);

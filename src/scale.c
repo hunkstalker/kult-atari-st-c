@@ -210,10 +210,10 @@ void func_13bc2(uint8_t *img, uint32_t d2in, uint32_t d3in, uint32_t d7,
  * escribe [filas][cols] en la entrada de icono que 128a4 deja en A2 (+0xe) y llama
  * al escalador 0x13a18. Devuelve A6 + 2 (los dos bytes leidos). */
 uint32_t func_128a4(uint8_t *img, uint32_t a6);
-uint32_t func_134da(uint8_t *img, uint32_t a6);
+uint32_t elem_blit_vbl(uint8_t *img, uint32_t a6);
 uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
 
-uint32_t func_13702(uint8_t *img, uint32_t a6) {
+uint32_t scale_prep(uint8_t *img, uint32_t a6) {
     uint32_t slot = 0x1a850;
     for (uint32_t k = 9;; k = (k - 1) & 0xffff) {
         if (be16(img + slot) == 0)
@@ -313,7 +313,7 @@ static void movep_write_l(uint8_t *img, uint32_t a, uint32_t v) {
     img[a + 6] = v & 0xff;
 }
 
-uint32_t func_138a6(uint8_t *img, uint32_t a6) {
+uint32_t scale_anim(uint8_t *img, uint32_t a6) {
     if (img[A_SKIP_TRANSITION] != 0) {
         uint32_t a6o;
         hint_blit_entry(img, a6, &a6o);
@@ -389,9 +389,9 @@ void blit_rect_vbl(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t
                  uint32_t d7);
 uint32_t screen_address_raw(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
 
-uint32_t func_13740(uint8_t *img, uint32_t a6) {
+uint32_t scale_loop(uint8_t *img, uint32_t a6) {
     if (img[A_SKIP_TRANSITION] != 0)
-        return func_134da(img, a6);
+        return elem_blit_vbl(img, a6);
     a6 = func_128a4(img, a6);
     uint32_t x = be16(img + A_ELEM_1A532);
     uint32_t y = be16(img + A_ELEM_1A530);

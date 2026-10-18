@@ -10,15 +10,15 @@ BACK = 0x88000
 VBL_COUNTER = 0x1acd4
 VBL_SITE = 0x1359a
 
-for _n, _args in (("func_1104a", [_u8p] + [ctypes.c_uint32] * 5),
-                  ("func_127f0", [_u8p] + [ctypes.c_uint32] * 5),
-                  ("func_12324", [_u8p]),
-                  ("func_12fea", [_u8p, ctypes.c_uint32]),
-                  ("func_16512", [_u8p, ctypes.c_uint32]),
-                  ("func_16554", [_u8p, ctypes.c_uint32]),
-                  ("func_16576", [_u8p, ctypes.c_uint32]),
-                  ("func_18d26", [_u8p, ctypes.c_uint32]),
-                  ("func_17472", [_u8p])):
+for _n, _args in (("text_blit_fwd_a3", [_u8p] + [ctypes.c_uint32] * 5),
+                  ("masked_save_blit", [_u8p] + [ctypes.c_uint32] * 5),
+                  ("gemdos_cnecin", [_u8p]),
+                  ("hint_blit_entry_b", [_u8p, ctypes.c_uint32]),
+                  ("hint_icons_wrap", [_u8p, ctypes.c_uint32]),
+                  ("draw_hint_icons_wrap", [_u8p, ctypes.c_uint32]),
+                  ("update_icon_list_wrap", [_u8p, ctypes.c_uint32]),
+                  ("draw_selection_frame_wrap", [_u8p, ctypes.c_uint32]),
+                  ("clear_globals", [_u8p])):
     getattr(harness._lib, _n).argtypes = _args
     getattr(harness._lib, _n).restype = ctypes.c_uint32
 
@@ -26,7 +26,7 @@ for _n, _args in (("func_1104a", [_u8p] + [ctypes.c_uint32] * 5),
 def test_fun_17472():
     pokes = {0x1aa8b: bytes([0x55]), 0x1acae: (0x1234).to_bytes(2, "big")}
     diffs, _ = differential(0x17472, {"_pokes": pokes},
-                            lambda lib, buf: lib.func_17472(buf))
+                            lambda lib, buf: lib.clear_globals(buf))
     assert not diffs, report(diffs)
 
 
@@ -39,7 +39,7 @@ def test_fun_1104a():
         diffs, _ = differential(
             0x1104A, {"a0": SCREEN, "a1": 0x40000, "d2": d2, "d3": d3, "d7": 0,
                       "_pokes": pokes},
-            lambda lib, buf, a=d2, b=d3: lib.func_1104a(buf, SCREEN, 0x40000, a, b, 0))
+            lambda lib, buf, a=d2, b=d3: lib.text_blit_fwd_a3(buf, SCREEN, 0x40000, a, b, 0))
         assert not diffs, f"d2={d2} d3={d3}\n{report(diffs)}"
 
 
@@ -51,7 +51,7 @@ def test_fun_127f0():
     diffs, _ = differential(
         0x127F0, {"a0": SCREEN, "a1": 0x40000, "d2": 0x10, "d3": 3, "d7": 0,
                   "_pokes": pokes},
-        lambda lib, buf: lib.func_127f0(buf, SCREEN, 0x40000, 0x10, 3, 0))
+        lambda lib, buf: lib.masked_save_blit(buf, SCREEN, 0x40000, 0x10, 3, 0))
     assert not diffs, report(diffs)
 
 
@@ -59,7 +59,7 @@ def test_fun_12324():
     pokes = {0x1a44f: bytes([0x00]), 0x1a456: bytes([0x00])}
     pokes.update(console_key("a"))
     diffs, info = differential(0x12324, {"_pokes": pokes},
-                               lambda lib, buf: lib.func_12324(buf))
+                               lambda lib, buf: lib.gemdos_cnecin(buf))
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["d0"]
 
@@ -83,7 +83,7 @@ def test_fun_12fea():
         pokes[SCREEN + i] = bytes([(i * 3 + 1) & 0xFF])
         pokes[BACK + i] = bytes([(i * 11 + 7) & 0xFF])
     diffs, info = differential(0x12FEA, {"a6": 0x30000, "_pokes": pokes},
-                               lambda lib, buf: lib.func_12fea(buf, 0x30000))
+                               lambda lib, buf: lib.hint_blit_entry_b(buf, 0x30000))
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
 
@@ -104,8 +104,8 @@ def _icon_zones(desc):
 
 
 def test_fun_16512_16554():
-    for entry, fn in ((0x16512, harness._lib.func_16512),
-                      (0x16554, harness._lib.func_16554)):
+    for entry, fn in ((0x16512, harness._lib.hint_icons_wrap),
+                      (0x16554, harness._lib.draw_hint_icons_wrap)):
         desc = 0x3A000
         e = bytearray([2, 3]) + (SCREEN - 0x8000).to_bytes(4, "big") + \
             (8).to_bytes(2, "big") + (4).to_bytes(4, "big")
@@ -133,7 +133,7 @@ def test_fun_16576():
     pokes[0x40000] = bytes([8, 0x20, 4, 0x20, 0x10, 0, 0, 0])
     pokes[0x40008] = bytes([0x30, 0x40, 0x30, 0x40, 0x10, 0, 0, 0])
     diffs, info = differential(0x16576, {"a6": 0x30000, "_pokes": pokes},
-                               lambda lib, buf: lib.func_16576(buf, 0x30000))
+                               lambda lib, buf: lib.update_icon_list_wrap(buf, 0x30000))
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
 
@@ -154,6 +154,6 @@ def test_fun_18d26():
         pokes[SCREEN + i] = bytes([(i * 3 + 1) & 0xFF])
         pokes[BACK + i] = bytes([(i * 11 + 7) & 0xFF])
     diffs, info = differential(0x18D26, {"a6": 0x30000, "_pokes": pokes},
-                               lambda lib, buf: lib.func_18d26(buf, 0x30000))
+                               lambda lib, buf: lib.draw_selection_frame_wrap(buf, 0x30000))
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]

@@ -90,8 +90,8 @@ def test_fun_1042c():
 
 
 FUN_10DFA = 0x10DFA
-harness._lib.func_10dfa.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_10dfa.restype = ctypes.c_uint32
+harness._lib.text_box_icon.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.text_box_icon.restype = ctypes.c_uint32
 
 
 def test_fun_10dfa():
@@ -102,14 +102,14 @@ def test_fun_10dfa():
         pokes[0x50000] = bytes([92, d4, 3, 2, 8])
         diffs, info = differential(
             FUN_10DFA, {"a6": 0x50000, "_pokes": pokes},
-            lambda lib, buf: lib.func_10dfa(buf, 0x50000))
+            lambda lib, buf: lib.text_box_icon(buf, 0x50000))
         assert not diffs, f"d4={d4}\n{report(diffs)}"
         assert info["ret"] == info["regs"]["a6"], "a6"
 
 
 FUN_10B52 = 0x10B52
-harness._lib.func_10b52.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_10b52.restype = ctypes.c_uint32
+harness._lib.text_window_entry.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.text_window_entry.restype = ctypes.c_uint32
 
 
 def test_fun_10b52():
@@ -132,7 +132,7 @@ def test_fun_10b52():
                 pokes[0x50000] = bytes([0, d4, 3, 0x10, flags])
             diffs, info = differential(
                 FUN_10B52, {"a6": 0x50000, "_pokes": pokes},
-                lambda lib, buf: lib.func_10b52(buf, 0x50000))
+                lambda lib, buf: lib.text_window_entry(buf, 0x50000))
             assert not diffs, f"d4={d4} flags={flags:#x}\n{report(diffs)}"
             assert info["ret"] == info["regs"]["a6"], "a6"
 
@@ -176,8 +176,8 @@ def test_fun_13f86():
 
 
 FUN_17930 = 0x17930
-harness._lib.func_17930.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_17930.restype = None
+harness._lib.obj_text_box.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.obj_text_box.restype = None
 
 
 def test_fun_17930():
@@ -197,5 +197,5 @@ def test_fun_17930():
         for i in range(0x40):
             pokes[0x28AD6 + i] = bytes([(i * 3 + 1) & 0xFF])
         diffs, _ = differential(FUN_17930, {"a6": 0x50000, "_pokes": pokes},
-                                lambda lib, buf: lib.func_17930(buf, 0x50000))
+                                lambda lib, buf: lib.obj_text_box(buf, 0x50000))
         assert not diffs, f"sel={sel}\n{report(diffs)}"

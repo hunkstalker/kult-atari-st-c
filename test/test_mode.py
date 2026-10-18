@@ -35,8 +35,8 @@ def _table_for(mode, header, packed=b"", tail=b""):
     return pokes
 
 
-harness._lib.func_1442c.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_1442c.restype = ctypes.c_uint32
+harness._lib.cmd74_wrap.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.cmd74_wrap.restype = ctypes.c_uint32
 harness._lib.scene_mode_set.argtypes = [_u8p, ctypes.c_uint32, _u32p, _u32p]
 harness._lib.scene_mode_set.restype = ctypes.c_uint32
 harness._lib.scene_mode_load.argtypes = [_u8p, _u32p, _u32p]
@@ -138,7 +138,7 @@ def test_fun_1442c():
     pokes[0x30000] = bytes([0x00, 0x03])
     diffs, info = differential(
         0x1442C, {"a6": 0x30000, "_pokes": pokes},
-        lambda lib, buf: lib.func_1442c(buf, 0x30000))
+        lambda lib, buf: lib.cmd74_wrap(buf, 0x30000))
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
 
@@ -152,8 +152,8 @@ harness._lib.scene_mode_apply.argtypes = [_u8p, ctypes.c_uint32]
 harness._lib.scene_mode_apply.restype = ctypes.c_uint32
 harness._lib.scene_mode_draw.argtypes = [_u8p, ctypes.c_uint32]
 harness._lib.scene_mode_draw.restype = ctypes.c_uint32
-harness._lib.func_14602.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_14602.restype = None
+harness._lib.scene_mode_draw_wrap.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.scene_mode_draw_wrap.restype = None
 
 VBL_SITE = 0x1359A
 VBL_COUNTER = 0x1ACD4
@@ -291,5 +291,5 @@ def test_fun_14602_completo():
     pokes[0x1A570] = bytes([0x01])
     diffs, _ = differential(
         FUN_14602, {"a6": 0x30000, "_pokes": pokes},
-        lambda lib, buf: lib.func_14602(buf, 0x30000))
+        lambda lib, buf: lib.scene_mode_draw_wrap(buf, 0x30000))
     assert not diffs, report(diffs)

@@ -13,12 +13,12 @@ BACK = 0x88000
 _u8p = ctypes.POINTER(ctypes.c_uint8)
 harness._lib.draw_hint_icons.argtypes = [_u8p]
 harness._lib.draw_hint_icons.restype = None
-harness._lib.func_16514.argtypes = [_u8p]
-harness._lib.func_16514.restype = None
-harness._lib.func_164d4.argtypes = [_u8p]
-harness._lib.func_164d4.restype = None
-harness._lib.func_164f6.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32]
-harness._lib.func_164f6.restype = None
+harness._lib.hint_icons.argtypes = [_u8p]
+harness._lib.hint_icons.restype = None
+harness._lib.icon_state_a.argtypes = [_u8p]
+harness._lib.icon_state_a.restype = None
+harness._lib.icon_state_b.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32]
+harness._lib.icon_state_b.restype = None
 
 
 def _blit_desc(dest):
@@ -66,7 +66,7 @@ def test_fun_16514():
     for i in range(16):
         pokes[TABLE + i * 4] = DESC_REST.to_bytes(4, "big")
     diffs, _ = differential(0x16514, {"_pokes": pokes},
-                            lambda lib, buf: lib.func_16514(buf))
+                            lambda lib, buf: lib.hint_icons(buf))
     assert not diffs, report(diffs)
 
 
@@ -75,7 +75,7 @@ def test_fun_164d4():
         pokes = _table_common()
         pokes[0x1acc7] = bytes([mode])
         diffs, _ = differential(0x164D4, {"_pokes": pokes},
-                                lambda lib, buf: lib.func_164d4(buf))
+                                lambda lib, buf: lib.icon_state_a(buf))
         assert not diffs, f"mode={mode:#x}\n{report(diffs)}"
 
 
@@ -93,7 +93,7 @@ def test_fun_164f6():
         for i in range(0x40):
             pokes[TEXT_TABLE + 4 + i] = bytes([(0x10 + i) & 0xFF])
         diffs, _ = differential(0x164F6, {"a6": 0x30000, "d0": 1, "_pokes": pokes},
-                                lambda lib, buf: lib.func_164f6(buf, 0x30000, 1))
+                                lambda lib, buf: lib.icon_state_b(buf, 0x30000, 1))
         assert not diffs, f"mode={mode:#x}\n{report(diffs)}"
 
 
@@ -102,15 +102,15 @@ FUN_18C8E = 0x18C8E
 FUN_18CB2 = 0x18CB2
 FUN_18316 = 0x18316
 FUN_182F0 = 0x182F0
-harness._lib.func_18ce0.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32]
-harness._lib.func_18ce0.restype = None
-for _n in ("func_18c8e", "func_18cb2"):
+harness._lib.icon_anim_c.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32]
+harness._lib.icon_anim_c.restype = None
+for _n in ("icon_anim_a", "icon_anim_b"):
     getattr(harness._lib, _n).argtypes = [_u8p, ctypes.POINTER(ctypes.c_uint32)]
     getattr(harness._lib, _n).restype = None
-harness._lib.func_18316.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_18316.restype = None
-harness._lib.func_182f0.argtypes = [_u8p]
-harness._lib.func_182f0.restype = None
+harness._lib.icon_list_build.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.icon_list_build.restype = None
+harness._lib.icon_list_reset.argtypes = [_u8p]
+harness._lib.icon_list_reset.restype = None
 
 
 def test_fun_18ce0():
@@ -119,13 +119,13 @@ def test_fun_18ce0():
         for i in range(0x100):
             pokes[0x1a95c + i] = bytes([0x80 if i % 6 == 0 else (i * 3) & 0xFF])
         diffs, _ = differential(FUN_18CE0, {"a0": 0x1a95c, "d0": d0, "_pokes": pokes},
-                                lambda lib, buf, n=d0: lib.func_18ce0(buf, 0x1a95c, n))
+                                lambda lib, buf, n=d0: lib.icon_anim_c(buf, 0x1a95c, n))
         assert not diffs, f"d0={d0}\n{report(diffs)}"
 
 
 def test_fun_18c8e_18cb2():
-    for entry, fn in ((FUN_18C8E, harness._lib.func_18c8e),
-                      (FUN_18CB2, harness._lib.func_18cb2)):
+    for entry, fn in ((FUN_18C8E, harness._lib.icon_anim_a),
+                      (FUN_18CB2, harness._lib.icon_anim_b)):
         pokes = {0x1acd2: bytes([0x44]), 0x1acf7: bytes([0x55])}
         for base in (0x1a8f0, 0x1a95c, 0x1a9d4, 0x1aa3a):
             for i in range(0x100):
@@ -142,7 +142,7 @@ def test_fun_182f0_18316():
     for i in range(300):
         pokes[0x2741e + i] = bytes([(i * 5 + 7) & 0xFF])
     diffs, _ = differential(FUN_182F0, {"_pokes": pokes},
-                            lambda lib, buf: lib.func_182f0(buf))
+                            lambda lib, buf: lib.icon_list_reset(buf))
     assert not diffs, report(diffs)
 
 
@@ -182,11 +182,11 @@ def test_fun_18d28():
 
 FUN_164A4 = 0x164A4
 FUN_16460 = 0x16460
-harness._lib.func_164a4.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32,
+harness._lib.icon_table_entry.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32,
                                      ctypes.c_uint32]
-harness._lib.func_164a4.restype = ctypes.c_uint32
-harness._lib.func_16460.argtypes = [_u8p]
-harness._lib.func_16460.restype = None
+harness._lib.icon_table_entry.restype = ctypes.c_uint32
+harness._lib.icon_table.argtypes = [_u8p]
+harness._lib.icon_table.restype = None
 
 
 def _obj(addr, x0, x1, y0, y1, flags):
@@ -201,7 +201,7 @@ def test_fun_164a4():
         pokes[BACK + i] = bytes([(i * 5 + 3) & 0xFF])
     diffs, info = differential(
         FUN_164A4, {"a1": 0x3A556, "a2": TABLE, "a5": obj, "_pokes": pokes},
-        lambda lib, buf: lib.func_164a4(buf, 0x3A556, TABLE, obj))
+        lambda lib, buf: lib.icon_table_entry(buf, 0x3A556, TABLE, obj))
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a1"]
 
@@ -222,5 +222,5 @@ def test_fun_16460():
     for i in range(0x2000):
         pokes[BACK + i] = bytes([(i * 7 + 1) & 0xFF])
     diffs, _ = differential(FUN_16460, {"_pokes": pokes},
-                            lambda lib, buf: lib.func_16460(buf))
+                            lambda lib, buf: lib.icon_table(buf))
     assert not diffs, report(diffs)

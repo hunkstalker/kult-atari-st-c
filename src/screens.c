@@ -121,7 +121,7 @@ uint32_t screen_address_off(uint8_t *img, uint32_t d0, uint32_t d1) {
 
 /* FUN_000159bc @ 0x159bc: copy D3+1 rows of 16 bytes (4 longs) from A1, advancing
  * A1 by 16 a row, into A2 with a 0xa0 destination stride.  Pure image code. */
-void func_159bc(uint8_t *img, uint32_t a1, uint32_t a2, uint32_t d3) {
+void row_palette(uint8_t *img, uint32_t a1, uint32_t a2, uint32_t d3) {
     uint32_t a0 = a2;
     uint32_t n = d3 & 0xffff;
     do {
@@ -144,7 +144,7 @@ void func_1350c(uint8_t *img, uint32_t *a6) {
 
 /* FUN_00013522 @ 0x13522: como 0x1350c pero antes apila el A6 de retorno (a6+3) y el fin
  * de script actual ($1a4e0) en la pila de llamadas en 0x1a7d6. */
-void func_13522(uint8_t *img, uint32_t *a6) {
+void script_pop(uint8_t *img, uint32_t *a6) {
     uint32_t a1 = be32(img + A_CALL_STACK);
     uint32_t d0 = ((img[*a6 + 2] << 8) | img[*a6 + 1]) & 0xffff;
     wr32(img + a1 - 4, *a6 + 3);
@@ -154,7 +154,7 @@ void func_13522(uint8_t *img, uint32_t *a6) {
 }
 
 /* FUN_00013552 @ 0x13552: desapila de 0x1a7d6: restaura $1a4e0 y A6 (vuelve de 0x13522). */
-void func_13552(uint8_t *img, uint32_t *a6) {
+void script_call(uint8_t *img, uint32_t *a6) {
     uint32_t a1 = be32(img + A_CALL_STACK);
     wr32(img + A_TEMPL_PTR, be32(img + a1));
     *a6 = be32(img + a1 + 4);
@@ -180,7 +180,7 @@ void load_named_screen(uint8_t *img) {
 
 /* FUN_000121b6 @ 0x121b6: copia 0x1f40 longs de screen_ptr_a a screen_ptr_b (la inversa
  * de copy_screen / 0x121c6). */
-void func_121b6(uint8_t *img) {
+void copy_screen_rev(uint8_t *img) {
     uint32_t a1 = be32(img + A_SCREEN_PTR_B);
     uint32_t a0 = be32(img + A_SCREEN_PTR_A);
     for (uint32_t n = 0x1f40; n != 0; n--) {
@@ -195,7 +195,7 @@ void func_121b6(uint8_t *img) {
  * y a1 = origen. */
 void blit_mask_setup(uint8_t *img, uint32_t d2, uint32_t d7);
 void blit_mask_row(uint8_t *img, uint32_t a0, uint32_t a1);
-void func_12190(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7) {
+void mask_row_blit(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7) {
     blit_mask_setup(img, d2, d7);
     uint32_t n = (d3 - 1) & 0xffff;
     a0 = (a0 - 0x8000) & 0xffffffffu;
@@ -209,7 +209,7 @@ void func_12190(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7
 
 /* FUN_00016b76 @ 0x16b76: copia D3+1 filas de (D2+1)*8 bytes desde A3-0x8000 a A3, con
  * stride de destino 0xa0. */
-void func_16b76(uint8_t *img, uint32_t a3, uint32_t d2, uint32_t d3) {
+void row_blit(uint8_t *img, uint32_t a3, uint32_t d2, uint32_t d3) {
     uint32_t a2 = a3;
     for (uint32_t ro = d3 & 0xffff;; ro = (ro - 1) & 0xffff) {
         uint32_t a0 = a2;
@@ -228,7 +228,7 @@ void func_16b76(uint8_t *img, uint32_t a3, uint32_t d2, uint32_t d3) {
  * descriptor 0xd8f0+A5 sobre el destino A3: por grupo lee 4 words (movem.w), calcula
  * la mascara ~(d4|d5|d6|d7) y escribe ((dst & mask) | word) en 4 words consecutivos.
  * Destino avanza 0xa0 por fila (D3+1 filas), fuente 0x40. */
-void func_16b2e(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t a3, uint32_t a5) {
+void or_rows(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t a3, uint32_t a5) {
     uint32_t a1 = A_SAVE_DESC + a5;
     uint32_t a2 = a3;
     uint32_t groups = d2 & 0xffff;
@@ -275,7 +275,7 @@ static void screen_copies(uint8_t *img, uint32_t a3) {
     for (uint32_t d6 = 0x34;; d6 = (d6 - 1) & 0xffff) {
         uint32_t a1 = 0x2705e + (d7w & 0xffff);
         d7w = ((d7w << 16) | (d7w >> 16));
-        func_159bc(img, a1, a2, 0x1d);
+        row_palette(img, a1, a2, 0x1d);
         if (img[0x1a573] != 0)
             wait_vbl(img);
         /* El original suma con `add.w`: el acarreo NO pasa a la palabra alta,
@@ -287,20 +287,20 @@ static void screen_copies(uint8_t *img, uint32_t a3) {
     }
     a2 = a3 + 0x7070;
     for (uint32_t d6 = 8;; d6 = (d6 - 1) & 0xffff) {
-        func_159bc(img, 0x2705e, a2, 8);
+        row_palette(img, 0x2705e, a2, 8);
         a2 += 0x10;
         if (d6 == 0)
             break;
     }
 }
 
-void func_15944(uint8_t *img) {
+void copy_rows(uint8_t *img) {
     uint32_t a3 = be32(img + A_SCREEN_PTR_B);
     img[0x1a573] = 0;
     screen_copies(img, a3);
 }
 
-void func_15934(uint8_t *img) {
+void copy_rows_a(uint8_t *img) {
     img[0x1a573] = 1;
     screen_copies(img, be32(img + A_SCREEN_PTR_A));
 }
@@ -308,11 +308,11 @@ void func_15934(uint8_t *img) {
 /* FUN_00018a30 @ 0x18a30: avanza la pista (0x18a10), limpia 0x500 bytes en
  * screen_ptr_a-0x500 y alterna el Setscreen a esa zona y de vuelta 5 veces (2 VBLs
  * por vuelta); al final copia 0x200 bytes desde screen_ptr_a+0x7b00 a la zona. */
-void func_18a10(uint8_t *img);
+void track_advance(uint8_t *img);
 void wait_vbl(uint8_t *img);
 
-void func_18a30(uint8_t *img) {
-    func_18a10(img);
+void screen_clean(uint8_t *img) {
+    track_advance(img);
     uint32_t a5 = be32(img + A_SCREEN_PTR_A);
     uint32_t a4 = (a5 - 0x500) & 0xffffffffu;
     {
@@ -355,10 +355,10 @@ void func_13bc2(uint8_t *img, uint32_t d2in, uint32_t d3in, uint32_t d7, uint32_
 void set_palette(uint8_t *img);
 void copy_screen(uint8_t *img);
 void wait_vbl(uint8_t *img);
-void func_18f8e(uint8_t *img, uint32_t d4);
-void func_182f0(uint8_t *img);
+void sound_play_a(uint8_t *img, uint32_t d4);
+void icon_list_reset(uint8_t *img);
 
-uint32_t func_18a98(uint8_t *img, uint32_t a6) {
+uint32_t attract(uint8_t *img, uint32_t a6) {
     img[0x1ad0d] = 5;
     uint32_t a1 = be32(img + A_SCREEN_PTR_B);
     for (uint32_t d1 = 0x1f3f;; d1 = (d1 - 1) & 0xffff) {
@@ -470,7 +470,7 @@ uint32_t func_18a98(uint8_t *img, uint32_t a6) {
                 if (d7d == 0)
                     break;
             }
-            func_18f8e(img, 0xf0);
+            sound_play_a(img, 0xf0);
         }
 
         {
@@ -519,6 +519,6 @@ uint32_t func_18a98(uint8_t *img, uint32_t a6) {
             break;
     }
 
-    func_182f0(img);
+    icon_list_reset(img);
     return a6 + 1;
 }

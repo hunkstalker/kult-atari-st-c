@@ -210,7 +210,7 @@ TB_TABLE = 0x3EC8A
 ROOM_SIZE = 0x291C + 0x7D00 * 2
 
 for _n, _args in (("load_scena", [_u8p]), ("save_scena", [_u8p]),
-                  ("func_15594", [_u8p]), ("func_155c4", [_u8p])):
+                  ("load_room", [_u8p]), ("save_room", [_u8p])):
     getattr(harness._lib, _n).argtypes = _args
     getattr(harness._lib, _n).restype = ctypes.c_int32
 
@@ -316,7 +316,7 @@ def test_fun_15594_carga():
     pokes.update(_textbox_pokes(0xAA))
     diffs, _ = differential(
         FUN_15594, {"_pokes": pokes},
-        lambda lib, buf: lib.func_15594(buf))
+        lambda lib, buf: lib.load_room(buf))
     assert not diffs, report(diffs)
 
 
@@ -326,7 +326,7 @@ def test_fun_15594_error():
     pokes.update(_textbox_pokes(0x18F))
     diffs, _ = differential(
         FUN_15594, {"_pokes": pokes},
-        lambda lib, buf: lib.func_15594(buf))
+        lambda lib, buf: lib.load_room(buf))
     assert not diffs, report(diffs)
 
 
@@ -339,5 +339,5 @@ def test_fun_155c4_guardado():
     pokes.update(_textbox_pokes(0xAA))
     diffs, _ = differential(
         FUN_155C4, {"_pokes": pokes},
-        lambda lib, buf: lib.func_155c4(buf))
+        lambda lib, buf: lib.save_room(buf))
     assert not diffs, report(diffs)
