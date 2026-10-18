@@ -13,7 +13,8 @@
 #include "addrs.h"
 #include "sched.h"
 
-/* 0x13594 — espera de VBL. */
+/* 0x13594 — espera de VBL. (El original deja D0 con el valor anterior del
+ * contador; ningún llamante lo consume, así que el out-param no se modela.) */
 void wait_vbl(uint8_t *img) {
     uint8_t prev = img[A_DAT_1ACD4];
     while (sched_poll8(img, A_DAT_1ACD4, 0x1359a) == prev)
