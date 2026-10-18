@@ -407,13 +407,15 @@ harness._lib.game_loop.argtypes = [_u8p, ctypes.c_uint32]
 harness._lib.game_loop.restype = None
 
 
-def test_game_loop():
+def _f101be_pokes(ad0b=0x01, ab60=0, acb0=0, acae=0):
     pokes = {
         0x1a4d2: (1).to_bytes(2, "big"),
         0x1acd4: bytes([0x00]),
         0x1acd2: bytes([0x00]),
-        0x1ad0b: bytes([0x01]),
-        0x1ab60: (0).to_bytes(2, "big"),
+        0x1ad0b: bytes([ad0b]),
+        0x1ab60: ab60.to_bytes(2, "big"),
+        0x1acb0: acb0.to_bytes(2, "big"),
+        0x1acae: acae.to_bytes(2, "big"),
         0x1a526: (0).to_bytes(2, "big"),
         0x1a44f: bytes([0x00]),
         0x1a456: bytes([0x00]),
@@ -447,6 +449,26 @@ def test_game_loop():
             (4).to_bytes(4, "big") + bytes(range(0x20, 0x30)))
     for i, b in enumerate(desc):
         pokes[0x32000 + i] = bytes([b])
+    return pokes
+
+
+def test_game_loop():
+    pokes = _f101be_pokes(ad0b=0x01)
+    sched = [{"pc": 0x136b0, "nth": 1, "addr": 0x1a44f, "width": 1, "value": 0x00},
+             {"pc": 0x1359a, "nth": 1, "addr": 0x1acd4, "width": 1, "value": 0x01}]
+    diffs, _ = differential(
+        0x101BE, {"_pokes": pokes},
+        lambda lib, buf: lib.game_loop(buf, harness.emu.STACK_TOP),
+        schedule=sched, wait_sites=[0x136b0, 0x1359a])
+    assert not diffs, report(diffs)
+
+
+def test_game_loop_timer_b():
+    """H-1: con 1ad0b=0 y ACB0 >= AB60 el original va a lab_310 (bcc) sin
+    despachar el comando B; con ACB0 < AB60 lo despacha. El C lo tenia invertido."""
+    # ACB0 >= AB60 -> lab_310: el comando B (0xa010, que es un no-op) NO se
+    # despacha. El C viejo (<) lo despachaba y necesitaba esperas.
+    pokes = _f101be_pokes(ad0b=0x00, ab60=0x20, acb0=0x30, acae=0xA010)
     sched = [{"pc": 0x136b0, "nth": 1, "addr": 0x1a44f, "width": 1, "value": 0x00},
              {"pc": 0x1359a, "nth": 1, "addr": 0x1acd4, "width": 1, "value": 0x01}]
     diffs, _ = differential(
@@ -1315,6 +1337,21 @@ def _f1834a_pokes():
 def test_fun_1834a():
     for d5 in (0x64, 0x10, 0x1E, 0x1D):
         pokes = _f1834a_pokes()
+        diffs, _ = differential(
+            FUN_1834A, {"d5": d5, "_pokes": pokes},
+            lambda lib, buf, v=d5: lib.icon_scale_loop(buf, 0, v),
+            schedule=_vbl_k(1), wait_sites=[VBL_SITE])
+        assert not diffs, f"d5={d5:#x}\n{report(diffs)}"
+
+
+def test_fun_1834a_pantalla_cero():
+    """H-3: en el tramo >=0xc00 el original OR-ea la mascara tambien en +4
+    (l_01840a cae a l_018412). Con pantalla a cero el patrón del test anterior
+    enmascaraba la diferencia."""
+    pokes = _f1834a_pokes()
+    for i in range(0x10000):
+        pokes[0x90000 + i] = bytes([0])
+    for d5 in (0x64, 0x10):
         diffs, _ = differential(
             FUN_1834A, {"d5": d5, "_pokes": pokes},
             lambda lib, buf, v=d5: lib.icon_scale_loop(buf, 0, v),
@@ -2465,6 +2502,19 @@ def test_fun_17a1a():
         pokes = _f17a1a_pokes(**kw)
         if name == "sind1":
             pokes[0x1AD03] = bytes([0x01])
+        diffs, info = differential(
+            FUN_17A1A, {"a6": 0x52000, "_pokes": pokes},
+            lambda lib, buf: lib.view_change(buf, 0x52000),
+            schedule=_vbl_k(11), wait_sites=[VBL_SITE], max_insns=2_000_000)
+        assert not diffs, f"{name}\n{report(diffs)}"
+        assert info["ret"] == info["regs"]["a6"], name
+    # H-2: la tabla de acciones se indexa por (obj[2]-0x2a), no por 0x1a69d directo;
+    # los casos "cuatro"/"cinco" de arriba escribian en 0x1a69d+0 y no llegaban a
+    # action==4/5. Aqui se pinta la entrada real (obj2=0x40 -> offset 0x16).
+    for name, entry, acd7 in (("act4_bajo", 4, 0x10), ("act4_alto", 4, 0x64),
+                              ("act5", 5, 0x10)):
+        pokes = _f17a1a_pokes(obj2=0x40, obj3=0x10, acd7=acd7)
+        pokes[0x1A69D + (0x40 - 0x2A)] = bytes([entry])
         diffs, info = differential(
             FUN_17A1A, {"a6": 0x52000, "_pokes": pokes},
             lambda lib, buf: lib.view_change(buf, 0x52000),

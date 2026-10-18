@@ -618,12 +618,21 @@ uint32_t view_change(uint8_t *img, uint32_t script) {
     }
     x = 1;
     y = img[A_DAT_1ACD7];
-    if (action == 2 || action == 4) {
-        uint32_t lim = (action == 2) ? 0xcd : 0x64;
-        if (y >= lim) {
+    if (action == 2) {
+        if (y >= 0xcd) {
             x = 0x51;
             if (pal_next_byte(img) >= 0x80)
                 x = 0x52;
+        }
+    } else if (action == 4) {
+        /* action==4: 0x51/0x52 solo si y < 0x64; si no, el original cae en el
+         * defecto x=2 (l_017be8), no deja x=1. */
+        if (y < 0x64) {
+            x = 0x51;
+            if (pal_next_byte(img) >= 0x80)
+                x = 0x52;
+        } else {
+            x = 2;
         }
     } else if (action == 3) {
         if (y >= 0x80) {
@@ -635,6 +644,8 @@ uint32_t view_change(uint8_t *img, uint32_t script) {
             if (pal_next_byte(img) >= 0x33)
                 x = 0x92;
         }
+    } else if (action != 0 && action != 1) {
+        x = 2;
     }
     img[0x1ad02] = (uint8_t)x;
     noop_160c0(img);
@@ -1074,9 +1085,11 @@ void icon_scale_loop(uint8_t *img, uint32_t base, uint32_t pass) {
             wr16(img + desc + 8, scale);
             scale = (scale + 0x10) & 0xffff;
             scale = (0xcffffu / scale) & 0xffff;                   /* divu.w */
-            int32_t p1 = (int32_t)(int16_t)be16(img + desc + 4) * (int32_t)scale;
+            /* `muls.w` del original: AMBOS factores se leen como word con signo
+             * (tambien el cociente de divu, que puede ser >= 0x8000). */
+            int32_t p1 = (int32_t)(int16_t)be16(img + desc + 4) * (int32_t)(int16_t)scale;
             uint32_t x = ((uint32_t)p1 >> 16) & 0xffff;     /* swap + move.w */
-            int32_t p2 = (int32_t)(int16_t)be16(img + desc + 6) * (int32_t)scale;
+            int32_t p2 = (int32_t)(int16_t)be16(img + desc + 6) * (int32_t)(int16_t)scale;
             uint32_t y = ((uint32_t)p2 >> 16) & 0xffff;
             x = (x + 0xa0) & 0xffff;
             if (!((int16_t)x < 0 || x >= 0x140)) {
@@ -1100,9 +1113,9 @@ void icon_scale_loop(uint8_t *img, uint32_t base, uint32_t pass) {
                         wr16(img + addr2 + 2, be16(img + addr2 + 2) | m);
                         wr16(img + addr2 + 6, be16(img + addr2 + 6) | m);
                     }
+                    /* El original OR-ea +4 tambien en el tramo >=0xc00 (cae de
+                     * l_01840a a l_018412); solo el tramo 0x600..0xbff termina. */
                     if (vb >= 0x600 && vb < 0xc00)
-                        goto next;
-                    if (vb >= 0xc00)
                         goto next;
                     wr16(img + addr2 + 4, be16(img + addr2 + 4) | m);
                 } else {
@@ -2153,7 +2166,9 @@ void game_loop(uint8_t *img, uint32_t stack) {
             if (be16(img + A_THE_COMMAND) != 0)
                 goto lab_2cc;
         }
-        if (be16(img + A_DAT_1ACB0) < be16(img + A_DAT_1AB60))
+        /* B: el original salta a lab_310 si ACB0 >= AB60 (bcc); el comando AE se
+         * despacha cuando ACB0 < AB60 (temporizador B ya vencido). */
+        if (be16(img + A_DAT_1ACB0) >= be16(img + A_DAT_1AB60))
             goto lab_310;
         wr16(img + A_THE_COMMAND, be16(img + A_DAT_1ACAE));
         if (be16(img + A_THE_COMMAND) == 0)
