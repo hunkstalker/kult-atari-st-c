@@ -167,16 +167,16 @@ int32_t load_scena(uint8_t *img) {
     if (gemdos_fopen(img) < 0)
         goto error;
     wr32(img + A_LOAD_LENGTH, 0x291c);
-    wr32(img + A_LOAD_BUFFER, 0x1a752);
+    wr32(img + A_LOAD_BUFFER, A_CLEAR_BUF);
     if (gemdos_fread(img) != 0x291c)
         goto error;
     wr32(img + A_LOAD_BUFFER, be32(img + A_SCREEN_PTR_B));
-    wr32(img + A_LOAD_LENGTH, 32000);
-    if (gemdos_fread(img) != 32000)
+    wr32(img + A_LOAD_LENGTH, 0x7d00);
+    if (gemdos_fread(img) != 0x7d00)
         goto error;
     copy_screen(img);
     set_palette_current(img);
-    if (gemdos_fread(img) != 32000)
+    if (gemdos_fread(img) != 0x7d00)
         goto error;
     if (gemdos_fclose(img) < 0)
         goto error;
@@ -203,15 +203,15 @@ int32_t save_scena(uint8_t *img) {
     if (gemdos_fcreate(img) < 0)
         goto error;
     wr32(img + A_LOAD_LENGTH, 0x291c);
-    wr32(img + A_LOAD_BUFFER, 0x1a752);
+    wr32(img + A_LOAD_BUFFER, A_CLEAR_BUF);
     if (gemdos_fwrite(img) != 0x291c)
         goto error;
     wr32(img + A_LOAD_BUFFER, be32(img + A_SCREEN_PTR_A));
-    wr32(img + A_LOAD_LENGTH, 32000);
-    if (gemdos_fwrite(img) != 32000)
+    wr32(img + A_LOAD_LENGTH, 0x7d00);
+    if (gemdos_fwrite(img) != 0x7d00)
         goto error;
     wr32(img + A_LOAD_BUFFER, be32(img + A_SCREEN_PTR_B));
-    if (gemdos_fwrite(img) != 32000)
+    if (gemdos_fwrite(img) != 0x7d00)
         goto error;
     if (gemdos_fclose(img) < 0)
         goto error;
@@ -234,7 +234,7 @@ uint32_t pal_next_byte(uint8_t *);
 
 /* 0x1682a — ctx: bucle A:CLEAR.BIN + the_command=0x918e */
 void reset_clear(uint8_t *img) {
-    wr32(img + A_LOAD_BUFFER, 0x1a752);
+    wr32(img + A_LOAD_BUFFER, A_CLEAR_BUF);
     wr32(img + A_LOAD_LENGTH, 0x291c);
     wr32(img + A_CUR_FILENAME, A_CLEAR_NAME);
     for (;;) {
