@@ -83,8 +83,12 @@ mapa (el harness necesita `dlsym`). Detalle en `docs/VISIBILIDAD.md`.
 
 ## Pendiente / siguiente
 
-- **Futuro (fase 3 del PLAN):** re-aplicar sobre este C limpio las mejoras de
-  kult-port (guardado por ranuras, textos ES, overlay F1, etc.).
+1. **Revisión del C** (antes de la fase 3): auditar el C ya escrito y renombrado
+   según **`docs/REVISION.md`** (fidelidad vs ASM, nombres/comentarios,
+   legibilidad, cobertura de tests). Se hace en sesión nueva y limpia.
+2. **Futuro (fase 3 del PLAN):** re-aplicar sobre este C limpio las mejoras de
+   kult-port (guardado por ranuras, textos ES, overlay F1, etc.), **solo tras
+   cerrar la revisión**.
 - No hay deuda de legibilidad ni de comportamiento conocida. `loop.c` y los
   módulos grandes están documentados y renombrados.
 - Trampas conocidas del oráculo/kit: `docs/REFERENCIA_F4.md` (sección final).

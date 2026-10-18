@@ -43,8 +43,8 @@ tools/gen_mapa.py     genera docs/mapa/ desde src/, names.txt y test/
 tools/regscan.py      mide la deuda de legibilidad por módulo (docs/LEGIBILIDAD.md)
 reference/test_f4/    469 pruebas del intento anterior (referencia, no se ejecutan)
 work/                 PRG original (gitignored) + names.txt (registro de nombres)
-docs/                 ESTADO, PLAN, PROMPT_SESION, REFERENCIA_F4, LEGIBILIDAD,
-                      VISIBILIDAD, mapa/ (fichas por módulo)
+docs/                 ESTADO, PLAN, PROMPT_SESION, REVISION, REFERENCIA_F4,
+                      LEGIBILIDAD, VISIBILIDAD, mapa/ (fichas por módulo)
 ```
 
 ## Estado

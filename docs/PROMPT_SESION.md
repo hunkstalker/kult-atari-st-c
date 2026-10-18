@@ -35,9 +35,12 @@ cerradas.
 en verde. Si añades un global, edítalo en `work/names.txt` y corre `make addrs`;
 si tocas `src/`/`test/`, corre `make mapa`.
 
-**Siguiente (fase 3 del PLAN):** re-aplicar sobre este C limpio las mejoras de
-kult-port (guardado por ranuras, textos ES, overlay F1, etc.). No hay deuda
-conocida de comportamiento ni de legibilidad.
+**Siguiente:** **revisar el C ya escrito y renombrado** antes de re-aplicar nada
+de kult-port. El plan y el prompt de arranque están en **`docs/REVISION.md`**
+(cuatro ejes: fidelidad vs ASM, nombres/comentarios, legibilidad, cobertura de
+tests; prioridad P0 primero). Solo tras cerrar esa revisión se abre la fase 3
+(mejoras de kult-port). No hay deuda conocida de comportamiento ni de
+legibilidad.
 
 Reglas de trabajo (ver `/app/kult-port/AGENTS.md`): reproducir/medir antes de
 tocar, una hipótesis un cambio, toda corrección deja test, commit al completar
