@@ -87,17 +87,23 @@ void set_palette_current(uint8_t *);
  * 0x1a10a[$1acf4] (decrementando componentes, VBL + Setpalette por pasada) hasta
  * igualarlo. */
 uint32_t advance_text_entry(uint8_t *, uint32_t, uint32_t);
+void sound_play_a(uint8_t *, uint32_t);
 void sound_play_b(uint8_t *, uint32_t);
 void set_palette(uint8_t *);
 void wait_vbl(uint8_t *);
 void run_command_keep_sp(uint8_t *, uint32_t);
 
-/* 0x16310 — (cmd idx 9): umbral 2, ciclo de paleta 0x16310 y flag $1ad0f. */
+/* 0x16310 — ciclo de paleta (lo llama el comando idx 9, 0x14f5e): guarda la
+ * paleta en A_SAVE_DESC, gira los 5 colores del buffer (tope 7/0x70/0x700) hasta
+ * que una pasada no cambie (VBL + Setpalette por pasada; el busy-wait de 65536
+ * del original no se reconstruye, no tiene efecto observable), despacha $1abfa y
+ * acerca los 5 colores al target 0x1a10a[$1acf4]. Al entrar suena 0x17 con
+ * sound_play_b (0x18f98) y al pasar a la fase 2 con sound_play_a (0x18f8e). */
 void palette_cycle(uint8_t *img) {
     sound_play_b(img, 0x17);
     {
         uint32_t p = be32(img + A_PALETTE_PTR);
-        uint32_t buf = 0xd8f0;
+        uint32_t buf = A_SAVE_DESC;
         for (int i = 0; i < 0x10; i++) {
             wr16(img + buf, be16(img + p));
             p += 2;
@@ -122,26 +128,23 @@ void palette_cycle(uint8_t *img) {
         if (changed == 0)
             break;
         wait_vbl(img);
-        {
-            uint32_t spin = 0xffff;
-            while (spin != 0xffff)
-                spin = (spin - 1) & 0xffff;
-        }
+        /* El original hace un busy-wait de 65536 iteraciones (`dbra d0` con
+         * d0=0xffff) antes de set_palette; no tiene efecto observable. */
         set_palette(img);
     }
-    sound_play_b(img, 0x17);
+    sound_play_a(img, 0x17);
     wr16(img + A_THE_COMMAND, be16(img + A_DAT_1ABFA));
     run_command_keep_sp(img, 0);
     for (;;) {                                   /* fase 2: acercar al target */
         uint32_t p = A_PAL_TABLE + ((uint32_t)img[A_PAL_INDEX_CUR] * 0xa);
-        uint32_t buf = 0xd8f2;
+        uint32_t buf = A_SAVE_DESC + 2;
         for (int i = 0; i <= 4; i++) {
             wr16(img + buf, be16(img + p));
             p += 2;
             buf += 2;
         }
         p = be32(img + A_PALETTE_PTR) + 2;
-        buf = 0xd8f2;
+        buf = A_SAVE_DESC + 2;
         uint32_t changed = 0;
         for (int i = 0; i <= 4; i++) {
             uint32_t color = be16(img + p);

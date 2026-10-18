@@ -37,5 +37,5 @@ origen), los globales `A_*` que toca y las pruebas que la cubren.
 | `textblit.c` | 26 | 10 | 23 | [textblit](textblit.md) |
 | `textbox.c` | 7 | 17 | 6 | [textbox](textbox.md) |
 | `textform.c` | 6 | 9 | 6 | [textform](textform.md) |
-| `video.c` | 5 | 12 | 1 | [video](video.md) |
+| `video.c` | 5 | 13 | 5 | [video](video.md) |
 | `vm.c` | 3 | 2 | 3 | [vm](vm.md) |
