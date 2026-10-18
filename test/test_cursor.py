@@ -19,12 +19,12 @@ DEST = 0x78000
 SAVE_BUF = 0x199ce
 
 
-def _draw_pokes(hotspot):
+def _draw_pokes(hotspot, cx=100, cy=50, clx=0, cly=0):
     return {
-        0x1a450: (100).to_bytes(2, "big"),         # cursor x
-        0x1a452: (50).to_bytes(2, "big"),          # cursor y
-        0x19700: (0).to_bytes(2, "big"),           # clip x
-        0x19702: (0).to_bytes(2, "big"),           # clip y
+        0x1a450: cx.to_bytes(2, "big"),            # cursor x
+        0x1a452: cy.to_bytes(2, "big"),            # cursor y
+        0x19700: clx.to_bytes(2, "big"),           # clip x
+        0x19702: cly.to_bytes(2, "big"),           # clip y
         0x1a48a: bytes([hotspot]),                 # hotspot flag
         0x199ca: (0x30000).to_bytes(4, "big"),     # sprite ptr
         0x1a45e: (0x78000).to_bytes(4, "big"),     # screen_ptr_a
@@ -38,6 +38,20 @@ def test_cursor_draw():
         diffs, _ = differential(CURSOR_DRAW, {"_pokes": _draw_pokes(hs)},
                                 lambda lib, buf: lib.cursor_draw(buf))
         assert not diffs, f"hotspot={hs}\n{report(diffs)}"
+
+
+def test_cursor_draw_fases_y_clip():
+    """Cubre las 16 fases de píxel (rotación ror/swap) y el recorte cuando el
+    cursor cae por encima/izquierda del clip (dx/dy = 0)."""
+    for cx in (0, 1, 7, 8, 15):                    # fases 0..15
+        for hs in (0, 1):
+            diffs, _ = differential(CURSOR_DRAW, {"_pokes": _draw_pokes(hs, cx=cx)},
+                                    lambda lib, buf: lib.cursor_draw(buf))
+            assert not diffs, f"cx={cx} hotspot={hs}\n{report(diffs)}"
+    diffs, _ = differential(CURSOR_DRAW,
+                            {"_pokes": _draw_pokes(1, cx=10, cy=10, clx=40, cly=30)},
+                            lambda lib, buf: lib.cursor_draw(buf))
+    assert not diffs, f"clip\n{report(diffs)}"
 
 
 def test_cursor_restore():
