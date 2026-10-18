@@ -9,8 +9,9 @@
  *   0xfc  -> XBIOS Supexec (FUN_00018fa4); no-op con el bypass; A6 += 1
  *   otro  -> handler del motor de sprites 0x15bde, índice = byte & 7
  *
- * Los 8 handlers (`0x15a90`..) caen al motor `0x15bde` y quedan PENDIENTES; los tests
- * de este primer corte usan solo 0xfe/0xfd/0xfc (ver src/anim.c en el TODO).
+ * Los 8 handlers (0x15a90 select, 0x15b94/0x15ba6/0x15bb2/0x15bbc/0x15bcc y el banco
+ * 0x15abe) fijan los globales del elemento y caen al motor; todos implementados y con
+ * test. `0x15a90` es `anim_bank_select`, no un handler.
  */
 #include <stdint.h>
 #include <stdlib.h>
@@ -69,8 +70,10 @@ void anim_restore(uint8_t *img) {
 void anim_counter(uint8_t *img, uint32_t x, uint32_t w, uint32_t h,
                  uint32_t dx, uint32_t dy, uint32_t src,
                  uint32_t *x_out, uint32_t *w_out, uint32_t *h_out, uint32_t *src_out) {
-    uint32_t flags = img[A_ANIM_1A574] & 7;
-    if (flags != 7) {
+    /* El original compara el BYTE completo (`cmpi.b #$7,$1a574`), no `&7`; con
+     * bits altos (0x0f..) no toma el atajo rts y ejecuta la rama de recorte. */
+    uint32_t flags = img[A_ANIM_1A574];
+    if ((uint8_t)flags != 7) {
         uint32_t count = be16(img + A_ANIM_1A46E);
         if (flags & 4) {
             if (count != 0) {
@@ -227,14 +230,18 @@ static uint32_t anim_engine(uint8_t *img, uint32_t script) {
     img[A_ANIM_1A574] = (uint8_t)(hdr & 7);
     uint32_t blocks = hdr >> 3;
     uint32_t script_saved = script;                 /* el original salva A6/D6 por bloque (movem) */
-    for (uint32_t b = 0; b < blocks; b++) {
+    /* Los dos bucles son `dbra` do-while: con 0 ejecutan 65536 iteraciones (igual
+     * que el original; el dato real siempre trae blocks>=1 y count>=1). */
+    uint32_t b = (blocks - 1) & 0xffff;
+    do {
         uint32_t bh = img[script++];
         uint32_t w = (bh & 0xfff8) >> 2;
         wr16(img + A_ANIM_1A470, (uint16_t)w);
         img[A_ANIM_1A577] = (uint8_t)(w >> 1);
         wr16(img + A_ANIM_1A56A, 0x1f4);
         uint32_t count = bh & 7;
-        for (uint32_t i = 0; i < count; i++) {
+        uint32_t i = (count - 1) & 0xffff;
+        do {
             uint32_t code = img[script++];
             anim_bank_select(img, code);
             uint32_t off = code & 7;
@@ -267,9 +274,11 @@ static uint32_t anim_engine(uint8_t *img, uint32_t script) {
                 uint8_t t = img[script];
                 return script + 1u + (t & 7);
             }
-        }
+            i = (i - 1) & 0xffff;
+        } while (i != 0xffff);
         script = script_saved;
-    }
+        b = (b - 1) & 0xffff;
+    } while (b != 0xffff);
     uint8_t t = img[script];
     return script + 1u + (t & 7);
 }
@@ -343,9 +352,9 @@ void elem_blit_rev(uint8_t *img, uint32_t dest, uint32_t src, uint32_t cols_in, 
 
 /* FUN_00015abe @ 0x15abe (handler idx 0): limpia el banco de sprites, elige la
  * entrada `idx` de la tabla 0x27fe2 (walk_entry), copia sus 2 primeros bytes como
- * cabecera del banco y, por cada subentrada de 3 bytes [idx][x_hi|x_flag][x_lo],
- * toma el bitmap idx de la tabla 0x28ad2 y lo blitea (0x12ad6/0x12b04 según el bit7
- * del byte alto del offset). */
+ * cabecera del banco y, por cada subentrada de 3 bytes [idx][x_lo][x_hi|flag]
+ * (offset = ((s[2]&0x7f)<<8)|s[1]), toma el bitmap idx de la tabla 0x28ad2 y lo
+ * blitea (0x12ad6/0x12b04 según el bit7 de s[2]). */
 
 
 uint32_t anim_bank_build(uint8_t *img, uint32_t script) {

@@ -1,6 +1,6 @@
 # anim.c
 
-anim.c — FUN_000159d2 @ 0x159d2: intérprete de animación.  Lee una entrada de la tabla A_ANIM_TABLE (0x23ee8, formato [u8 len][data]) elegida por A6[1] (1-based) con `walk_entry` (0x12950), y recorre sus bytes hasta el fin de la entrada (`$1a4b6`):  0xfe  -> $1a47a = sign_ext8(A6[1]); $1a47c = sign_ext8(A6[2]); A6 += 3 0xfd  -> wrappers de sonido FUN_00018f8e/0x98; no-op con el bypass `$1ab4f != 0` 0xfc  -> XBIOS Supexec (FUN_00018fa4); no-op con el bypass; A6 += 1 otro  -> handler del motor de sprites 0x15bde, índice = byte & 7  Los 8 handlers (`0x15a90`..) caen al motor `0x15bde` y quedan PENDIENTES; los tests de este primer corte usan solo 0xfe/0xfd/0xfc (ver src/anim.c en el TODO). 
+anim.c — FUN_000159d2 @ 0x159d2: intérprete de animación.  Lee una entrada de la tabla A_ANIM_TABLE (0x23ee8, formato [u8 len][data]) elegida por A6[1] (1-based) con `walk_entry` (0x12950), y recorre sus bytes hasta el fin de la entrada (`$1a4b6`):  0xfe  -> $1a47a = sign_ext8(A6[1]); $1a47c = sign_ext8(A6[2]); A6 += 3 0xfd  -> wrappers de sonido FUN_00018f8e/0x98; no-op con el bypass `$1ab4f != 0` 0xfc  -> XBIOS Supexec (FUN_00018fa4); no-op con el bypass; A6 += 1 otro  -> handler del motor de sprites 0x15bde, índice = byte & 7  Los 8 handlers (0x15a90 select, 0x15b94/0x15ba6/0x15bb2/0x15bbc/0x15bcc y el banco 0x15abe) fijan los globales del elemento y caen al motor; todos implementados y con test. `0x15a90` es `anim_bank_select`, no un handler. 
 
 ## Funciones
 
@@ -13,7 +13,7 @@ anim.c — FUN_000159d2 @ 0x159d2: intérprete de animación.  Lee una entrada d
 | `0x12b40` | `bit_permute_byte` | FUN_00012b40 @ 0x12b40: permutación de bits de un byte (D1 -> D6), usada por el blitter 0x12b04 (orientación invertida). | test_anim |
 | `0x12ad6` | `elem_blit` | FUN_00012ad6 @ 0x12ad6: blitter de bytes directo (D2+1 columnas x D3+1 filas). | test_anim |
 | `0x12b04` | `elem_blit_rev` | FUN_00012b04 @ 0x12b04: variante invertida (permuta el byte con 0x12b40 y escribe hacia atrás desde A0+2*D2). | test_anim |
-| `0x15abe` | `anim_bank_build` | FUN_00015abe @ 0x15abe (handler idx 0): limpia el banco de sprites, elige la entrada `idx` de la tabla 0x27fe2 (walk_entry), copia sus 2 primeros bytes como cabecera del banco y, por cada subentrada de 3 bytes [idx][x_hi|x_flag][x_lo], toma el bitmap idx de la tabla 0x28ad2 y lo blitea (0x12ad6/0x12b04 según el bit7 del byte alto del offset). | test_anim |
+| `0x15abe` | `anim_bank_build` | FUN_00015abe @ 0x15abe (handler idx 0): limpia el banco de sprites, elige la entrada `idx` de la tabla 0x27fe2 (walk_entry), copia sus 2 primeros bytes como cabecera del banco y, por cada subentrada de 3 bytes [idx][x_lo][x_hi|flag] (offset = ((s[2]&0x7f)<<8)|s[1]), toma el bitmap idx de la tabla 0x28ad2 y lo blitea (0x12ad6/0x12b04 según el bit7 de s[2]). | test_anim |
 | `0x15b94` | `anim_h7` | anim h7 | — |
 | `0x15bcc` | `anim_h1` | anim h1 | — |
 | `0x15ba6` | `anim_h6` | anim h6 | — |

@@ -180,7 +180,9 @@ harness._lib.anim_counter.restype = None
 
 def test_fun_15cd8_step_adjust():
     """0x15cd8 ajusta contador/fuente según los flags $1a574; salidas por registro."""
-    for fl in (0, 1, 2, 3, 4, 5, 6, 7):
+    # $1a574 se compara como BYTE completo (cmpi.b #$7): los bits altos no toman
+    # el atajo rts aunque (fl & 7) == 7.
+    for fl in (0, 1, 2, 3, 4, 5, 6, 7, 0x0f, 0x17, 0xff):
         for step in (0, 1, 2, 5, 0x7fff, 0x8000, 0xffff):
             for d0, d2, d3, d4, d5 in ((10, 3, 7, 2, 1), (0, 0, 0, 0, 0),
                                        (0x20, 8, 4, 4, 2), (5, 1, 1, 1, 9),
