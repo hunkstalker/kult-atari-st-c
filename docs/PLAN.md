@@ -73,7 +73,9 @@ Regla de oro: una pieza está hecha solo si su prueba diferencial pasa.
   tipadas documentadas** (más directo, cercano al original) o (b) **structs
   tipados** (más legible). Propuesta: (a), documentando cada campo.
 - **Documentación:** ficha por módulo (qué hace, qué funciones, qué estado toca,
-  qué pruebas) + un mapa de módulos en `docs/mapa/`.
+  qué pruebas) + un mapa de módulos en `docs/mapa/`. Se **generan** con
+  `tools/gen_mapa.py` (`make mapa`) y `test/test_mapa.py` los mantiene
+  sincronizados.
 - **Identificación total:** cada parte del juego debe poder localizarse por su
   nombre y su procedencia.
 

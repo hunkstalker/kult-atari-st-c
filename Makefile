@@ -9,3 +9,8 @@ include $(KIT)/kit.mk
 .PHONY: addrs
 addrs:
 	$(PY) tools/gen_addrs.py --write
+
+# Regenera docs/mapa/ (fichas por modulo + mapa) desde src/, names.txt y test/.
+.PHONY: mapa
+mapa:
+	$(PY) tools/gen_mapa.py
