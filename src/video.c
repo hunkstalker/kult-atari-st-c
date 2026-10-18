@@ -37,9 +37,9 @@
  * by the new value, and store that byte into 0x1acd7. Devuelve el byte en D0 (lo usan
  * 0x17a1a y compania); los llamantes que no lo necesitan lo ignoran. */
 uint32_t pal_next_byte(uint8_t *img) {
-    uint32_t i = (uint8_t)(img[A_DAT_1A579] + 1);
-    img[A_DAT_1A579] = (uint8_t)i;
-    uint32_t v = img[A_TBL_2741E + i];
+    uint32_t idx = (uint8_t)(img[A_DAT_1A579] + 1);
+    img[A_DAT_1A579] = (uint8_t)idx;
+    uint32_t v = img[A_TBL_2741E + idx];
     img[A_DAT_1ACD7] = (uint8_t)v;
     return v;
 }
@@ -47,27 +47,27 @@ uint32_t pal_next_byte(uint8_t *img) {
 /* FUN_00016230 @ 0x16230: same bump, but read a big-endian word from 0x2741e[index]
  * and return it in D0. */
 uint32_t pal_next_word(uint8_t *img) {
-    uint32_t i = (uint8_t)(img[A_DAT_1A579] + 1);
-    img[A_DAT_1A579] = (uint8_t)i;
-    uint32_t a0 = A_TBL_2741E + i;
-    return ((uint32_t)img[a0] << 8) | img[a0 + 1];
+    uint32_t idx = (uint8_t)(img[A_DAT_1A579] + 1);
+    img[A_DAT_1A579] = (uint8_t)idx;
+    uint32_t p = A_TBL_2741E + idx;
+    return ((uint32_t)img[p] << 8) | img[p + 1];
 }
 
 /* FUN_0001627a @ 0x1627a: only when the low byte of (0x1ab60 - 0x1a526) reaches
  * 0xb4, latch 0x1a526 = 0x1ab60 and clear bit 6 of each of the 63 six-byte entries
  * at 0x1a8f0 whose byte0 has bit 6 set, byte1 != 0x1acd2 and byte1 < 0x34. */
 void pal_threshold(uint8_t *img) {
-    uint32_t d0 = (be16(img + A_DAT_1AB60) - be16(img + A_DAT_1A526)) & 0xffff;
-    if ((d0 & 0xff) < 0xb4)
+    uint32_t delta = (be16(img + A_DAT_1AB60) - be16(img + A_DAT_1A526)) & 0xffff;
+    if ((delta & 0xff) < 0xb4)
         return;
     wr16(img + A_DAT_1A526, be16(img + A_DAT_1AB60));
-    uint32_t a0 = A_LIST_1A8F0;
-    uint8_t d1 = img[A_DAT_1ACD2];
+    uint32_t p = A_LIST_1A8F0;
+    uint8_t mode = img[A_DAT_1ACD2];
     for (int i = 0; i < 0x3f; i++) {
-        uint8_t b0 = img[a0];
-        if ((b0 & 0x40) && img[a0 + 1] != d1 && img[a0 + 1] < 0x34)
-            img[a0] = (uint8_t)(b0 & 0xbf);
-        a0 += 6;
+        uint8_t b0 = img[p];
+        if ((b0 & 0x40) && img[p + 1] != mode && img[p + 1] < 0x34)
+            img[p] = (uint8_t)(b0 & 0xbf);
+        p += 6;
     }
 }
 
@@ -96,36 +96,36 @@ void run_command_keep_sp(uint8_t *img, uint32_t a6);
 void palette_cycle(uint8_t *img) {
     sound_play_b(img, 0x17);
     {
-        uint32_t a0 = be32(img + A_PALETTE_PTR);
-        uint32_t a1 = 0xd8f0;
+        uint32_t p = be32(img + A_PALETTE_PTR);
+        uint32_t buf = 0xd8f0;
         for (int i = 0; i < 0x10; i++) {
-            wr16(img + a1, be16(img + a0));
-            a0 += 2;
-            a1 += 2;
+            wr16(img + buf, be16(img + p));
+            p += 2;
+            buf += 2;
         }
     }
     for (;;) {                                   /* fase 1: girar hasta el wrap */
-        uint32_t a0 = be32(img + A_PALETTE_PTR) + 2;
-        uint32_t d5 = 0;
+        uint32_t p = be32(img + A_PALETTE_PTR) + 2;
+        uint32_t changed = 0;
         for (int i = 0; i <= 4; i++) {
-            uint32_t d0 = be16(img + a0);
-            if (d0 != 0x777) {
-                d5 = 0xffff;
-                uint32_t r = d0 & 0xf;   if (r != 7)     r++;
-                uint32_t g = d0 & 0xf0;  if (g != 0x70)  g += 0x10;
-                uint32_t b = d0 & 0xf00; if (b != 0x700) b += 0x100;
-                d0 = (r | g | b) & 0xffff;
+            uint32_t color = be16(img + p);
+            if (color != 0x777) {
+                changed = 0xffff;
+                uint32_t r = color & 0xf;   if (r != 7)     r++;
+                uint32_t g = color & 0xf0;  if (g != 0x70)  g += 0x10;
+                uint32_t b = color & 0xf00; if (b != 0x700) b += 0x100;
+                color = (r | g | b) & 0xffff;
             }
-            wr16(img + a0, d0);
-            a0 += 2;
+            wr16(img + p, color);
+            p += 2;
         }
-        if (d5 == 0)
+        if (changed == 0)
             break;
         wait_vbl(img);
         {
-            uint32_t d0b = 0xffff;
-            while (d0b != 0xffff)
-                d0b = (d0b - 1) & 0xffff;
+            uint32_t spin = 0xffff;
+            while (spin != 0xffff)
+                spin = (spin - 1) & 0xffff;
         }
         set_palette(img);
     }
@@ -133,32 +133,32 @@ void palette_cycle(uint8_t *img) {
     wr16(img + A_THE_COMMAND, be16(img + A_DAT_1ABFA));
     run_command_keep_sp(img, 0);
     for (;;) {                                   /* fase 2: acercar al target */
-        uint32_t a0 = A_PAL_TABLE + ((uint32_t)img[A_PAL_INDEX_CUR] * 0xa);
-        uint32_t a1 = 0xd8f2;
+        uint32_t p = A_PAL_TABLE + ((uint32_t)img[A_PAL_INDEX_CUR] * 0xa);
+        uint32_t buf = 0xd8f2;
         for (int i = 0; i <= 4; i++) {
-            wr16(img + a1, be16(img + a0));
-            a0 += 2;
-            a1 += 2;
+            wr16(img + buf, be16(img + p));
+            p += 2;
+            buf += 2;
         }
-        a0 = be32(img + A_PALETTE_PTR) + 2;
-        a1 = 0xd8f2;
-        uint32_t d5 = 0;
+        p = be32(img + A_PALETTE_PTR) + 2;
+        buf = 0xd8f2;
+        uint32_t changed = 0;
         for (int i = 0; i <= 4; i++) {
-            uint32_t d0 = be16(img + a0);
-            uint32_t d1 = d0, d2 = d0;
-            uint32_t d4 = be16(img + a1);
-            if (d0 != d4) {
-                d5 = 0xffff;
-                uint32_t r = d0 & 0xf;   if (r != (d4 & 0xf))     r = (r - 1) & 0xffff;
-                uint32_t g = d1 & 0xf0;  if (g != (d4 & 0xf0))    g = (g - 0x10) & 0xffff;
-                uint32_t b = d2 & 0xf00; if (b != (d4 & 0xf00))   b = (b - 0x100) & 0xffff;
-                d0 = (r | g | b) & 0xffff;
+            uint32_t color = be16(img + p);
+            uint32_t comp1 = color, comp2 = color;
+            uint32_t target = be16(img + buf);
+            if (color != target) {
+                changed = 0xffff;
+                uint32_t r = color & 0xf;   if (r != (target & 0xf))     r = (r - 1) & 0xffff;
+                uint32_t g = comp1 & 0xf0;  if (g != (target & 0xf0))    g = (g - 0x10) & 0xffff;
+                uint32_t b = comp2 & 0xf00; if (b != (target & 0xf00))   b = (b - 0x100) & 0xffff;
+                color = (r | g | b) & 0xffff;
             }
-            wr16(img + a0, d0);
-            a0 += 2;
-            a1 += 2;
+            wr16(img + p, color);
+            p += 2;
+            buf += 2;
         }
-        if (d5 == 0)
+        if (changed == 0)
             return;
         wait_vbl(img);
         set_palette(img);
@@ -176,24 +176,24 @@ void palette_cycle(uint8_t *img) {
 
 void crt0_init(uint8_t *img) {
     wr16(img + 0x1a558, 0);                       /* XBIOS Getrez: low-res */
-    uint32_t d0 = OS_SCREEN_BASE;                 /* XBIOS Physbase */
-    wr32(img + 0x1a45e, d0);
-    d0 = (d0 - 0x8000) & 0xffffffff;
-    wr32(img + 0x1a462, d0);
-    d0 = (d0 - 0x20) & 0xffffffff;
-    wr32(img + 0x1a466, d0);
+    uint32_t base = OS_SCREEN_BASE;                 /* XBIOS Physbase */
+    wr32(img + 0x1a45e, base);
+    base = (base - 0x8000) & 0xffffffff;
+    wr32(img + 0x1a462, base);
+    base = (base - 0x20) & 0xffffffff;
+    wr32(img + 0x1a466, base);
     uint32_t ss = 0;
     os_super(OS_SUPER_ENTER, &ss);                /* GEMDOS Super(0) */
-    uint32_t a0 = be32(img + 0x456);
-    wr32(img + 0x1a4d4, be32(img + a0));
-    wr32(img + a0, 0x160c2);
+    uint32_t vec = be32(img + 0x456);
+    wr32(img + 0x1a4d4, be32(img + vec));
+    wr32(img + vec, 0x160c2);
     wr32(img + 0x502, 0x1019a);
     img[0x1a579] = img[0x4bd];
-    os_super(ss, &d0);                            /* Super(token) */
-    a0 = (OS_KBDVBASE + 0x10) & 0xffffffff;       /* XBIOS Kbdvbase + 0x10 */
-    wr32(img + 0x1a446, a0);
-    wr32(img + 0x1a44a, be32(img + a0));
-    wr32(img + a0, 0x13686);
+    os_super(ss, &base);                            /* Super(token) */
+    vec = (OS_KBDVBASE + 0x10) & 0xffffffff;       /* XBIOS Kbdvbase + 0x10 */
+    wr32(img + 0x1a446, vec);
+    wr32(img + 0x1a44a, be32(img + vec));
+    wr32(img + vec, 0x13686);
     /* XBIOS Ikbdws(0x19, 0x1a459, 4): el modelo no lo registra (no hay efecto en
      * imagen), asi que el candidato no emite nada. */
 }

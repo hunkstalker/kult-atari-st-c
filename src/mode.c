@@ -49,46 +49,46 @@ void command_state_reset(uint8_t *img) {
 
 /* 0x14496 — camina 0x1ad38 y publica cabecera/objetos del modo */
 void scene_mode_load(uint8_t *img, uint32_t *a4_out, uint32_t *a5_out) {
-    uint32_t a4 = A_MODE_TABLE, a5;
+    uint32_t end = A_MODE_TABLE, p;
     do {
-        uint32_t d1 = ((uint32_t)img[A_MODE_FLAG] - 1) & 0xffff;
-        walk_entry(img, A_MODE_TABLE, d1, &a4, &a5);
+        uint32_t index = ((uint32_t)img[A_MODE_FLAG] - 1) & 0xffff;
+        walk_entry(img, A_MODE_TABLE, index, &end, &p);
     } while (img[A_DAT_D8EB] != 0x52);
 
-    img[A_DAT_1ACD2] = img[a5++];
-    img[A_DAT_1ACC7] = img[a5++];
-    img[A_1AB48] = img[a5];
-    img[A_TEXT_SEL_A] = img[a5++];
-    img[A_PAL_INDEX_CUR] = img[a5++];
-    img[A_DAT_1AB4B] = img[a5++];
+    img[A_DAT_1ACD2] = img[p++];
+    img[A_DAT_1ACC7] = img[p++];
+    img[A_1AB48] = img[p];
+    img[A_TEXT_SEL_A] = img[p++];
+    img[A_PAL_INDEX_CUR] = img[p++];
+    img[A_DAT_1AB4B] = img[p++];
 
     uint32_t count = img[A_DAT_1AB4B];
     if (count != 0) {
         for (uint32_t i = 0; i < 0x4b; i++)
             wr16(img + A_DAT_1AB62 + i * 2, 0);
         static const uint32_t field[5] = {0, 2, 4, 6, 8};
-        uint32_t a3 = A_DAT_1AB62;
+        uint32_t obj = A_DAT_1AB62;
         uint32_t n = count - 1;
         for (;;) {
-            uint32_t flags = be16(img + a5);
-            a5 += 2;
+            uint32_t flags = be16(img + p);
+            p += 2;
             for (int bit = 4; bit >= 0; bit--) {
                 if (flags & (1u << bit)) {
-                    wr16(img + a3 + field[4 - bit], be16(img + a5));
-                    a5 += 2;
+                    wr16(img + obj + field[4 - bit], be16(img + p));
+                    p += 2;
                 }
             }
-            a3 += 10;
+            obj += 10;
             if (n == 0)
                 break;
             n--;
         }
     }
 
-    wr32(img + A_OBJECT_LIST_BEGIN, a5);
-    wr32(img + A_DAT_1A762, a5);
-    wr32(img + A_OBJECT_LIST_END, a4);
-    wr32(img + A_SEL_1A7D2, a5);
+    wr32(img + A_OBJECT_LIST_BEGIN, p);
+    wr32(img + A_DAT_1A762, p);
+    wr32(img + A_OBJECT_LIST_END, end);
+    wr32(img + A_SEL_1A7D2, p);
     img[A_SEL_1AB4A] = 0;
     img[A_DAT_1ACD3] = 0;
     img[A_DAT_1ACEB] = 0;
@@ -97,33 +97,33 @@ void scene_mode_load(uint8_t *img, uint32_t *a4_out, uint32_t *a5_out) {
     wr16(img + A_DAT_1ACAA, 0);
     img[A_DAT_1ACE7] = 0;
 
-    *a4_out = a4;
-    *a5_out = a5;
+    *a4_out = end;
+    *a5_out = p;
 }
 
 /* 0x1443e — fija A_MODE_FLAG + marcador 0x1a695 y carga el modo */
-uint32_t scene_mode_set(uint8_t *img, uint32_t a6, uint32_t *a4_out, uint32_t *a5_out) {
-    uint32_t d0 = img[a6 + 1];
+uint32_t scene_mode_set(uint8_t *img, uint32_t script, uint32_t *a4_out, uint32_t *a5_out) {
+    uint32_t mode = img[script + 1];
     img[A_DAT_1ACCB] = img[A_MODE_FLAG];
-    img[A_MODE_FLAG] = (uint8_t)d0;
-    if (img[A_DAT_1AD32] != 0 || d0 == 0x81 || d0 == 0x82) {
-        uint8_t marker = img[A_DAT_1AD32] != 0 ? 0xe5 : (d0 == 0x81 ? 0xdd : 0xde);
+    img[A_MODE_FLAG] = (uint8_t)mode;
+    if (img[A_DAT_1AD32] != 0 || mode == 0x81 || mode == 0x82) {
+        uint8_t marker = img[A_DAT_1AD32] != 0 ? 0xe5 : (mode == 0x81 ? 0xdd : 0xde);
         for (int i = 0; i < 8; i++)
             img[A_DAT_1A695 + i] = marker;
     }
-    a6 += 2;
+    script += 2;
     scene_mode_load(img, a4_out, a5_out);
     command_state_reset(img);
-    return a6;
+    return script;
 }
 
 /* 0x1442c — cmd74 wrap */
-uint32_t cmd74_wrap(uint8_t *img, uint32_t a6) {
+uint32_t cmd74_wrap(uint8_t *img, uint32_t script) {
     uint8_t saved = img[A_DAT_1ACC7];
-    uint32_t a4, a5;
-    a6 = scene_mode_set(img, a6, &a4, &a5);
+    uint32_t end, p;
+    script = scene_mode_set(img, script, &end, &p);
     img[A_DAT_1ACC7] = saved;
-    return a6;
+    return script;
 }
 
 /* ---- cluster 0x14602/0x1460a/0x146d0 (modo de escena) ----
@@ -162,46 +162,46 @@ void hint_blit_stroke(uint8_t *img, uint32_t *a6);
 void hint_blit_3(uint8_t *img, uint32_t *a6);
 
 /* 0x1460a — procesa el modo tras input (formulario, objeto, overlays) */
-uint32_t scene_mode_apply(uint8_t *img, uint32_t a6) {
+uint32_t scene_mode_apply(uint8_t *img, uint32_t script) {
     img[A_DAT_1A572] = 0;
-    uint32_t d1 = 0;
+    uint32_t idx = 0;
     if (img[A_SKIP_TRANSITION] == 0) {
         uint32_t t = img[A_DAT_1AD0F] & 0x38;
         if (t == 0) {
-            d1 = img[A_DAT_1AD0F] & 7;
+            idx = img[A_DAT_1AD0F] & 7;
         } else if (t == 8) {
             img[A_DAT_1A572] = 1;
-            textform_fwd(img, a6, img[A_SEL_1ACC9]);
-            d1 = img[A_DAT_1AD0F] & 7;
+            textform_fwd(img, script, img[A_SEL_1ACC9]);
+            idx = img[A_DAT_1AD0F] & 7;
         }
     }
-    img[A_DAT_1ACC8] = (uint8_t)d1;
-    anim_mode(img, a6);
-    uint32_t a4, a5;
-    a6 = scene_mode_set(img, a6, &a4, &a5);
+    img[A_DAT_1ACC8] = (uint8_t)idx;
+    anim_mode(img, script);
+    uint32_t end, p;
+    script = scene_mode_set(img, script, &end, &p);
     img[A_DAT_1ACFE] = img[A_DAT_1ACD2];
-    d1 = img[A_DAT_1ACC8];
-    uint32_t d2 = 0;
-    if (d1 != 0) {
-        d1 = (d1 | 0x88) & 0xff;
-        uint32_t d2b = 1;
+    idx = img[A_DAT_1ACC8];
+    uint32_t sel = 0;
+    if (idx != 0) {
+        idx = (idx | 0x88) & 0xff;
+        uint32_t n = 1;
         for (;;) {
-            if (img[a5 + 4] == d1) {
-                d2 = d2b;
+            if (img[p + 4] == idx) {
+                sel = n;
                 break;
             }
-            d2b = (d2b + 1) & 0xff;
-            a5 += 8;
-            if (a5 == a4)
+            n = (n + 1) & 0xff;
+            p += 8;
+            if (p == end)
                 break;
         }
     }
-    img[A_SEL_1ACC9] = (uint8_t)d2;
-    img[A_DAT_1A572] |= (uint8_t)d2;
+    img[A_SEL_1ACC9] = (uint8_t)sel;
+    img[A_DAT_1A572] |= (uint8_t)sel;
     scene_text_box(img);
-    d1 = img[A_DAT_1AD25];
-    if (d1 != 0) {
-        run_text_table(img, a6, 0, d1);
+    idx = img[A_DAT_1AD25];
+    if (idx != 0) {
+        run_text_table(img, script, 0, idx);
         img[A_DAT_1AD25] = 0;
     }
     icon_table(img);
@@ -210,14 +210,14 @@ uint32_t scene_mode_apply(uint8_t *img, uint32_t a6) {
     rot_action(img);
     update_icon_list(img);
     img[A_DAT_1AD0F] = 0;
-    return a6;
+    return script;
 }
 
-static void body_146d2(uint8_t *img, uint32_t a6) {
-    uint32_t a6b = a6;
-    hint_blit_2(img, &a6b);
-    hint_blit_stroke(img, &a6b);
-    hint_blit_3(img, &a6b);
+static void body_146d2(uint8_t *img, uint32_t script) {
+    uint32_t script2 = script;
+    hint_blit_2(img, &script2);
+    hint_blit_stroke(img, &script2);
+    hint_blit_3(img, &script2);
     if (img[A_DAT_1A572] == 0 && img[A_SKIP_TRANSITION] == 0)
         copy_rows_a(img);
     copy_screen(img);
@@ -232,19 +232,19 @@ static void body_146d2(uint8_t *img, uint32_t a6) {
     sample_find_body(img);
     icon_repeat(img);
     if (img[A_SEL_1ACC9] != 0)
-        textform_rev(img, a6, img[A_SEL_1ACC9]);
+        textform_rev(img, script, img[A_SEL_1ACC9]);
     draw_hint_icons(img);
 }
 
 /* 0x146d0 — cuerpo: cursores, transicion, formulario, iconos */
-uint32_t scene_mode_draw(uint8_t *img, uint32_t a6) {
-    a6 += 1;
-    body_146d2(img, a6);
-    return a6;
+uint32_t scene_mode_draw(uint8_t *img, uint32_t script) {
+    script += 1;
+    body_146d2(img, script);
+    return script;
 }
 
 /* 0x14602 — scene mode draw wrap */
-void scene_mode_draw_wrap(uint8_t *img, uint32_t a6) {
-    a6 = scene_mode_apply(img, a6);
-    body_146d2(img, a6);
+void scene_mode_draw_wrap(uint8_t *img, uint32_t script) {
+    script = scene_mode_apply(img, script);
+    body_146d2(img, script);
 }

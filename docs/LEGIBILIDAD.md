@@ -173,6 +173,23 @@ afinan al tocar cada módulo.
 | tanda | módulos | estado |
 |---|---|---|
 | 1 | palette, screens, cursor, input, delay, stubs, state, boxdraw, line, sprite, maskblit, misc, vm | **HECHA** |
-| 2 | textblit (resto), text, textbox, textform, icons, video, select (+goto), mode | pendiente |
+| 2 | textblit (resto), text, textbox, textform, icons, video, select, mode | **HECHA** |
 | 3 | element, anim, scale, reveal, overlay (locales), commands, handlers | pendiente |
 | 4 | dispatch, sound, music (+goto), fileio (+goto), loop (+goto) | pendiente |
+
+**Tanda 2 — vídeo/texto: HECHA** (`ids_reg` antes→después):
+
+| módulo | antes | después | goto |
+|---|---:|---:|---:|
+| textbox.c | 514 | 82 | 0 |
+| textblit.c | 400 | 49 | 0 |
+| text.c | 218 | 51 | 5 |
+| icons.c | 179 | 31 | 0 |
+| select.c | 175 | 25 | 30 |
+| textform.c | 190 | 23 | 0 |
+| mode.c | 109 | 17 | 0 |
+| video.c | 89 | 4 | 0 |
+
+Totales: `ids_reg` **8801 → 6142**. Los `goto` de `select.c` (30) y `text.c` (5)
+se **conservan** (colas compartidas del original, ver §2); el conteo de `goto`
+baja en Tanda 4 al convertir los bucles simples.

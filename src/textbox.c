@@ -20,79 +20,79 @@ void text_box_body(uint8_t *img, uint32_t a5) {
     wr32(img + A_COLOR_TABLE, 0x1d3a2);
     wr32(img + A_SCREEN_DRAW_BASE, 0);
 
-    uint32_t d0 = (be16(img + A_TEXT_BOX_W) + 2) & 0xffff;
-    d0 = (d0 << 2) & 0xffff;
-    d0 = (d0 - 2) & 0xffff;
-    uint32_t d3 = d0;
-    d0 = be16(img + A_TEXT_BOX_X);
-    uint32_t d1 = be16(img + A_TEXT_BOX_Y);
-    d0 = ((d0 << 2) + 2) & 0xffff;
-    uint32_t d2 = 6;
-    uint32_t d7 = d3;
-    wr16(img + A_TEXT_BOX_SPAN, d7);
-    d3 = (d3 - 2) & 0xffff;
-    box_hline(img, d0, d1, d2, d3);                 /* borde superior */
+    uint32_t x = (be16(img + A_TEXT_BOX_W) + 2) & 0xffff;
+    x = (x << 2) & 0xffff;
+    x = (x - 2) & 0xffff;
+    uint32_t len = x;
+    x = be16(img + A_TEXT_BOX_X);
+    uint32_t y = be16(img + A_TEXT_BOX_Y);
+    x = ((x << 2) + 2) & 0xffff;
+    uint32_t color = 6;
+    uint32_t span = len;
+    wr16(img + A_TEXT_BOX_SPAN, span);
+    len = (len - 2) & 0xffff;
+    box_hline(img, x, y, color, len);                 /* borde superior */
 
-    d0 = (d0 - 1) & 0xffff;
-    d2 = 0xd;
-    for (uint32_t d6 = 2; ; d6 = (d6 - 1) & 0xffff) {
-        d1 = (d1 + 1) & 0xffff;
-        d3 = d7;
-        box_hline(img, d0, d1, d2, d3);
-        if (d6 == 0) break;
+    x = (x - 1) & 0xffff;
+    color = 0xd;
+    for (uint32_t i = 2; ; i = (i - 1) & 0xffff) {
+        y = (y + 1) & 0xffff;
+        len = span;
+        box_hline(img, x, y, color, len);
+        if (i == 0) break;
     }
 
-    d1 = (d1 - 1) & 0xffff;
-    d0 = (d0 - 1) & 0xffff;
-    d2 = 6;
-    d3 = 2;
-    box_vline(img, d0, d1, d2, d3);                 /* esquina sup. izq. */
-    d1 = (d1 - 1) & 0xffff;
-    d0 = (d0 + 1) & 0xffff;
-    d3 = 1;
-    box_vline(img, d0, d1, d2, d3);
-    d0 = (d0 + d7 - 1) & 0xffff;
-    d3 = 1;
-    box_vline(img, d0, d1, d2, d3);
-    d0 = (d0 + 1) & 0xffff;
-    d1 = (d1 + 1) & 0xffff;
-    d3 = 2;
-    box_vline(img, d0, d1, d2, d3);                 /* esquina sup. der. */
+    y = (y - 1) & 0xffff;
+    x = (x - 1) & 0xffff;
+    color = 6;
+    len = 2;
+    box_vline(img, x, y, color, len);                 /* esquina sup. izq. */
+    y = (y - 1) & 0xffff;
+    x = (x + 1) & 0xffff;
+    len = 1;
+    box_vline(img, x, y, color, len);
+    x = (x + span - 1) & 0xffff;
+    len = 1;
+    box_vline(img, x, y, color, len);
+    x = (x + 1) & 0xffff;
+    y = (y + 1) & 0xffff;
+    len = 2;
+    box_vline(img, x, y, color, len);                 /* esquina sup. der. */
 
-    d0 = be16(img + A_TEXT_BOX_X);
-    d1 = (be16(img + A_TEXT_BOX_Y) + 4) & 0xffff;
-    wr16(img + A_CURSOR_TEXT_X, d0);
-    wr16(img + A_CURSOR_TEXT_Y, d1);
+    x = be16(img + A_TEXT_BOX_X);
+    y = (be16(img + A_TEXT_BOX_Y) + 4) & 0xffff;
+    wr16(img + A_CURSOR_TEXT_X, x);
+    wr16(img + A_CURSOR_TEXT_Y, y);
     img[A_TEXT_END_FLAG] = 0;
 
     do {
         print_char(img, 0x3b);                      /* ';' */
         a5 = print_line(img, a5);
         print_char(img, 0x3c);                      /* '<' */
-        d1 = (d1 + 6) & 0xffff;
-        wr16(img + A_CURSOR_TEXT_Y, d1);
-        wr16(img + A_CURSOR_TEXT_X, d0);
+        y = (y + 6) & 0xffff;
+        wr16(img + A_CURSOR_TEXT_Y, y);
+        wr16(img + A_CURSOR_TEXT_X, x);
     } while (img[A_TEXT_END_FLAG] == 0);
 
-    d7 = be16(img + A_TEXT_BOX_SPAN);
-    d0 = ((d0 << 2) + 1) & 0xffff;
-    d2 = 0xd;
-    d3 = d7;
-    box_hline(img, d0, d1, d2, d3);                 /* borde inferior */
-    d3 = 1;
-    d2 = 6;
-    box_vline(img, d0, d1, d2, d3);
-    d1 = (d1 + 1) & 0xffff;
-    d0 = (d0 + 1) & 0xffff;
-    d3 = (d7 - 2) & 0xffff;
-    box_hline(img, d0, d1, d2, d3);
-    d1 = (d1 - 1) & 0xffff;
-    d0 = (d0 - 1) & 0xffff;
-    d3 = 1;
-    box_vline(img, d0, d1, d2, d3);
-    d0 = (d0 + d7 - 1) & 0xffff;
-    d3 = 1;
-    box_vline(img, d0, d1, d2, d3);
+    span = be16(img + A_TEXT_BOX_SPAN);
+    x = ((x << 2) + 1) & 0xffff;
+    color = 0xd;
+    len = span;
+    box_hline(img, x, y, color, len);                 /* borde inferior */
+    len = 1;
+    color = 6;
+    box_vline(img, x, y, color, len);
+    y = (y + 1) & 0xffff;
+    x = (x + 1) & 0xffff;
+    len = (span - 2) & 0xffff;
+    box_hline(img, x, y, color, len);
+    y = (y - 1) & 0xffff;
+    x = (x - 1) & 0xffff;
+    len = 1;
+    box_vline(img, x, y, color, len);
+    x = (x + span - 1) & 0xffff;
+    len = 1;
+    box_vline(img, x, y, color, len);
 }
 
 /* FUN_00010440 @ 0x10440: orquestador del comando de caja de texto (nibble 0x9000).
@@ -112,15 +112,15 @@ void restore_rect(uint8_t *img);
 /* Cola comun de 0x1042c/0x10440: mide la caja (0x10998/0x109bc), fija 0x1a512/0x1a514,
  * calcula la posicion y dibuja (0x1258a + 0x10e66 + 0x12292 + 0x124f2). */
 static void textbox_tail(uint8_t *img, uint32_t a5) {
-    uint32_t d5, d6;
-    measure_words(img, a5, &d5, &d6);
-    d6 = (d6 + 2) & 0xffff;
-    if ((d5 & 0xff) >= 5)                /* cmpi.b #$5,d5 */
-        d6 = 0x14;
-    wr16(img + A_TEXT_BOX_W, d6);
+    uint32_t nwords, width;
+    measure_words(img, a5, &nwords, &width);
+    width = (width + 2) & 0xffff;
+    if ((nwords & 0xff) >= 5)                /* cmpi.b #$5,nwords */
+        width = 0x14;
+    wr16(img + A_TEXT_BOX_W, width);
 
-    wrap_line(img, a5, &d5, &d6);
-    uint32_t h = (d5 * 6 + 7) & 0xffff;    /* lsl #2 + 2x add + 7 = d5*6+7 */
+    wrap_line(img, a5, &nwords, &width);
+    uint32_t h = (nwords * 6 + 7) & 0xffff;    /* lsl #2 + 2x add + 7 = nwords*6+7 */
     wr16(img + A_TEXT_BOX_H, h);
 
     uint32_t x = (be16(img + A_CURSOR_X) >> 2) & 0xffff;
@@ -136,11 +136,11 @@ static void textbox_tail(uint8_t *img, uint32_t a5) {
         y = (y - (y_over - 0xc8)) & 0xffff;
     wr16(img + A_TEXT_BOX_Y, y);
 
-    uint32_t d7;
-    uint32_t a0 = screen_address(img, be16(img + A_TEXT_BOX_X), y, &d7);
-    uint32_t d2 = (be16(img + A_TEXT_BOX_W) + 2) & 0xffff;
-    uint32_t d3 = be16(img + A_TEXT_BOX_H);
-    save_rect(img, d2, d3, a0, d7);
+    uint32_t phase;
+    uint32_t addr = screen_address(img, be16(img + A_TEXT_BOX_X), y, &phase);
+    uint32_t w = (be16(img + A_TEXT_BOX_W) + 2) & 0xffff;
+    uint32_t h2 = be16(img + A_TEXT_BOX_H);
+    save_rect(img, w, h2, addr, phase);
 
     text_box_body(img, a5);
     prompt_wait(img);
@@ -149,22 +149,22 @@ static void textbox_tail(uint8_t *img, uint32_t a5) {
 
 /* 0x10440 — idem (otra ruta de entrada) */
 void draw_text_box_variant(uint8_t *img, uint32_t the_command) {
-    uint32_t d4 = the_command & 0x3ff;
-    uint32_t a5 = position_text(img, 0x3ec8a, d4);
-    textbox_tail(img, a5);
+    uint32_t index = the_command & 0x3ff;
+    uint32_t str = position_text(img, 0x3ec8a, index);
+    textbox_tail(img, str);
 }
 
 /* FUN_0001042c @ 0x1042c: variante que lee el indice de texto de A6[1] (via 0x10fb4,
  * que puede consumir un byte extra) y cae en la misma cola. Devuelve A6 avanzado. */
 uint32_t text_index_arg(uint8_t *img, uint32_t a5, uint32_t d4, uint32_t *a6);
 /* 0x1042c — calcula geometria de caja de texto y la dibuja */
-uint32_t draw_text_box(uint8_t *img, uint32_t a6) {
-    uint32_t d4 = img[a6 + 1];
-    a6 += 1;
-    uint32_t a5 = text_index_arg(img, 0x3ec8a, d4, &a6);
-    a6 += 1;
-    textbox_tail(img, a5);
-    return a6;
+uint32_t draw_text_box(uint8_t *img, uint32_t script) {
+    uint32_t index = img[script + 1];
+    script += 1;
+    uint32_t str = text_index_arg(img, 0x3ec8a, index, &script);
+    script += 1;
+    textbox_tail(img, str);
+    return script;
 }
 
 /* FUN_00010dfa @ 0x10dfa (cmd idx 92): caja de texto con argumentos inline
@@ -173,26 +173,26 @@ uint32_t draw_text_box(uint8_t *img, uint32_t a6) {
 void hint_slot_alloc(uint8_t *img, uint32_t d4, uint32_t a0, uint32_t d7,
                  uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
 /* 0x10dfa — text box icon */
-uint32_t text_box_icon(uint8_t *img, uint32_t a6) {
-    a6 += 1;
-    uint32_t d4 = img[a6];
-    uint32_t a5 = text_index_arg(img, 0x3ec8a, d4, &a6);
-    wr16(img + A_TEXT_BOX_W, img[a6 + 3]);
-    wr16(img + A_ELEM_1A532, img[a6 + 1]);
-    wr16(img + A_ELEM_1A530, img[a6 + 2]);
-    text_box_body(img, a5);
+uint32_t text_box_icon(uint8_t *img, uint32_t script) {
+    script += 1;
+    uint32_t index = img[script];
+    uint32_t str = text_index_arg(img, 0x3ec8a, index, &script);
+    wr16(img + A_TEXT_BOX_W, img[script + 3]);
+    wr16(img + A_ELEM_1A532, img[script + 1]);
+    wr16(img + A_ELEM_1A530, img[script + 2]);
+    text_box_body(img, str);
 
     uint32_t x = be16(img + A_ELEM_1A532);
     uint32_t y = be16(img + A_ELEM_1A530);
     uint32_t xw = (x << 2) & 0xffff;
-    uint32_t d0 = (xw & 0xfff0) >> 1;
-    uint32_t d7 = xw & 0xf;
-    uint32_t d1 = (y * 0xa0) & 0xffff;
-    uint32_t a0 = addr_add(be32(img + A_SCREEN_PTR_A), d0 + d1);
-    uint32_t d2 = (be16(img + A_TEXT_BOX_W) + 2) & 0xffff;
-    uint32_t d3 = (be16(img + A_CURSOR_TEXT_Y) - y + 8) & 0xffff;
-    hint_slot_alloc(img, 3, a0, d7, d0, d1, d2, d3);
-    return a6 + 4;
+    uint32_t xoff = (xw & 0xfff0) >> 1;
+    uint32_t phase = xw & 0xf;
+    uint32_t yoff = (y * 0xa0) & 0xffff;
+    uint32_t addr = addr_add(be32(img + A_SCREEN_PTR_A), xoff + yoff);
+    uint32_t w = (be16(img + A_TEXT_BOX_W) + 2) & 0xffff;
+    uint32_t h = (be16(img + A_CURSOR_TEXT_Y) - y + 8) & 0xffff;
+    hint_slot_alloc(img, 3, addr, phase, xoff, yoff, w, h);
+    return script + 4;
 }
 
 /* FUN_00010b6c @ 0x10b6c: dibuja un marco/ventana de texto (bordes segun los bits
@@ -209,142 +209,142 @@ void hint_slot_alloc(uint8_t *img, uint32_t d4, uint32_t a0, uint32_t d7,
                  uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
 
 /* 0x10b6c — ventana de texto con adorno/flecha (bits 0xe0) */
-void text_window(uint8_t *img, uint32_t a5, uint32_t a6) {
+void text_window(uint8_t *img, uint32_t str, uint32_t script) {
     wr32(img + A_COLOR_TABLE, 0x1d382);
     wr32(img + A_SCREEN_DRAW_BASE, 0);
-    uint32_t d0 = img[a6 + 3] & 0x1f;
-    wr16(img + A_TEXT_BOX_W, d0);
-    d0 = (d0 + 2) & 0xffff;
-    d0 = (d0 << 2) & 0xffff;
-    uint32_t span = (d0 - 2) & 0xffff;
-    d0 = img[a6 + 1];
-    uint32_t d1 = img[a6 + 2];
-    wr16(img + A_ELEM_1A532, d0);
-    wr16(img + A_ELEM_1A530, d1);
-    d0 = (d0 << 2) & 0xffff;
-    d0 = (d0 + 2) & 0xffff;
-    uint32_t d2 = 0;
+    uint32_t x = img[script + 3] & 0x1f;
+    wr16(img + A_TEXT_BOX_W, x);
+    x = (x + 2) & 0xffff;
+    x = (x << 2) & 0xffff;
+    uint32_t span = (x - 2) & 0xffff;
+    x = img[script + 1];
+    uint32_t y = img[script + 2];
+    wr16(img + A_ELEM_1A532, x);
+    wr16(img + A_ELEM_1A530, y);
+    x = (x << 2) & 0xffff;
+    x = (x + 2) & 0xffff;
+    uint32_t color = 0;
     wr16(img + A_TEXT_BOX_SPAN, span);
-    uint32_t d3 = (span - 2) & 0xffff;
-    box_hline(img, d0, d1, d2, d3);
-    d0 = (d0 - 1) & 0xffff;
-    d2 = 0xf;
-    for (uint32_t d6 = 2; d6 != 0xffff; d6 = (d6 - 1) & 0xffff) {
-        d1 = (d1 + 1) & 0xffff;
-        box_hline(img, d0, d1, d2, span);
+    uint32_t len = (span - 2) & 0xffff;
+    box_hline(img, x, y, color, len);
+    x = (x - 1) & 0xffff;
+    color = 0xf;
+    for (uint32_t i = 2; i != 0xffff; i = (i - 1) & 0xffff) {
+        y = (y + 1) & 0xffff;
+        box_hline(img, x, y, color, span);
     }
-    d1 = (d1 - 1) & 0xffff;
-    d0 = (d0 - 1) & 0xffff;
-    d2 = 0;
-    d3 = 2;
-    box_vline(img, d0, d1, d2, d3);
-    d1 = (d1 - 1) & 0xffff;
-    d0 = (d0 + 1) & 0xffff;
-    d3 = 1;
-    box_vline(img, d0, d1, d2, d3);
-    d0 = (d0 + span) & 0xffff;
-    d0 = (d0 - 1) & 0xffff;
-    d3 = 1;
-    box_vline(img, d0, d1, d2, d3);
-    d0 = (d0 + 1) & 0xffff;
-    d1 = (d1 + 1) & 0xffff;
-    d3 = 2;
-    box_vline(img, d0, d1, d2, d3);
+    y = (y - 1) & 0xffff;
+    x = (x - 1) & 0xffff;
+    color = 0;
+    len = 2;
+    box_vline(img, x, y, color, len);
+    y = (y - 1) & 0xffff;
+    x = (x + 1) & 0xffff;
+    len = 1;
+    box_vline(img, x, y, color, len);
+    x = (x + span) & 0xffff;
+    x = (x - 1) & 0xffff;
+    len = 1;
+    box_vline(img, x, y, color, len);
+    x = (x + 1) & 0xffff;
+    y = (y + 1) & 0xffff;
+    len = 2;
+    box_vline(img, x, y, color, len);
 
-    d0 = be16(img + A_ELEM_1A532);
-    d1 = (be16(img + A_ELEM_1A530) + 4) & 0xffff;
+    x = be16(img + A_ELEM_1A532);
+    y = (be16(img + A_ELEM_1A530) + 4) & 0xffff;
     for (;;) {
-        wr16(img + A_CURSOR_TEXT_X, d0);
-        wr16(img + A_CURSOR_TEXT_Y, d1);
+        wr16(img + A_CURSOR_TEXT_X, x);
+        wr16(img + A_CURSOR_TEXT_Y, y);
         img[A_TEXT_END_FLAG] = 0;
-        uint32_t sx = d0, sy = d1;
+        uint32_t sx = x, sy = y;
         print_char(img, 0x3b);
-        a5 = print_line(img, a5);
+        str = print_line(img, str);
         print_char(img, 0x3c);
-        d0 = sx;
-        d1 = (sy + 6) & 0xffff;
-        wr16(img + A_CURSOR_TEXT_X, d0);
-        wr16(img + A_CURSOR_TEXT_Y, d1);
+        x = sx;
+        y = (sy + 6) & 0xffff;
+        wr16(img + A_CURSOR_TEXT_X, x);
+        wr16(img + A_CURSOR_TEXT_Y, y);
         if (img[A_TEXT_END_FLAG] != 0)
             break;
     }
 
     uint32_t sp = be16(img + A_TEXT_BOX_SPAN);
-    d0 = (d0 << 2) & 0xffff;
-    d0 = (d0 + 1) & 0xffff;
-    d2 = 0xf;
-    d3 = sp;
-    box_hline(img, d0, d1, d2, d3);
-    d3 = 1;
-    d2 = 0;
-    box_vline(img, d0, d1, d2, d3);
-    d1 = (d1 + 1) & 0xffff;
-    d0 = (d0 + 1) & 0xffff;
-    d3 = (sp - 2) & 0xffff;
-    box_hline(img, d0, d1, d2, d3);
-    d1 = (d1 - 1) & 0xffff;
-    d0 = (d0 - 1) & 0xffff;
-    d3 = 1;
-    box_vline(img, d0, d1, d2, d3);
-    d0 = (d0 + sp) & 0xffff;
-    d0 = (d0 - 1) & 0xffff;
-    d3 = 1;
-    box_vline(img, d0, d1, d2, d3);
+    x = (x << 2) & 0xffff;
+    x = (x + 1) & 0xffff;
+    color = 0xf;
+    len = sp;
+    box_hline(img, x, y, color, len);
+    len = 1;
+    color = 0;
+    box_vline(img, x, y, color, len);
+    y = (y + 1) & 0xffff;
+    x = (x + 1) & 0xffff;
+    len = (sp - 2) & 0xffff;
+    box_hline(img, x, y, color, len);
+    y = (y - 1) & 0xffff;
+    x = (x - 1) & 0xffff;
+    len = 1;
+    box_vline(img, x, y, color, len);
+    x = (x + sp) & 0xffff;
+    x = (x - 1) & 0xffff;
+    len = 1;
+    box_vline(img, x, y, color, len);
 
     uint32_t phase;
     uint32_t base = screen_address(img, be16(img + A_ELEM_1A532),
                                        be16(img + A_ELEM_1A530), &phase);
     wr32(img + A_ELEM_1A528, base);
     wr16(img + A_DAT_1A49E, phase);
-    d0 = (be16(img + A_TEXT_BOX_W) + 2) & 0xffff;
-    d1 = (be16(img + A_CURSOR_TEXT_Y) - be16(img + A_ELEM_1A530) + 2) & 0xffff;
-    wr16(img + A_ELEM_1A532, d0);
-    wr16(img + A_ELEM_1A530, d1);
+    x = (be16(img + A_TEXT_BOX_W) + 2) & 0xffff;
+    y = (be16(img + A_CURSOR_TEXT_Y) - be16(img + A_ELEM_1A530) + 2) & 0xffff;
+    wr16(img + A_ELEM_1A532, x);
+    wr16(img + A_ELEM_1A530, y);
 
-    uint32_t bx = img[a6 + 1], by = img[a6 + 2];
-    uint32_t b6 = img[a6 + 3] & 0xe0;
+    uint32_t bx = img[script + 1], by = img[script + 2];
+    uint32_t b6 = img[script + 3] & 0xe0;
     if (b6 == 0) {
-        d0 = (bx + 1) & 0xffff;
-        d1 = (by - 7) & 0xffff;
-        text_blit_ovl_b(img, d0, d1, 0x12);
+        x = (bx + 1) & 0xffff;
+        y = (by - 7) & 0xffff;
+        text_blit_ovl_b(img, x, y, 0x12);
     } else if (b6 == 0x20) {
-        d0 = (bx + be16(img + A_TEXT_BOX_W)) & 0xffff;
-        d1 = (by - 7) & 0xffff;
-        text_blit_rev_entry(img, 0x12, d0, d1);
-        d0 = (d0 - 1) & 0xffff;
+        x = (bx + be16(img + A_TEXT_BOX_W)) & 0xffff;
+        y = (by - 7) & 0xffff;
+        text_blit_rev_entry(img, 0x12, x, y);
+        x = (x - 1) & 0xffff;
     } else if (b6 == 0x80) {
-        d0 = (bx + be16(img + A_TEXT_BOX_W)) & 0xffff;
-        d1 = (be16(img + A_CURSOR_TEXT_Y) + 1) & 0xffff;
-        text_blit_rev_entry(img, 0x15, d0, d1);
-        d0 = (d0 - 1) & 0xffff;
+        x = (bx + be16(img + A_TEXT_BOX_W)) & 0xffff;
+        y = (be16(img + A_CURSOR_TEXT_Y) + 1) & 0xffff;
+        text_blit_rev_entry(img, 0x15, x, y);
+        x = (x - 1) & 0xffff;
     } else if (b6 == 0xa0) {
-        d0 = (bx + 1) & 0xffff;
-        d1 = (be16(img + A_CURSOR_TEXT_Y) + 1) & 0xffff;
-        text_blit_ovl_b(img, d0, d1, 0x15);
+        x = (bx + 1) & 0xffff;
+        y = (be16(img + A_CURSOR_TEXT_Y) + 1) & 0xffff;
+        text_blit_ovl_b(img, x, y, 0x15);
     } else if (b6 == 0xc0) {
-        d0 = (bx + be16(img + A_TEXT_BOX_W)) & 0xffff;
-        d1 = (be16(img + A_CURSOR_TEXT_Y) + 4) & 0xffff;
-        text_blit_ovl_b(img, d0, d1, 0x14);
+        x = (bx + be16(img + A_TEXT_BOX_W)) & 0xffff;
+        y = (be16(img + A_CURSOR_TEXT_Y) + 4) & 0xffff;
+        text_blit_ovl_b(img, x, y, 0x14);
     } else if (b6 == 0xe0) {
-        d0 = (bx + 1) & 0xffff;
-        d1 = (be16(img + A_CURSOR_TEXT_Y) + 4) & 0xffff;
-        text_blit_ovl_b(img, d0, d1, 0x13);
+        x = (bx + 1) & 0xffff;
+        y = (be16(img + A_CURSOR_TEXT_Y) + 4) & 0xffff;
+        text_blit_ovl_b(img, x, y, 0x13);
     }
     uint32_t fa0 = be32(img + A_ELEM_1A528);
     uint32_t fd7 = be16(img + A_DAT_1A49E);
     uint32_t fd2 = be16(img + A_ELEM_1A532);
     uint32_t fd3 = be16(img + A_ELEM_1A530);
-    hint_slot_alloc(img, 1, fa0, fd7, d0, d1, fd2, fd3);
+    hint_slot_alloc(img, 1, fa0, fd7, x, y, fd2, fd3);
 }
 
 /* FUN_00010b52 @ 0x10b52 (cmd idx 78): text index de A6[1] sobre el banco 0x3c534,
  * copia 0x1a482 a 0x1a484 y dibuja la ventana (0x10b6c). Devuelve A6 + 5. */
-uint32_t text_window_entry(uint8_t *img, uint32_t a6) {
-    a6 += 1;
-    uint32_t a5 = text_index_arg(img, 0x3c534, img[a6], &a6);
+uint32_t text_window_entry(uint8_t *img, uint32_t script) {
+    script += 1;
+    uint32_t str = text_index_arg(img, 0x3c534, img[script], &script);
     wr16(img + A_DAT_1A484, be16(img + A_TEXT_INDEX));
-    text_window(img, a5, a6);
-    return a6 + 4;
+    text_window(img, str, script);
+    return script + 4;
 }
 
 /* FUN_00013f86 @ 0x13f86: mide y dibuja una caja de texto autodimensionada.
@@ -367,68 +367,68 @@ void box_vline_back(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_
 void scene_text_box(uint8_t *img) {
     copy_rows(img);
     wr16(img + A_DAT_1A49E, img[0x1acf1]);
-    uint32_t a4o, a5o;
-    walk_entry(img, 0x24982, (img[0x1acc7] - 1) & 0xffff, &a4o, &a5o);
-    wr32(img + A_DAT_1A4B2, a4o);
-    uint32_t a6 = a5o;
+    uint32_t end, entry;
+    walk_entry(img, 0x24982, (img[0x1acc7] - 1) & 0xffff, &end, &entry);
+    wr32(img + A_DAT_1A4B2, end);
+    uint32_t script = entry;
     wr32(img + 0x1ab40, 0xff00ff00);
-    uint32_t a4 = 0x1a7b6;
+    uint32_t marker = 0x1a7b6;
     img[0x1a751] = 0;
     for (;;) {
-        uint32_t d4 = img[a6];
-        if (d4 >= 0x32 && d4 < 0x3d) {
-            wr32(img + a4, a6 - 3);
-            a4 += 4;
+        uint32_t b = img[script];
+        if (b >= 0x32 && b < 0x3d) {
+            wr32(img + marker, script - 3);
+            marker += 4;
             img[0x1a751] = (uint8_t)(img[0x1a751] + 1);
-            uint32_t d0 = img[0x1a751];
-            if (d0 == img[0x1acc9] ||
-                (img[0x1acc7] == 0x20 && d4 == 0x3b && (img[0x1aced] & 8))) {
-                a6 += 3;
+            uint32_t x = img[0x1a751];
+            if (x == img[0x1acc9] ||
+                (img[0x1acc7] == 0x20 && b == 0x3b && (img[0x1aced] & 8))) {
+                script += 3;
                 continue;
             }
         }
-        uint32_t a0o, d2, d3, d7;
-        run_text_entry_ex(img, a6, &a0o, &d2, &d3, &d7);
+        uint32_t addr, w, h, phase;
+        run_text_entry_ex(img, script, &addr, &w, &h, &phase);
         /* D6 = A6[1] & 0x7f: 14138 lo guarda con bit7 y lo enmascara al ajustar
          * la posicion (0x1416c); sin la mascara el ancho de la caja se dispara. */
-        uint32_t d6 = img[a6 + 1] & 0x7f;
+        uint32_t v = img[script + 1] & 0x7f;
         /* D5 = (A6[2] << 1) & 0xff: 14138 hace `lsl.b` (byte), no `lsl.w`. */
-        uint32_t d5 = (img[a6 + 2] << 1) & 0xff;
-        if (d6 < img[0x1ab40])
-            img[0x1ab40] = (uint8_t)d6;
-        uint32_t t = (d6 + d2) & 0xff;
+        uint32_t v2 = (img[script + 2] << 1) & 0xff;
+        if (v < img[0x1ab40])
+            img[0x1ab40] = (uint8_t)v;
+        uint32_t t = (v + w) & 0xff;
         if (t >= img[0x1ab41])
             img[0x1ab41] = (uint8_t)t;
-        if (d5 < img[0x1ab42])
-            img[0x1ab42] = (uint8_t)d5;
-        t = (d5 + d3) & 0xff;
+        if (v2 < img[0x1ab42])
+            img[0x1ab42] = (uint8_t)v2;
+        t = (v2 + h) & 0xff;
         if (t >= img[0x1ab43])
             img[0x1ab43] = (uint8_t)t;
-        a6 += 3;
-        if (a6 == a4o)
+        script += 3;
+        if (script == end)
             break;
     }
-    uint32_t d0 = (img[0x1ab41] - img[0x1ab40] - 2) & 0xff;
-    img[0x1ab49] = (uint8_t)d0;
-    d0 = img[0x1ab40];
-    wr16(img + A_CURSOR_TEXT_X, d0 & 0xffff);
-    wr16(img + 0x1aa6a, (d0 + 1) & 0xffff);
-    uint32_t d1 = (img[0x1ab43] + 2) & 0xff;
-    wr16(img + 0x1aa6c, d1 & 0xffff);
-    wr16(img + A_CURSOR_TEXT_Y, d1 & 0xffff);
+    uint32_t x = (img[0x1ab41] - img[0x1ab40] - 2) & 0xff;
+    img[0x1ab49] = (uint8_t)x;
+    x = img[0x1ab40];
+    wr16(img + A_CURSOR_TEXT_X, x & 0xffff);
+    wr16(img + 0x1aa6a, (x + 1) & 0xffff);
+    uint32_t y = (img[0x1ab43] + 2) & 0xff;
+    wr16(img + 0x1aa6c, y & 0xffff);
+    wr16(img + A_CURSOR_TEXT_Y, y & 0xffff);
     wr32(img + A_SCREEN_DRAW_BASE, 0x8000);
     wr32(img + A_COLOR_TABLE, 0x1d3c2);
     print_char(img, 0x3b);
-    overlay_a_draw(img, a6);
+    overlay_a_draw(img, script);
     print_char(img, 0x3c);
-    d0 = be16(img + 0x1aa6a);
-    d1 = be16(img + 0x1aa6c);
-    d0 = ((d0 - 1) << 2) & 0xffff;
-    d1 = (d1 - 2) & 0xffff;
-    uint32_t d6v = ((img[0x1ab49] + 2) << 2) & 0xffff;
-    box_hline_back(img, d0, d1, 7, d6v);
-    box_hline_back(img, d0, (d1 + 1) & 0xffff, 6, d6v);
-    box_hline_back(img, d0, (d1 + 8) & 0xffff, 7, d6v);
-    box_vline_back(img, d0, d1, 7, 9);
-    box_vline_back(img, (d0 + d6v - 1) & 0xffff, d1, 7, 9);
+    x = be16(img + 0x1aa6a);
+    y = be16(img + 0x1aa6c);
+    x = ((x - 1) << 2) & 0xffff;
+    y = (y - 2) & 0xffff;
+    uint32_t w2 = ((img[0x1ab49] + 2) << 2) & 0xffff;
+    box_hline_back(img, x, y, 7, w2);
+    box_hline_back(img, x, (y + 1) & 0xffff, 6, w2);
+    box_hline_back(img, x, (y + 8) & 0xffff, 7, w2);
+    box_vline_back(img, x, y, 7, 9);
+    box_vline_back(img, (x + w2 - 1) & 0xffff, y, 7, 9);
 }
