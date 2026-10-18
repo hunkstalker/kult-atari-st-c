@@ -145,28 +145,7 @@ rutas no probadas / riesgo de UB; **BAJA** = nombre/comentario/estilo.
 - `docs/REVISION.md` con el **registro de hallazgos** y `docs/ESTADO.md`
   actualizado. Solo entonces se abre la fase 3.
 
-## 7. Prompt para la sesión de revisión (copiar y pegar)
-
----
-Trabajamos en la reimplementación en C de **Kult: The Temple of Flying Saucers**
-(Atari ST) en `/app/kult-atari-st-c`. El decomp ASM canónico
-(`/app/kult-atari-st-decomp`, byte a byte, **no se toca**) es la verdad.
-
-Antes de tocar nada de kult-port, quiero **revisar el C ya escrito y renombrado**.
-Lee, por este orden: `docs/REVISION.md` (este plan), `docs/ESTADO.md`,
-`docs/PLAN.md` (§4.1 convenciones) y `docs/REFERENCIA_F4.md`.
-
-Haz la revisión siguiendo `docs/REVISION.md`: los cuatro ejes (fidelidad vs ASM,
-nombres/comentarios, legibilidad/estilo, cobertura de tests), empezando por la
-prioridad P0. Por cada función compara el cuerpo C con su `auto_*.s` en
-`/app/kult-atari-st-decomp/matching/`, registra hallazgos con la plantilla §5 y,
-si hay fallo real, arréglalo **con prueba** y deja `make test` verde.
-
-Reglas: reproducir/medir antes de tocar, una hipótesis un cambio, toda corrección
-deja test, commit por módulo. Todo en español. No toques kult-port.
----
-
-## 8. Registro de hallazgos
+## 7. Registro de hallazgos
 
 (Se rellena durante la revisión. Vacío al crear el plan.)
 
