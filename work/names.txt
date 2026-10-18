@@ -453,7 +453,6 @@ var 0x134 sound_timer_vector    # vector de interrupcion del timer B (sonido)
 # ==== importados del C viejo (func_XXXX + alias) ====
 fn 0x128a4 elem_command
 fn 0x14138 run_text_entry_ex
-fn 0x10fec screen_address_off
 fn 0x12950 walk_entry
 fn 0x10390 dispatch_a6
 fn 0x104f4 inline_cmd_walk
