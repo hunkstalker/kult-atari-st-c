@@ -14,3 +14,14 @@ addrs:
 .PHONY: mapa
 mapa:
 	$(PY) tools/gen_mapa.py
+
+# Core con la API publica restringida por version-script (build on-target).
+# El build diferencial (build/libkult.so) NO usa esto: necesita todos los simbolos.
+CORE     := build/libkultcore.so
+CORE_SRC := $(wildcard src/*.c) $(wildcard $(KIT)/src/*.c)
+$(CORE): $(CORE_SRC) $(wildcard include/*.h) kult_core.map
+	@mkdir -p build
+	$(CC) $(CFLAGS) -shared -Wl,--version-script=kult_core.map $(CORE_SRC) -o $(CORE)
+.PHONY: core
+core: $(CORE)
+test: $(CORE)

@@ -30,16 +30,19 @@ para que modificar el juego sea localizar la pieza y tocarla.
 ## Estructura
 
 ```
-Makefile              build del candidato + `make test` (diferencial) + `make addrs`
+Makefile              build del candidato + `make test` (diferencial) + `make addrs`/`mapa`/`core`
 project.toml          datos del proyecto para el arnés (PRG, nombres, base)
 include/addrs.h       direcciones con nombre de los globales (GENERADO desde names.txt)
-src/                  C a escribir (empieza vacío)
+include/kult_api.h    API pública del core (frontera con el motor)
+kult_core.map         version-script: exporta solo la API en el build on-target
+src/                  C de la reimplementación (un módulo por subsistema)
 test/                 pruebas diferenciales (harness.py + test_*.py) + convenciones
 tools/recreate_kit/   arnés + oráculo (Musashi); GPL-2.0
 tools/gen_addrs.py    genera include/addrs.h desde work/names.txt
+tools/gen_mapa.py     genera docs/mapa/ desde src/, names.txt y test/
 reference/test_f4/    469 pruebas del intento anterior (referencia, no se ejecutan)
 work/                 PRG original (gitignored) + names.txt (registro de nombres)
-docs/                 plan, prompt de sesión, referencia
+docs/                 plan, prompt de sesión, referencia, mapa/, VISIBILIDAD
 ```
 
 ## Estado

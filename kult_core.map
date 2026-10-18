@@ -1,0 +1,46 @@
+/* kult_core.map — version-script del core (build on-target, `make core`).
+ *
+ * Solo los símbolos de `global` salen en la tabla dinámica de
+ * `build/libkultcore.so`; el resto (`local: *`) queda oculto, de modo que al
+ * enlazar el core con SDL y otras librerías no colisiona ninguno de sus ~400
+ * símbolos internos. La lista es la API que consume el motor (ver
+ * include/kult_api.h y docs/VISIBILIDAD.md).
+ *
+ * Sin nombre de versión (bloque anónimo) para que los símbolos no lleven tag.
+ */
+{
+  global:
+    copy_screen;
+    crt0_init;
+    cursor_draw;
+    cursor_restore;
+    draw_hint_icons;
+    game_loop;
+    gemdos_cnecin;
+    init_hardware;
+    load_eche_bank;
+    load_fond;
+    load_named_screen;
+    load_resource_list_a;
+    load_resource_list_b;
+    load_scena;
+    music_stop;
+    music_tick;
+    pal_next_byte;
+    prompt_wait;
+    psg_trap3;
+    run_command_keep_sp;
+    save_clear_bin;
+    save_scena;
+    set_palette;
+    sound_isr_back;
+    sound_isr_fwd;
+    sound_isr_load;
+    sound_stop;
+    sound_stop_supexec;
+    swap_screens;
+    wait_frame;
+    wait_frame_cursor;
+  local:
+    *;
+};
