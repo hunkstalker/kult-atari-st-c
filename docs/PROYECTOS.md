@@ -10,7 +10,7 @@ contradice a este, manda este.
 |---|---|---|---|
 | `/app/kult-atari-st-decomp` | decomp **ASM** del original Atari ST | **byte a byte** (`sha256 2e85f223…`) | **congelado**; no se toca |
 | `/app/kult-atari-st-c` | **reimplementación en C** del ST, legible y renombrada | **mismo comportamiento** (diferencial Musashi) | es la **base**; revisión interna cerrada, **pendiente de validación del usuario** |
-| `/app/kult-port-pc-compilation` (a crear) | **la compilación**: une **Atari ST + Amiga**, mejoras y **todos los idiomas** | por capas: core verificado + backends | **nace de `kult-atari-st-c`** |
+| `/app/kult-port-pc-compilation` | **la compilación**: une **Atari ST + Amiga**, mejoras y **todos los idiomas** | por capas: core verificado + backends | **nace de `kult-atari-st-c`** (plan en ese repo) |
 | `/app/kult-port-legacy` | predecesor de modding | — | **solo referencia**; no se toca |
 
 ## Papeles en detalle
@@ -33,7 +33,7 @@ repo de trabajo hasta que el usuario valide. Es la **base** de la compilación.
 El objetivo de producto: un Kult **nativo en C para PC** que **una las versiones
 Atari ST y Amiga**, con mejoras y **todos los idiomas**. **Nace de
 `kult-atari-st-c`** (se copian `src/`, `include/`, `test/`, `tools/` al crear el
-repo) y toma `kult-port-legacy` como **referencia**. Plan: **`docs/PLAN_COMPILACION.md`**.
+repo) y toma `kult-port-legacy` como **referencia**. Plan: repositorio `/app/kult-port-pc-compilation` (docs/PLAN.md).
 
 ### `kult-port-legacy` — referencia (ex `kult-port`)
 Predecesor de modding, **renombrado** de `kult-port` a `kult-port-legacy`. Se
