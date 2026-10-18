@@ -253,7 +253,7 @@ uint32_t wait_button_b(uint8_t *img, uint32_t a6) {
  * (y de `screen_address`) en el mismo punto en que el original los tendria.
  */
 
-uint32_t func_128a4(uint8_t *img, uint32_t a6);
+uint32_t elem_command_wrap(uint8_t *img, uint32_t a6);
 void grid_fill(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t d7, uint32_t a1);
 void row_blit_a(uint8_t *img, uint32_t d1, uint32_t a0, uint32_t a1);
 void row_blit_b(uint8_t *img, uint32_t d1, uint32_t a0, uint32_t a1);
@@ -276,7 +276,7 @@ static elem_regs elem_after_128a4(uint8_t *img) {
  * el, 128a4 + 126e0 (compone el bitmap en 0xd8f0) y 11ece (d1=alto-1, a1=0xd8f0 +
  * (alto-1)*0x40). */
 uint32_t blit_dispatch_a(uint8_t *img, uint32_t a6) {
-    a6 = func_128a4(img, a6);
+    a6 = elem_command_wrap(img, a6);
     elem_regs r = elem_after_128a4(img);
     if (img[A_SKIP_TRANSITION] != 0) {
         blit_rect_vbl(img, r.a0, r.a1, r.d2, r.d3, r.d7);
@@ -291,7 +291,7 @@ uint32_t blit_dispatch_a(uint8_t *img, uint32_t a6) {
 /* FUN_00011f2e @ 0x11f2e: idem pero 11ee8; el segundo 0x10fec usa y = *(0x1a530)+alto-1
  * y a1 = 0xd8f0. */
 uint32_t blit_dispatch_b(uint8_t *img, uint32_t a6) {
-    a6 = func_128a4(img, a6);
+    a6 = elem_command_wrap(img, a6);
     elem_regs r = elem_after_128a4(img);
     if (img[A_SKIP_TRANSITION] != 0) {
         blit_rect_vbl(img, r.a0, r.a1, r.d2, r.d3, r.d7);
@@ -377,7 +377,7 @@ void scroll_down(uint8_t *img, uint32_t d1in, uint32_t d2in, uint32_t d3in,
 uint32_t overlay_dispatch_1(uint8_t *img, uint32_t a6) {
     if (img[A_SKIP_TRANSITION] != 0)
         return elem_blit_vbl(img, a6);
-    a6 = func_128a4(img, a6);
+    a6 = elem_command_wrap(img, a6);
     elem_regs r = elem_after_128a4(img);
     uint32_t a1 = r.a1 + be32(img + A_DAT_1A534) - 2;
     blit_rect_vbl(img, r.a0, a1, 1, r.d3, r.d7);
@@ -391,7 +391,7 @@ uint32_t overlay_dispatch_1(uint8_t *img, uint32_t a6) {
 uint32_t overlay_dispatch_2(uint8_t *img, uint32_t a6) {
     if (img[A_SKIP_TRANSITION] != 0)
         return elem_blit_vbl(img, a6);
-    a6 = func_128a4(img, a6);
+    a6 = elem_command_wrap(img, a6);
     elem_regs r = elem_after_128a4(img);
     uint32_t d7;
     uint32_t a0 = screen_address(img, be16(img + A_ELEM_1A532) + r.d2 - 1,
@@ -484,7 +484,7 @@ static uint32_t border_after_127e0(uint8_t *img, elem_regs r) {
 
 /* 0x132aa: 128a4 + 127e0 + 13370 + 12466 (la rama 0x1a570!=0 es 0x134da). */
 uint32_t reveal_box_build(uint8_t *img, uint32_t a6) {
-    a6 = func_128a4(img, a6);
+    a6 = elem_command_wrap(img, a6);
     elem_regs r = elem_after_128a4(img);
     if (img[A_SKIP_TRANSITION] != 0) {
         blit_rect_vbl(img, r.a0, r.a1, r.d2, r.d3, r.d7);
@@ -499,7 +499,7 @@ uint32_t reveal_box_build(uint8_t *img, uint32_t a6) {
 
 /* 0x132ec: como 0x132aa pero con 0x13e14. */
 uint32_t reveal_box_wait_a(uint8_t *img, uint32_t a6) {
-    a6 = func_128a4(img, a6);
+    a6 = elem_command_wrap(img, a6);
     elem_regs r = elem_after_128a4(img);
     if (img[A_SKIP_TRANSITION] != 0) {
         blit_rect_vbl(img, r.a0, r.a1, r.d2, r.d3, r.d7);
@@ -514,7 +514,7 @@ uint32_t reveal_box_wait_a(uint8_t *img, uint32_t a6) {
 
 /* 0x1332e: como 0x132aa pero con 0x13eae. */
 uint32_t reveal_box_wait_b(uint8_t *img, uint32_t a6) {
-    a6 = func_128a4(img, a6);
+    a6 = elem_command_wrap(img, a6);
     elem_regs r = elem_after_128a4(img);
     if (img[A_SKIP_TRANSITION] != 0) {
         blit_rect_vbl(img, r.a0, r.a1, r.d2, r.d3, r.d7);
@@ -730,7 +730,7 @@ void mode_queue_wrap(uint8_t *img) {
 /* FUN_000134da @ 0x134da: rama compartida por los dispatchers 0x11xxx con
  * 0x1a570 != 0: 0x128a4 y rebliteo (0x124da). */
 uint32_t elem_blit_vbl(uint8_t *img, uint32_t a6) {
-    a6 = func_128a4(img, a6);
+    a6 = elem_command_wrap(img, a6);
     elem_regs r = elem_after_128a4(img);
     blit_rect_vbl(img, r.a0, r.a1, r.d2, r.d3, r.d7);
     return a6;

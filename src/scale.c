@@ -54,7 +54,7 @@ static void scale_setup(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t *d2o,
     wr32(img + 0x1a494, 0);
 }
 
-void func_13a18(uint8_t *img, uint32_t d2in, uint32_t d3in, uint32_t d7,
+void scale_16_16(uint8_t *img, uint32_t d2in, uint32_t d3in, uint32_t d7,
                  uint32_t a2) {
     uint32_t d2, d6, d7start;
     scale_setup(img, d2in & 0xffff, d3in & 0xffff, &d2, &d6, &d7start);
@@ -139,7 +139,7 @@ void func_13a18(uint8_t *img, uint32_t d2in, uint32_t d3in, uint32_t d7,
     copy_scratch_rows(img, a5, (be16(img + 0x1a556) - 1) & 0xffff, d2);
 }
 
-void func_13bc2(uint8_t *img, uint32_t d2in, uint32_t d3in, uint32_t d7,
+void scale_blit(uint8_t *img, uint32_t d2in, uint32_t d3in, uint32_t d7,
                  uint32_t a1in) {
     uint32_t d2, d6, d7start;
     scale_setup(img, d2in & 0xffff, d3in & 0xffff, &d2, &d6, &d7start);
@@ -209,7 +209,7 @@ void func_13bc2(uint8_t *img, uint32_t d2in, uint32_t d3in, uint32_t d7,
 /* FUN_00013702 @ 0x13702 (byte 16): 128a4 + setup de 0x1a544/0x1a542/0x1a486;
  * escribe [filas][cols] en la entrada de icono que 128a4 deja en A2 (+0xe) y llama
  * al escalador 0x13a18. Devuelve A6 + 2 (los dos bytes leidos). */
-uint32_t func_128a4(uint8_t *img, uint32_t a6);
+uint32_t elem_command_wrap(uint8_t *img, uint32_t a6);
 uint32_t elem_blit_vbl(uint8_t *img, uint32_t a6);
 uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
 
@@ -222,7 +222,7 @@ uint32_t scale_prep(uint8_t *img, uint32_t a6) {
         if (k == 0)
             break;
     }
-    a6 = func_128a4(img, a6);
+    a6 = elem_command_wrap(img, a6);
     uint32_t d7;
     uint32_t a0 = screen_address(img, be16(img + A_ELEM_1A532),
                                      be16(img + A_ELEM_1A530), &d7);
@@ -239,7 +239,7 @@ uint32_t scale_prep(uint8_t *img, uint32_t a6) {
     b3 = (b3 << 2) & 0xffff;
     b2 = (b2 - 2) & 0xffff;
     b3 = (b3 - 2) & 0xffff;
-    func_13a18(img, b2, b3, d7, a0);
+    scale_16_16(img, b2, b3, d7, a0);
     return a6 + 2;
 }
 
@@ -251,7 +251,7 @@ static uint32_t movep_read_l(uint8_t *img, uint32_t a) {
 /* FUN_0001398e @ 0x1398e: construye en 0xd8f0 una lista de entradas
  * [word offset][word max(1,*0x1a1f2)][long movep(fila)] de 8 filas (stride 0xa0)
  * por grupo, avanzando A2 +1/+7 y A0 +0x500 por banda; cierra con un long 0. */
-void func_1398e(uint8_t *img, uint32_t d2in, uint32_t d3in, uint32_t d7, uint32_t a0) {
+void scale_list_build(uint8_t *img, uint32_t d2in, uint32_t d3in, uint32_t d7, uint32_t a0) {
     uint32_t a4 = 0xd8f0;
     uint32_t a5 = 0x1a1f2;
     uint32_t d2 = d2in & 0xffff;
@@ -305,7 +305,7 @@ void func_1398e(uint8_t *img, uint32_t d2in, uint32_t d3in, uint32_t d7, uint32_
 void hint_select_off(uint8_t *img, uint32_t d0, uint32_t *o);
 void hint_blit_entry(uint8_t *img, uint32_t a6, uint32_t *a6_out);
 void wait_vbl(uint8_t *img);
-void func_1398e(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t d7, uint32_t a0);
+void scale_list_build(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t d7, uint32_t a0);
 static void movep_write_l(uint8_t *img, uint32_t a, uint32_t v) {
     img[a] = (v >> 24) & 0xff;
     img[a + 2] = (v >> 16) & 0xff;
@@ -321,7 +321,7 @@ uint32_t scale_anim(uint8_t *img, uint32_t a6) {
     }
     uint32_t o[8];
     hint_select_off(img, img[a6 + 1], o);
-    func_1398e(img, o[5], o[6], o[2], o[0]);
+    scale_list_build(img, o[5], o[6], o[2], o[0]);
 
     uint32_t d6 = 1;
     for (;;) {
@@ -392,7 +392,7 @@ uint32_t screen_address_raw(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7
 uint32_t scale_loop(uint8_t *img, uint32_t a6) {
     if (img[A_SKIP_TRANSITION] != 0)
         return elem_blit_vbl(img, a6);
-    a6 = func_128a4(img, a6);
+    a6 = elem_command_wrap(img, a6);
     uint32_t x = be16(img + A_ELEM_1A532);
     uint32_t y = be16(img + A_ELEM_1A530);
     uint32_t w = be16(img + A_ELEM_1A52E);
@@ -426,7 +426,7 @@ uint32_t scale_loop(uint8_t *img, uint32_t a6) {
     uint32_t d4 = (d4b - 3) & 0xffff;
     uint32_t a2 = a0;
     for (;;) {
-        func_13a18(img, d2, d3, d7, a2);
+        scale_16_16(img, d2, d3, d7, a2);
         {
             uint32_t acc = be32(img + 0x1a546);
             uint32_t lo = acc & 0xffff, hi = acc >> 16;

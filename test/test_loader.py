@@ -22,8 +22,8 @@ SCRIPTP = 0x40000
 
 _u8p = ctypes.POINTER(ctypes.c_uint8)
 _u32p = ctypes.POINTER(ctypes.c_uint32)
-harness._lib.func_1350c.argtypes = [_u8p, _u32p]
-harness._lib.func_1350c.restype = None
+harness._lib.script_push.argtypes = [_u8p, _u32p]
+harness._lib.script_push.restype = None
 harness._lib.script_pop.argtypes = [_u8p, _u32p]
 harness._lib.script_pop.restype = None
 harness._lib.script_call.argtypes = [_u8p, _u32p]
@@ -50,7 +50,7 @@ def test_fun_1350c():
     a6 = ctypes.c_uint32(SCRIPTP)
     diffs, info = differential(FUN_1350C, {"a6": SCRIPTP, "_pokes": _script_pokes()},
                                lambda lib, buf, p=a6:
-                               lib.func_1350c(buf, ctypes.byref(p)))
+                               lib.script_push(buf, ctypes.byref(p)))
     assert not diffs, report(diffs)
     assert a6.value == info["regs"]["a6"], "A6 nuevo"
 

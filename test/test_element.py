@@ -233,8 +233,8 @@ def test_fun_129c8():
 
 
 FUN_128A4 = 0x128A4
-harness._lib.func_128a4.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.func_128a4.restype = ctypes.c_uint32
+harness._lib.elem_command_wrap.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.elem_command_wrap.restype = ctypes.c_uint32
 
 
 def test_fun_128a4_direct():
@@ -250,7 +250,7 @@ def test_fun_128a4_direct():
         for i in range(0x800):
             pokes[SCREEN_A + i] = bytes([(i * 3 + 1) & 0xFF])
         diffs, info = differential(FUN_128A4, {"a6": 0x50000, "_pokes": pokes},
-                                   lambda lib, buf: lib.func_128a4(buf, 0x50000))
+                                   lambda lib, buf: lib.elem_command_wrap(buf, 0x50000))
         assert not diffs, f"x={x} y={y}\n{report(diffs)}"
         assert info["ret"] == info["regs"]["a6"], f"x={x} y={y} a6"
 
@@ -291,11 +291,11 @@ def test_fun_128a4_ff():
             pokes[SCREEN_A + i] = bytes([(i * 3 + 1) & 0xFF])
         if early:
             diffs, info = differential(FUN_128A4, {"a6": 0x50000, "_pokes": pokes},
-                                       lambda lib, buf: lib.func_128a4(buf, 0x50000),
+                                       lambda lib, buf: lib.elem_command_wrap(buf, 0x50000),
                                        stop_pc=STOP_EARLY)
         else:
             diffs, info = differential(FUN_128A4, {"a6": 0x50000, "_pokes": pokes},
-                                       lambda lib, buf: lib.func_128a4(buf, 0x50000))
+                                       lambda lib, buf: lib.elem_command_wrap(buf, 0x50000))
         assert not diffs, (f"skip={skip_18d28} found={found}\n{report(diffs)}")
         assert info["ret"] == info["regs"]["a6"], f"skip={skip_18d28} found={found} a6"
 

@@ -51,7 +51,7 @@ void     hint_blit_2(uint8_t *img, uint32_t *a6);
 uint32_t icon_blit_handler(uint8_t *img, uint32_t a6);
 void     hint_blit_stroke(uint8_t *img, uint32_t *a6);
 uint32_t prompt_wait_entry(uint8_t *img, uint32_t a6);
-void     func_1350c(uint8_t *img, uint32_t *a6);
+void     script_push(uint8_t *img, uint32_t *a6);
 void     script_pop(uint8_t *img, uint32_t *a6);
 void     script_call(uint8_t *img, uint32_t *a6);
 void     script_store(uint8_t *img, uint32_t *a6);
@@ -196,7 +196,7 @@ static uint32_t byte_handler(uint32_t b, uint8_t *img, uint32_t a6) {
     case 42: return icon_blit_handler(img, a6);
     case 43: n = a6; hint_blit_stroke(img, &n); return n;
     case 46: return prompt_wait_entry(img, a6);
-    case 51: n = a6; func_1350c(img, &n); return n;
+    case 51: n = a6; script_push(img, &n); return n;
     case 52: n = a6; script_pop(img, &n); return n;
     case 53: n = a6; script_call(img, &n); return n;
     case 56: anim_entry_a(img, a6); return addr_add(a6, 4);   /* 0x159d2: push a6+4, pop al final */
@@ -406,7 +406,7 @@ static void cmd_handler(uint8_t *img, uint32_t idx, uint32_t a6) {
     case 85: (void)view_change(img, a6); break;
     case 86: (void)use_object(img, a6); break;
     case 87: (void)track_icon_anim(img, a6); break;
-    case 88: { uint32_t n = a6; func_1350c(img, &n); } break;
+    case 88: { uint32_t n = a6; script_push(img, &n); } break;
     case 89: { uint32_t n = a6; script_pop(img, &n); } break;
     case 90: { uint32_t n = a6; script_call(img, &n); } break;
     case 91: (void)scene_mode_draw_wrap(img, a6); break;

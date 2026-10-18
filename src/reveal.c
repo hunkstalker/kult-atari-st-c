@@ -87,7 +87,7 @@ static uint32_t rol16b(uint32_t v, uint32_t n) {
 /* FUN_00012fb6 @ 0x12fb6: escribe 4 words en A0: para cada uno, AND con la máscara
  * invertida (rotada de 0x8000 por D7) y OR con la parte correspondiente de D0. Puro
  * bucle de píxeles. */
-void func_12fb6(uint8_t *img, uint32_t a0, uint32_t d0, uint32_t d7) {
+void masked_word4(uint8_t *img, uint32_t a0, uint32_t d0, uint32_t d7) {
     uint32_t d4 = ror16b(0x8000, d7);
     uint32_t d5 = (~d4) & 0xffff;
     d0 = ror16b(d0, d7);
@@ -102,13 +102,13 @@ void func_12fb6(uint8_t *img, uint32_t a0, uint32_t d0, uint32_t d7) {
 /* FUN_00012f28 @ 0x12f28: revelado pixel a pixel del elemento. Tras 128a4 reescala
  * x/ancho <<2, fija el total (alto*ancho) en 0x1a49e y recorre las posiciones en
  * pasos de 0x11 (mod total) pintando el bit (0x12fb6) con retardo entre pasos. */
-uint32_t func_128a4(uint8_t *img, uint32_t a6);
+uint32_t elem_command_wrap(uint8_t *img, uint32_t a6);
 uint32_t elem_blit_vbl(uint8_t *img, uint32_t a6);
 
 uint32_t reveal_pixel(uint8_t *img, uint32_t a6) {
     if (img[A_SKIP_TRANSITION] != 0)
         return elem_blit_vbl(img, a6);
-    a6 = func_128a4(img, a6);
+    a6 = elem_command_wrap(img, a6);
     uint32_t x = be16(img + A_ELEM_1A532);
     uint32_t w = be16(img + A_ELEM_1A52E);
     uint32_t h = be16(img + A_ELEM_1A52C);
@@ -129,7 +129,7 @@ uint32_t reveal_pixel(uint8_t *img, uint32_t a6) {
         uint32_t a0 = screen_address_raw(img, (be16(img + A_ELEM_1A532) + r) & 0xffff,
                                           (be16(img + A_ELEM_1A530) + q) & 0xffff, &d7);
         uint32_t v = (be16(img + a1 + off) << bit) & 0xffff;
-        func_12fb6(img, a0, v, d7);
+        masked_word4(img, a0, v, d7);
         cpu_delay(reveal_gate(0x64));            /* dbf 0x64 del original */
         acc = (acc + 0x11) & 0xffff;
         if (acc == total)

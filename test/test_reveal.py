@@ -64,8 +64,8 @@ def test_fun_12e2e_reveal():
 
 
 FUN_12FB6 = 0x12FB6
-harness._lib.func_12fb6.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32]
-harness._lib.func_12fb6.restype = None
+harness._lib.masked_word4.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32]
+harness._lib.masked_word4.restype = None
 
 
 def test_fun_12fb6():
@@ -74,7 +74,7 @@ def test_fun_12fb6():
             pokes = {0x40000 + i: bytes([(i * 7 + 3) & 0xFF]) for i in range(0x10)}
             diffs, _ = differential(
                 FUN_12FB6, {"a0": 0x40000, "d0": d0, "d7": d7, "_pokes": pokes},
-                lambda lib, buf, v=d0, p=d7: lib.func_12fb6(buf, 0x40000, v, p))
+                lambda lib, buf, v=d0, p=d7: lib.masked_word4(buf, 0x40000, v, p))
             assert not diffs, f"d0={d0:#x} d7={d7}\n{report(diffs)}"
 
 

@@ -15,12 +15,12 @@ SRC = 0x40000
 DEST = 0x90000
 
 _u8p = ctypes.POINTER(ctypes.c_uint8)
-harness._lib.func_13a18.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32,
+harness._lib.scale_16_16.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32,
                                      ctypes.c_uint32, ctypes.c_uint32]
-harness._lib.func_13a18.restype = None
-harness._lib.func_13bc2.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32,
+harness._lib.scale_16_16.restype = None
+harness._lib.scale_blit.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32,
                                      ctypes.c_uint32, ctypes.c_uint32]
-harness._lib.func_13bc2.restype = None
+harness._lib.scale_blit.restype = None
 
 
 def _scale_pokes():
@@ -45,7 +45,7 @@ def test_fun_13a18():
         pokes[0x1a486] = d5.to_bytes(2, "big")
         diffs, _ = differential(
             FUN_13A18, {"d2": d2, "d3": d3, "d7": 0, "a2": DEST, "_pokes": pokes},
-            lambda lib, buf, a=d2, b=d3: lib.func_13a18(buf, a, b, 0, DEST))
+            lambda lib, buf, a=d2, b=d3: lib.scale_16_16(buf, a, b, 0, DEST))
         assert not diffs, f"d2={d2} d3={d3} d5={d5}\n{report(diffs)}"
 
 
@@ -58,7 +58,7 @@ def test_fun_13bc2():
         diffs, _ = differential(
             FUN_13BC2, {"d2": d2, "d3": d3, "d7": 0, "a1": DEST + 0x1000,
                         "_pokes": pokes},
-            lambda lib, buf, a=d2, b=d3: lib.func_13bc2(buf, a, b, 0, DEST + 0x1000))
+            lambda lib, buf, a=d2, b=d3: lib.scale_blit(buf, a, b, 0, DEST + 0x1000))
         assert not diffs, f"d2={d2} d3={d3} d5={d5}\n{report(diffs)}"
 
 
@@ -110,9 +110,9 @@ def test_fun_13702():
 
 
 FUN_1398E = 0x1398E
-harness._lib.func_1398e.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32,
+harness._lib.scale_list_build.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32,
                                      ctypes.c_uint32, ctypes.c_uint32]
-harness._lib.func_1398e.restype = None
+harness._lib.scale_list_build.restype = None
 
 
 def test_fun_1398e():
@@ -127,7 +127,7 @@ def test_fun_1398e():
         diffs, _ = differential(
             FUN_1398E, {"d2": d2, "d3": d3, "d7": d7, "a0": a0, "_pokes": pokes},
             lambda lib, buf, a=d2, b=d3, c=d7, d=a0:
-            lib.func_1398e(buf, a, b, c, d))
+            lib.scale_list_build(buf, a, b, c, d))
         assert not diffs, f"d2={d2} d3={d3} d7={d7} a0={a0:#x}\n{report(diffs)}"
 
 

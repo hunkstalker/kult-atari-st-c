@@ -495,7 +495,7 @@ fn 0x127e0 masked_save
 fn 0x127f0 masked_save_blit
 fn 0x127fa masked_save_row
 fn 0x1285a elem_class_find
-fn 0x128a4 func_128a4
+fn 0x128a4 elem_command_wrap
 fn 0x1296c elem_bitmap_build
 fn 0x129c8 elem_list_build
 fn 0x129d6 text_block_build
@@ -507,7 +507,7 @@ fn 0x12d96 elem_blit_pair
 fn 0x12dd8 elem_blit_pair_vbl
 fn 0x12e08 reveal_box_a
 fn 0x12ea2 reveal_box_b
-fn 0x12fb6 func_12fb6
+fn 0x12fb6 masked_word4
 fn 0x12fea hint_blit_entry_b
 fn 0x132aa reveal_box_build
 fn 0x132ec reveal_box_wait_a
@@ -518,15 +518,15 @@ fn 0x13490 icon_reveal_h
 fn 0x134b2 icon_reveal_v
 fn 0x134da elem_blit_vbl
 fn 0x134e4 copy_grid
-fn 0x1350c func_1350c
+fn 0x1350c script_push
 fn 0x13522 script_pop
 fn 0x13552 script_call
 fn 0x13702 scale_prep
 fn 0x13740 scale_loop
 fn 0x138a6 scale_anim
-fn 0x1398e func_1398e
-fn 0x13a18 func_13a18
-fn 0x13bc2 func_13bc2
+fn 0x1398e scale_list_build
+fn 0x13a18 scale_16_16
+fn 0x13bc2 scale_blit
 fn 0x13f2a text_table_paint
 fn 0x141dc text_entry_blit
 fn 0x1442c cmd74_wrap

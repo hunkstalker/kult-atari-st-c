@@ -137,7 +137,7 @@ void row_palette(uint8_t *img, uint32_t a1, uint32_t a2, uint32_t d3) {
 
 /* FUN_0001350c @ 0x1350c: salta a la plantilla número (a6[2]<<8 | a6[1]): a6 = TEMPL+d0.
  * El word leído es el destino (no se usa aquí). Devuelve el A6 nuevo por out-param. */
-void func_1350c(uint8_t *img, uint32_t *a6) {
+void script_push(uint8_t *img, uint32_t *a6) {
     uint32_t d0 = ((img[*a6 + 2] << 8) | img[*a6 + 1]) & 0xffff;
     *a6 = A_TEMPL_DATA + d0;
 }
@@ -351,7 +351,7 @@ void screen_clean(uint8_t *img) {
 uint32_t elem_command(uint8_t *img, uint32_t a6, uint32_t *a6o, uint32_t *d0o,
                         uint32_t *d1o);
 uint32_t screen_address_raw(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
-void func_13bc2(uint8_t *img, uint32_t d2in, uint32_t d3in, uint32_t d7, uint32_t a1in);
+void scale_blit(uint8_t *img, uint32_t d2in, uint32_t d3in, uint32_t d7, uint32_t a1in);
 void set_palette(uint8_t *img);
 void copy_screen(uint8_t *img);
 void wait_vbl(uint8_t *img);
@@ -403,7 +403,7 @@ uint32_t attract(uint8_t *img, uint32_t a6) {
         uint32_t d0m = (d0 & 0xfff0u) >> 1;
         wr32(img + 0x1a4ba, (a0 - d0m) & 0xffffffffu);
         wr16(img + 0x1a486, d7);
-        func_13bc2(img, be16(img + 0x1a4ac), be16(img + 0x1a4aa), d7,
+        scale_blit(img, be16(img + 0x1a4ac), be16(img + 0x1a4aa), d7,
                     (a0 - 0x8000) & 0xffffffffu);
 
         if (img[0x1a571] == 0) {

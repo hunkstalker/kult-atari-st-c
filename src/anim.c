@@ -575,14 +575,14 @@ void script_store(uint8_t *img, uint32_t *a6) {
 
 /* FUN_000160aa @ 0x160aa: evalúa una expresión; si D6 == 0 vuelve una posición y salta a
  * 0x1350c (a6 = TEMPL + word), si no avanza 2. */
-void func_1350c(uint8_t *img, uint32_t *a6);
+void script_push(uint8_t *img, uint32_t *a6);
 void script_jump_zero(uint8_t *img, uint32_t *a6) {
     uint32_t p = *a6 + 1;
     uint32_t a0b;
     uint32_t d6 = script_expr(img, &p, &a0b);
     if ((d6 & 0xffff) == 0) {
         p -= 1;
-        func_1350c(img, &p);
+        script_push(img, &p);
     } else {
         p += 2;
     }

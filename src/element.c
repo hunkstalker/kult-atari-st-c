@@ -293,7 +293,7 @@ uint32_t elem_command(uint8_t *img, uint32_t a6, uint32_t *a6o, uint32_t *d0o,
     return a6;
 }
 
-uint32_t func_128a4(uint8_t *img, uint32_t a6) {
+uint32_t elem_command_wrap(uint8_t *img, uint32_t a6) {
     uint32_t a6o, d0o, d1o;
     return elem_command(img, a6, &a6o, &d0o, &d1o);
 }
