@@ -357,3 +357,85 @@ nada (una hipótesis, un cambio), igual que en P0.
 - Registro §7 ampliado y `docs/ESTADO.md` actualizado.
 
 Solo al cerrar P1 (y P2) se abre la **fase 3** (re-aplicar kult-port).
+
+---
+
+## 9. Registro de hallazgos P1
+
+Revisión P1 completada (los 11 módulos) con los cuatro ejes. `make test` 494
+verde, `make regscan` `ids_reg=0`, `make core` OK. Commits `revision(<módulo>)`.
+
+### Tabla resumen
+
+| id | sev | módulo | función (0xADDR) | estado |
+|---|---|---|---|---|
+| H-mus1 | ALTA | music | `music_cmd` (0x3a734) | arreglado + test |
+| H-mus2 | MEDIA | music | `music_install` (0x3a5c2) | arreglado + test |
+| H-mus3 | MEDIA | music | `music_tick` (0x3aab6) | arreglado |
+| H-mus4 | MEDIA | music | `music_tick` (0x3aab6) | intencional (índices 5–7) |
+| H-mus5 | MEDIA | music | `music_load` (0x3a62e) | intencional (índice signado) |
+| H-tb1 | MEDIA | textblit | `bit_reverse_word` (0x11196) | arreglado + test |
+| H-tb2 | MEDIA | textblit | `run_text_entry_ex` (0x14138) | arreglado + test |
+| H-tb3 | BAJA | textblit | comentarios | arreglado |
+| H-an1 | MEDIA | anim | `anim_counter` (0x15cd8) | arreglado + test |
+| H-an2 | MEDIA | anim | `anim_engine` (0x15bde) | arreglado (do-while) |
+| H-an3 | BAJA | anim | `frame_gate_delay`/`KULT_ANIM_GATE` | intencional (hook) |
+| H-an4 | BAJA | anim | comentarios | arreglado |
+| H-el1 | ALTA | element | `elem_command` (0x128a4) | intencional (H-SC1) |
+| H-el2 | MEDIA | element | `walk_entry` decl | arreglado |
+| H-el3 | BAJA | element | `text_block_build` (0x129d6) | arreglado |
+| H-rv1 | BAJA | reveal | `cpu_delay`/`KULT_REVEAL_GATE` | intencional (hook) |
+
+Módulos P1 sin hallazgo de comportamiento: `vm`, `misc`, `textform`, `icons`,
+`fileio`, `sound` (solo mejoras de comentario/legibilidad o cobertura).
+
+### Detalle
+
+- **[H-mus1] ALTA · `music_cmd` (0x3a734)**: el bloque bit8 hace
+  `move.b $1d(a6),d0`, que pisa el byte bajo del acumulador D0 (el mínimo
+  devuelto); el C no lo tocaba. Arreglado (`minv = (minv & 0xffffff00) |
+  img[state+0x1d]`); test con `0x0100`/`0x0110`.
+- **[H-mus2] MEDIA · `music_install` (0x3a5c2)**: el `movem.l (a7)+,d0-...` final
+  restaura D0, así que devuelve el D0 de entrada, no el handler anterior de
+  Setexc. Firma cambiada a `(img, d0_in)`; test con `d0_in ∈ {0,0x1234,0xdead}`.
+- **[H-mus3] MEDIA · `music_tick` (0x3aab6)**: en `l_03ab3a` el original NO
+  escribe `channel[8]` (solo lo hace en `l_03abe2`, byte != 0xff); el C lo
+  escribía también en la ruta 0xff. Corregido.
+- **[H-mus4] MEDIA · `music_tick`**: el salto calculado `tabla[b&7]` con
+  índices 5–7 lee fuera de la tabla de 5 entradas (datos en 0x3aec0). El C
+  retorna; intencional (comando malformado, no generado por el juego).
+- **[H-mus5] MEDIA · `music_load` (0x3a62e)**: el índice `(a0,d0.w)` se
+  sign-extiende en el original; el único llamante pasa selector 0. Intencional.
+- **[H-tb1] MEDIA · `bit_reverse_word` (0x11196)**: las ops `.b`/`.w` y el
+  `move.w d1,d0` preservan la palabra alta de D0/D1; el C la descartaba. Test con
+  palabra alta != 0.
+- **[H-tb2] MEDIA · `run_text_entry_ex` (0x14138)**: D5 sale de `move.w d1,d5`,
+  que conserva la palabra alta del stride (0xffff con flags bit7). Out-param
+  `yflags` arreglado; `scene_text_box` (0x13f86) ahora enmascara al byte bajo
+  (`cmp.b`). Tests en `test_textblit` y `test_textbox`.
+- **[H-an1] MEDIA · `anim_counter` (0x15cd8)**: compara el byte completo
+  (`cmpi.b #7`), no `&7`; con bits altos ejecuta la rama de recorte. Test con
+  `fl ∈ {0x0f,0x17,0xff}`.
+- **[H-an2] MEDIA · `anim_engine` (0x15bde)**: los bucles de bloques/elementos
+  son `dbra` do-while (con 0 ejecutan 65536 iteraciones); convertidos.
+- **[H-el1] ALTA · `elem_command` (0x128a4)**: el retorno doble de `l_01294c`
+  (`addq.l #4,a7; rts`) no se propaga a los 12 llamantes (`blit_dispatch_a/b`,
+  `overlay_dispatch_1/2`, `reveal_pixel`, `reveal_box_*`, `elem_blit_vbl`,
+  `scale_prep/loop`, `attract`). Intencional (ver H-SC1 y `REFERENCIA_F4`).
+- **[H-el2] MEDIA · `walk_entry`**: `element.c` la declaraba `uint32_t`; la
+  definición (`vm.c`) es `void` (UB de declaraciones). Alineado.
+- **[H-el3] BAJA · `text_block_build` (0x129d6)**: producto `mulu.w` (palabras
+  bajas) en vez de 32×32.
+
+Los hooks `cpu_delay`/`KULT_REVEAL_GATE` (reveal) y `frame_gate_delay`/
+`KULT_ANIM_GATE` (anim) son instrumentación del port, no-op por defecto
+(`include/kult_port.h`): no alteran la imagen y están documentados.
+
+### Cierre
+
+- P1: 11/11 módulos con checklist completa; ALTA/MEDIA resueltos o *intencional*
+  con justificación.
+- `make test` 494 verde, `make regscan` `ids_reg=0`, `make core` OK.
+- Falta **P2** (`palette`, `cursor`, `input`, `delay`, `boxdraw`, `line`,
+  `maskblit`, `sprite`, `text`, `overlay`, `screens`, `state`, `stubs`) para
+  cerrar la revisión y abrir la fase 3.

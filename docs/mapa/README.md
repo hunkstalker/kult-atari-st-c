@@ -15,7 +15,7 @@ origen), los globales `A_*` que toca y las pruebas que la cubren.
 | `element.c` | 16 | 28 | 15 | [element](element.md) |
 | `fileio.c` | 17 | 14 | 17 | [fileio](fileio.md) |
 | `handlers.c` | 44 | 39 | 40 | [handlers](handlers.md) |
-| `icons.c` | 13 | 9 | 12 | [icons](icons.md) |
+| `icons.c` | 13 | 9 | 13 | [icons](icons.md) |
 | `input.c` | 2 | 3 | 2 | [input](input.md) |
 | `line.c` | 3 | 3 | 3 | [line](line.md) |
 | `loop.c` | 74 | 81 | 74 | [loop](loop.md) |
@@ -34,7 +34,7 @@ origen), los globales `A_*` que toca y las pruebas que la cubren.
 | `state.c` | 4 | 2 | 4 | [state](state.md) |
 | `stubs.c` | 4 | 0 | 4 | [stubs](stubs.md) |
 | `text.c` | 16 | 16 | 16 | [text](text.md) |
-| `textblit.c` | 26 | 10 | 23 | [textblit](textblit.md) |
+| `textblit.c` | 26 | 10 | 24 | [textblit](textblit.md) |
 | `textbox.c` | 7 | 17 | 6 | [textbox](textbox.md) |
 | `textform.c` | 6 | 9 | 6 | [textform](textform.md) |
 | `video.c` | 5 | 13 | 5 | [video](video.md) |

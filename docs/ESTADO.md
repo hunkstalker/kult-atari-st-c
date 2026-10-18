@@ -13,7 +13,7 @@ y verificada con el **diferencial** contra el oráculo (Musashi).
 
 - `src/`: **33 módulos**, ~12.460 líneas.
 - Nombres: **417 funciones** + **221 globales** en `work/names.txt` (registro único).
-- Pruebas: **492** diferenciales en verde, **0 warnings**.
+- Pruebas: **494** diferenciales en verde, **0 warnings**.
 - Legibilidad: **0** identificadores de registro/decompilador en código.
 - API pública del core + visibilidad on-target cerradas.
 
@@ -90,10 +90,15 @@ mapa (el harness necesita `dlsym`). Detalle en `docs/VISIBILIDAD.md`.
    la cobertura H-M1), 5 *intencional* con justificación (H-V2/H-L5 busy-waits
    sin efecto, H-C4, H-D5, H-S2, H-SC1 retorno doble de `0x128a4`, H-SC2 divu
    por 0 = trap) y **0 ALTA/MEDIA abiertos**. 492 pruebas.
-2. **Revisión P1** (siguiente; plan en `docs/REVISION.md` §8): `vm`, `misc`,
-   `reveal`, `textform`, `icons`, `fileio`, `sound`, `textblit`, `anim`, `music`,
-   `element` (de menor a mayor). Después **P2**.
-3. **Futuro (fase 3 del PLAN):** re-aplicar sobre este C limpio las mejoras de
+2. **Revisión P1 (HECHO, ver `docs/REVISION.md` §9):** los 11 módulos
+   auditados. 10 hallazgos arreglados (con prueba los ALTA/MEDIA: `music_cmd`
+   bit8, `music_install` retorno, `music_tick` channel[8], `bit_reverse_word`
+   palabra alta, `run_text_entry_ex` D5, `anim_counter` byte, motor do-while,
+   `walk_entry` decl) y 5 *intencional* (hooks de port y casos degenerados).
+3. **Revisión P2** (siguiente): `palette`, `cursor`, `input`, `delay`, `boxdraw`,
+   `line`, `maskblit`, `sprite`, `text`, `overlay`, `screens`, `state`, `stubs`.
+   Al cerrarla se abre la fase 3.
+4. **Futuro (fase 3 del PLAN):** re-aplicar sobre este C limpio las mejoras de
    kult-port (guardado por ranuras, textos ES, overlay F1, etc.), **solo tras
    cerrar la revisión**.
 - Trampas conocidas del oráculo/kit: `docs/REFERENCIA_F4.md` (sección final).
@@ -108,5 +113,7 @@ mapa (el harness necesita `dlsym`). Detalle en `docs/VISIBILIDAD.md`.
 3. Escalado por subsistemas (pantalla, texto, escena, bucle/VM, sonido/música).
 4. `docs/mapa/` (fichas) y visibilidad on-target.
 5. Limpieza (warnings, helpers duplicados) y **legibilidad** (tandas 1–4).
-6. **Revisión P0 del C** vs ASM (`docs/REVISION.md`): 20 hallazgos, 17
+6. **Revisión P0 del C** vs ASM (`docs/REVISION.md` §7): 20 hallazgos, 17
    arreglados (16 con prueba), 5 intencionales; 478 → 492 pruebas.
+7. **Revisión P1 del C** (`docs/REVISION.md` §9): 11 módulos; 10 hallazgos
+   arreglados (ALTA/MEDIA con prueba) y 5 intencionales; 492 → 494 pruebas.
