@@ -190,6 +190,24 @@ def test_fun_10390():
     assert not diffs, report(diffs)
 
 
+def test_vm_byte_4d_nested_a6():
+    """Byte 77 (0x4d) -> 0x10390: the_command = 0xf000|word, walk_entry + vm_run
+    anidada. El A6 que sale es el FIN del sub-guion (0x103ae hace `movea.l a5,a6`),
+    no script+1; el VM exterior continua alli. H-1 dispatch."""
+    pokes = _template_chain(0x100)
+    pokes[0x1A826] = harness.emu.STACK_TOP.to_bytes(4, "big")
+    # word inline 0x0080 -> cmd 0xf080 -> idx 0x7f; el sub-guion para en el byte 0
+    # de la entrada 0x7f: TEMPL + 2*0x7f + 1.
+    pokes[SCRIPT] = bytes([0x4D, 0x80, 0x00, 0])
+    pokes[SCRIPT_END] = (SCRIPT + 0x200).to_bytes(4, "big")
+    diffs, info = differential(
+        VM_BYTES, {"a6": SCRIPT, "_pokes": pokes},
+        lambda lib, buf: lib.vm_run(buf, SCRIPT))
+    assert not diffs, report(diffs)
+    assert info["ret"] == info["regs"]["a6"] == TEMPL + 2 * 0x7F + 1, (
+        f"a6 cand={info['ret']:#x} orac={info['regs']['a6']:#x}")
+
+
 def test_fun_186ee():
     """0x186ee: paleta 0x10, comando 0x916b (caja de texto) y paleta actual."""
     from harness import console_key

@@ -110,7 +110,7 @@ uint32_t wipe_e(uint8_t *, uint32_t);
 void noop_16dba(uint8_t *);
 uint32_t class30_dispatch(uint8_t *, uint32_t);
 uint32_t update_icon_list_wrap(uint8_t *, uint32_t);
-void dispatch_a6(uint8_t *, uint32_t);
+uint32_t dispatch_a6(uint8_t *, uint32_t);
 uint32_t sample_mark_b(uint8_t *, uint32_t);
 uint32_t sample_mark_a(uint8_t *, uint32_t);
 uint32_t sample_mark_c(uint8_t *, uint32_t);
@@ -261,7 +261,7 @@ static uint32_t byte_handler(uint32_t b, uint8_t *img, uint32_t script) {
     case 74: noop_16dba(img); return script;
     case 75: return class30_dispatch(img, script);
     case 76: return update_icon_list_wrap(img, script);
-    case 77: dispatch_a6(img, script); return addr_add(script, 1);
+    case 77: return dispatch_a6(img, script);
     case 78: return sample_mark_b(img, script);
     case 79: return sample_mark_a(img, script);
     case 80: return sample_mark_c(img, script);
@@ -499,11 +499,17 @@ void run_command_keep_sp(uint8_t *img, uint32_t script) {
 }
 
 /* FUN_00010390 @ 0x10390: handler de byte que lee un word de script[1..2], lo marca con el
- * nibble 0xf000 (comando de plantilla) y salta al despacho. */
-void dispatch_a6(uint8_t *img, uint32_t script) {
-    uint32_t cmd = ((img[script + 2] << 8) | img[script + 1]) | 0xf000;
+ * nibble 0xf000 (comando de plantilla) y salta al despacho. El comando formado es
+ * siempre 0xf000, asi que 0x103ae toma la rama `walk_entry(TEMPL, cmd-1) + vm_run` y
+ * deja A6 = fin del sub-guion; el handler DEVUELVE ese A6 (el `bra f_0103ae` deja
+ * que el rts del sub-VM vuelva al VM llamante, que continua en esa direccion). */
+uint32_t dispatch_a6(uint8_t *img, uint32_t script) {
+    uint32_t cmd = (((uint32_t)img[script + 2] << 8) | img[script + 1]) | 0xf000;
     wr16(img + A_THE_COMMAND, cmd & 0xffff);
-    run_command_keep_sp(img, script);
+    uint32_t end_out, entry_out;
+    walk_entry(img, A_TEMPL_DATA, (cmd & 0x3ff) - 1, &end_out, &entry_out);
+    wr32(img + A_TEMPL_PTR, end_out);
+    return vm_run(img, entry_out);
 }
 
 /* FUN_000186ee @ 0x186ee: reproduce la paleta 0x10, lanza el comando 0x916b (caja de
