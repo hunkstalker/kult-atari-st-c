@@ -86,7 +86,7 @@ def test_set_palette():
 
 def test_set_palette_entry():
     """0x162e2: copia la entrada índice d0 a *(A_PALETTE_PTR)+2 y aplica."""
-    for idx in (0, 1, 3, 9):
+    for idx in (0, 1, 3, 9, 0x10003):   # el `mulu.w` del original solo usa la palabra baja
         diffs, info = differential(
             SET_PALETTE_ENTRY, {"d0": idx, "_pokes": _palette_pokes()},
             lambda lib, buf, i=idx: lib.set_palette_entry(buf, i))
