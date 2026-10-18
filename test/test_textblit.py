@@ -32,6 +32,7 @@ TEXT_TABLE = 0x41fb0
 SCREEN = 0x90000
 
 _u8p = ctypes.POINTER(ctypes.c_uint8)
+_u32p = ctypes.POINTER(ctypes.c_uint32)
 harness._lib.bit_reverse_word.argtypes = [ctypes.c_uint32, ctypes.c_uint32,
                                             ctypes.POINTER(ctypes.c_uint32),
                                             ctypes.POINTER(ctypes.c_uint32)]
@@ -53,16 +54,21 @@ harness._lib.noop_11014.restype = None
 
 
 def test_bit_reverse_word():
-    for d0 in (0, 1, 2, 0x00f0, 0x0f00, 0x8000, 0xffff, 0x1234, 0xabcd):
-        for d1 in (0, 0xffff, 0x5555):
-            o0, o1 = ctypes.c_uint32(), ctypes.c_uint32()
-            diffs, info = differential(BIT_REVERSE, {"d0": d0, "d1": d1},
-                                       lambda lib, buf, a=d0, b=d1, p=o0, q=o1:
-                                       lib.bit_reverse_word(a, b, ctypes.byref(p),
-                                                              ctypes.byref(q)))
-            assert not diffs, report(diffs)
-            assert o0.value == info["regs"]["d0"], f"d0={d0:#x} d1={d1:#x}"
-            assert o1.value == info["regs"]["d1"], f"d0={d0:#x} d1={d1:#x}"
+    lows = (0, 1, 2, 0x00f0, 0x0f00, 0x8000, 0xffff, 0x1234, 0xabcd)
+    pairs = [(d0, d1) for d0 in lows for d1 in (0, 0xffff, 0x5555)]
+    # Palabra alta no nula: el original la preserva (ops .b/.w + move.w d1,d0).
+    pairs += [((hi0 << 16) | lo0, (hi1 << 16) | lo1)
+              for hi0 in (0x1234, 0xffff, 0xa5a5) for hi1 in (0xbeef,)
+              for lo0 in (0x3c5a, 0x00f0) for lo1 in (0x1234, 0xffff)]
+    for d0, d1 in pairs:
+        o0, o1 = ctypes.c_uint32(), ctypes.c_uint32()
+        diffs, info = differential(BIT_REVERSE, {"d0": d0, "d1": d1},
+                                   lambda lib, buf, a=d0, b=d1, p=o0, q=o1:
+                                   lib.bit_reverse_word(a, b, ctypes.byref(p),
+                                                          ctypes.byref(q)))
+        assert not diffs, report(diffs)
+        assert o0.value == info["regs"]["d0"], f"d0={d0:#x} d1={d1:#x}"
+        assert o1.value == info["regs"]["d1"], f"d0={d0:#x} d1={d1:#x}"
 
 
 def _run_blit(entry, fn, rng, trials=80):
@@ -152,6 +158,27 @@ def test_fun_14138_special_char():
     diffs, _ = differential(FUN_14138, {"a6": A6, "_pokes": pokes},
                             lambda lib, buf: lib.run_text_entry(buf, A6))
     assert not diffs, report(diffs)
+
+
+harness._lib.run_text_entry_ex.argtypes = [_u8p, ctypes.c_uint32, _u32p, _u32p,
+                                           _u32p, _u32p, _u32p]
+harness._lib.run_text_entry_ex.restype = None
+
+
+def test_fun_14138_d5_palabra_alta():
+    """D5 sale de `move.w d1,d5`: la palabra alta conserva la del stride (0xffff
+    con flags bit7=1, que lo nego)."""
+    for flags in (0x90, 0x80, 0x10):
+        glyph = bytes((0x10 + i) & 0xff for i in range(0x20))
+        pokes = _entry_pokes(0, 0x01, flags, 2, 2, glyph)
+        o = [ctypes.c_uint32() for _ in range(5)]
+        diffs, info = differential(
+            FUN_14138, {"a6": A6, "_pokes": pokes},
+            lambda lib, buf: lib.run_text_entry_ex(
+                buf, A6, ctypes.byref(o[0]), ctypes.byref(o[1]), ctypes.byref(o[2]),
+                ctypes.byref(o[3]), ctypes.byref(o[4])))
+        assert not diffs, f"flags={flags:#x}\n{report(diffs)}"
+        assert o[4].value == info["regs"]["d5"], f"flags={flags:#x} d5"
 
 
 def test_fun_141dc():

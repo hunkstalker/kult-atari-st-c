@@ -25,6 +25,10 @@ uint32_t screen_address(uint8_t *, uint32_t, uint32_t, uint32_t *);
 /* movep: bytes alternos (alto en +0, bajo en +2, ...) */
 /* 0x11196 — permutacion de palabra (resultado en D0/D1) */
 void bit_reverse_word(uint32_t w0, uint32_t w1, uint32_t *w0_out, uint32_t *w1_out) {
+    /* Las ops `.b`/`.w` del original preservan la palabra alta de D0/D1, y el
+     * final `move.w d1,d0` solo sustituye la baja. */
+    uint32_t hi0 = w0 & 0xffff0000u;
+    uint32_t hi1 = w1 & 0xffff0000u;
     w0 &= 0xffff;
     w1 &= 0xffff;
     uint32_t x;
@@ -44,8 +48,8 @@ void bit_reverse_word(uint32_t w0, uint32_t w1, uint32_t *w0_out, uint32_t *w1_o
         x = (w1 >> 15) & 1;
         w1 = n1;
     }
-    *w0_out = w1;
-    *w1_out = w1;
+    *w0_out = hi0 | w1;
+    *w1_out = hi1 | w1;
 }
 
 /* 0x11050 — blit de texto directo (A0/A1/A3/D2/D3/D7) */
@@ -207,10 +211,10 @@ void run_text_entry_ex(uint8_t *img, uint32_t entry, uint32_t *addr_out,
     if (cols_out) *cols_out = cols;
     if (rows_out) *rows_out = rows;
     if (phase_out) *phase_out = phase;
-    /* D5 = D1 ya ajustado (`lsl.b` y el -8 de 'S'); lo consume 0x13f86 para la
-     * caja. El original lo deja en el registro tras el `movem` (0x10fec no lo
-     * toca). */
-    if (yflags_out) *yflags_out = flags;
+    /* D5 = D1 ya ajustado (`lsl.b` y el -8 de 'S') con `move.w d1,d5`, que solo
+     * sustituye la palabra BAJA: la alta conserva la de D5, que es la del stride
+     * (0xffff si el bit7 lo nego). Lo consume 0x13f86 para la caja. */
+    if (yflags_out) *yflags_out = (stride & 0xffff0000u) | (flags & 0xffffu);
     uint32_t addr = screen - 0x8000;
     uint32_t stride2 = be32(img + A_DAT_1A534);
     if (img[entry + 1] & 0x80)
@@ -277,7 +281,7 @@ uint32_t wipe_rows(uint8_t *img, uint32_t entry, uint32_t base, uint32_t groups,
     return entry + 1;
 }
 
-/* FUN_00016c48 @ 0x16c48: wipe de texto (d4 = 3, x = 0x23, y = 0xad o 0x31 segun
+/* FUN_00016c48 @ 0x16c48: wipe de texto (d4 = 3, x = 0x23, y = 0xad o 0xb1 segun
  * A6[1]); cae en el cuerpo 0x16c6c con D2 = 2, D3 = 8. Devuelve A6 = entrada+2
  * (0x16dbc + el addq final de 0x16c6c): el VM original continua 2 bytes mas alla. */
 uint32_t wipe_b(uint8_t *img, uint32_t entry) {
@@ -407,7 +411,8 @@ void text_blit_ovl_a(uint8_t *img, uint32_t x, uint32_t y, uint32_t index) {
     text_blit_entry(img, x, y, index, 0x8000);
 }
 
-/* 0x11020 — busca en la tabla 0x1a8f0 la entrada [0x40][$1acd2] y blitea los dos iconos (0x11020 + 0x11016) en (0x4a,0xe) con d4 = 0xad (0xac si no la encuentra), y cuen... */
+/* 0x11020 — wrapper: A4 = 0 (base de pantalla) y continua en 0x11026 (blit de la
+ * tabla A_ANIM_TBL_28AD2). La busqueda en la tabla 0x1a8f0 es 0x1857c, no esta. */
 void text_blit_ovl_b(uint8_t *img, uint32_t x, uint32_t y, uint32_t index) {
     text_blit_entry(img, x, y, index, 0);
 }
@@ -460,7 +465,7 @@ void prompt(uint8_t *img) {
  * sale por GEMDOS Cnecin (trap #1/$8). A5/A6 los preserva el `movem.l` de entrada. */
 void wait_frame(uint8_t *);
 void prompt(uint8_t *);
-/* 0x12292 — wipe grande de texto. Primer 0x16dbc (d4=3, x=0x23, y=0xad) + 0x16b2e(2,7); segundo 0x16dbc (d4=0x77, x=0x20, y=0x5e) + 0x16b2e(3,0x47); prompt (0x12292) y 7... */
+/* 0x12292 — prompt_wait */
 void prompt_wait(uint8_t *img) {
     if (img[0x1acc6] == 0x87) {
         uint32_t key;
