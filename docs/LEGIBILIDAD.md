@@ -174,8 +174,24 @@ afinan al tocar cada módulo.
 |---|---|---|
 | 1 | palette, screens, cursor, input, delay, stubs, state, boxdraw, line, sprite, maskblit, misc, vm | **HECHA** |
 | 2 | textblit (resto), text, textbox, textform, icons, video, select, mode | **HECHA** |
-| 3 | element, anim, scale, reveal, overlay (locales), commands, handlers | pendiente |
+| 3 | element, anim, scale, reveal, overlay, commands | **HECHA** |
+| 3 | handlers | pendiente |
 | 4 | dispatch, sound, music (+goto), fileio (+goto), loop (+goto) | pendiente |
+
+**Tanda 3 (parcial) — escena/elementos/animación: HECHA** (`ids_reg` antes→después):
+
+| módulo | antes | después | goto |
+|---|---:|---:|---:|
+| element.c | 576 | 111 | 0 |
+| anim.c | 655 | 147 | 0 |
+| scale.c | 332 | 66 | 0 |
+| overlay.c | 569 | 194 | 0 |
+| commands.c | 364 | 49 | 3 |
+| reveal.c | 64 | 4 | 0 |
+
+Totales: `ids_reg` **8801 → 4153**. Queda `handlers.c` (567) para cerrar la
+Tanda 3, y la Tanda 4 (`loop` 1547, `dispatch` 416, `music` 581, `sound` 98,
+`fileio` 23, …).
 
 **Tanda 2 — vídeo/texto: HECHA** (`ids_reg` antes→después):
 

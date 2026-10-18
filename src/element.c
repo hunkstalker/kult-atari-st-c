@@ -26,103 +26,103 @@ void wait_vbl(uint8_t *img);
 void blit_mask_rows(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d3);
 
 /* 0x126e0 — grid fill */
-void grid_fill(uint8_t *img, uint32_t d2w, uint32_t d3w, uint32_t d7w, uint32_t a1) {
-    uint32_t a3 = be32(img + A_DAT_1A534);
-    uint32_t a0 = A_SAVE_DESC;
+void grid_fill(uint8_t *img, uint32_t cols_in, uint32_t rows_in, uint32_t phase_in, uint32_t src) {
+    uint32_t stride = be32(img + A_DAT_1A534);
+    uint32_t dest = A_SAVE_DESC;
     for (int i = 0; i < 0x627; i++)
-        wr32(img + a0 + (uint32_t)i * 4, 0);
+        wr32(img + dest + (uint32_t)i * 4, 0);
 
-    blit_mask_setup(img, d2w, d7w);
+    blit_mask_setup(img, cols_in, phase_in);
 
-    a0 = A_SAVE_DESC;
-    uint32_t outer = (d2w - 1) & 0xffff;
-    uint32_t rows = (d3w - 1) & 0xffff;
-    uint32_t d7 = d7w & 0xffff;
+    dest = A_SAVE_DESC;
+    uint32_t col = (cols_in - 1) & 0xffff;
+    uint32_t rows = (rows_in - 1) & 0xffff;
+    uint32_t phase = phase_in & 0xffff;
     for (;;) {
-        uint16_t d4 = rotate_right16(0xf000, d7);
-        uint32_t base = a0;
-        uint32_t src_base = a1;
-        uint32_t d5 = rows;
+        uint16_t mask = rotate_right16(0xf000, phase);
+        uint32_t base = dest;
+        uint32_t src_base = src;
+        uint32_t r = rows;
         for (;;) {
-            uint16_t d2 = rotate_right16(be16(img + a1), d7);
+            uint16_t word = rotate_right16(be16(img + src), phase);
             for (int k = 0; k < 4; k++) {
-                wr16(img + a0, (uint16_t)(be16(img + a0) | (d2 & d4)));
-                a0 += 2;
-                d2 = rotate_left16(d2, 4);
+                wr16(img + dest, (uint16_t)(be16(img + dest) | (word & mask)));
+                dest += 2;
+                word = rotate_left16(word, 4);
             }
-            a0 += 0x38;
-            a1 += a3;
-            d5 = (d5 - 1) & 0xffff;
-            if (d5 == 0xffff)
+            dest += 0x38;
+            src += stride;
+            r = (r - 1) & 0xffff;
+            if (r == 0xffff)
                 break;
         }
-        a0 = base;
-        a1 = src_base + 2;
-        d7 = (d7 + 4) & 0xf;
-        if (d7 == 0)
-            a0 += 8;
-        outer = (outer - 1) & 0xffff;
-        if (outer == 0xffff)
+        dest = base;
+        src = src_base + 2;
+        phase = (phase + 4) & 0xf;
+        if (phase == 0)
+            dest += 8;
+        col = (col - 1) & 0xffff;
+        if (col == 0xffff)
             break;
     }
 }
 
 /* 0x1276c — pattern fill */
-void pattern_fill(uint8_t *img, uint32_t d2w, uint32_t d3w, uint32_t d7w,
-                 uint32_t d6w, uint32_t a0) {
-    uint32_t outer = (d2w - 1) & 0xffff;
-    uint32_t rows = (d3w - 1) & 0xffff;
-    uint32_t d7 = d7w & 0xffff;
+void pattern_fill(uint8_t *img, uint32_t cols_in, uint32_t rows_in, uint32_t phase_in,
+                 uint32_t pattern, uint32_t dest) {
+    uint32_t col = (cols_in - 1) & 0xffff;
+    uint32_t rows = (rows_in - 1) & 0xffff;
+    uint32_t phase = phase_in & 0xffff;
     for (;;) {
-        uint16_t d1 = rotate_right16(0x0fff, d7);
-        uint16_t d4 = (uint16_t)~d1;
-        uint32_t base = a0;
-        uint32_t d5 = rows;
+        uint16_t mask = rotate_right16(0x0fff, phase);
+        uint16_t inv = (uint16_t)~mask;
+        uint32_t base = dest;
+        uint32_t r = rows;
         for (;;) {
-            uint16_t d2 = rotate_right16((uint16_t)d6w, d7);
+            uint16_t word = rotate_right16((uint16_t)pattern, phase);
             for (int k = 0; k < 4; k++) {
-                wr16(img + a0, (uint16_t)((be16(img + a0) & d1) | (d2 & d4)));
-                a0 += 2;
-                d2 = rotate_left16(d2, 4);
+                wr16(img + dest, (uint16_t)((be16(img + dest) & mask) | (word & inv)));
+                dest += 2;
+                word = rotate_left16(word, 4);
             }
-            a0 += 0x98;
-            d5 = (d5 - 1) & 0xffff;
-            if (d5 == 0xffff)
+            dest += 0x98;
+            r = (r - 1) & 0xffff;
+            if (r == 0xffff)
                 break;
         }
-        a0 = base;
-        d7 = (d7 + 4) & 0xf;
-        if (d7 == 0)
-            a0 += 8;
-        outer = (outer - 1) & 0xffff;
-        if (outer == 0xffff)
+        dest = base;
+        phase = (phase + 4) & 0xf;
+        if (phase == 0)
+            dest += 8;
+        col = (col - 1) & 0xffff;
+        if (col == 0xffff)
             break;
     }
     wait_vbl(img);
 }
 
 /* 0x11ece — row blit a */
-void row_blit_a(uint8_t *img, uint32_t d1, uint32_t a0, uint32_t a1) {
-    uint32_t d3 = 1;
+void row_blit_a(uint8_t *img, uint32_t count, uint32_t dest, uint32_t src) {
+    uint32_t rows = 1;
     for (;;) {
-        blit_mask_rows(img, a0, a1, d3);
-        d3 = (d3 + 1) & 0xffff;
-        a1 -= 0x40;
-        d1 = (d1 - 1) & 0xffff;
-        if (d1 == 0xffff)
+        blit_mask_rows(img, dest, src, rows);
+        rows = (rows + 1) & 0xffff;
+        src -= 0x40;
+        count = (count - 1) & 0xffff;
+        if (count == 0xffff)
             break;
     }
 }
 
 /* 0x11ee8 — row blit b */
-void row_blit_b(uint8_t *img, uint32_t d1, uint32_t a0, uint32_t a1) {
-    uint32_t d3 = 1;
+void row_blit_b(uint8_t *img, uint32_t count, uint32_t dest, uint32_t src) {
+    uint32_t rows = 1;
     for (;;) {
-        blit_mask_rows(img, a0, a1, d3);
-        a0 -= 0xa0;
-        d3 = (d3 + 1) & 0xffff;
-        d1 = (d1 - 1) & 0xffff;
-        if (d1 == 0xffff)
+        blit_mask_rows(img, dest, src, rows);
+        dest -= 0xa0;
+        rows = (rows + 1) & 0xffff;
+        count = (count - 1) & 0xffff;
+        if (count == 0xffff)
             break;
     }
 }
@@ -132,26 +132,26 @@ void row_blit_b(uint8_t *img, uint32_t d1, uint32_t a0, uint32_t a1) {
  * 0x1ab4c/0x1ab4d, devuelve por out d0=byte2, d1=byte1, d2=0xff, d3=byte3, y marca
  * encontrado (el llamante 0x128a4 bifurca por el Z del `bsr`: encontrado -> Z=0).
  * Si no, cae en 0x10768 (rts) dejando los registros de entrada intactos. */
-int elem_class_find(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3,
+int elem_class_find(uint8_t *img, uint32_t ret0, uint32_t ret1, uint32_t ret2, uint32_t ret3,
                 uint32_t *out) {
-    uint32_t a0 = be32(img + A_ELEM_CLASS);
-    uint32_t d2v = (d2 & 0xffffff00u) | (uint32_t)(img[a0 + 3] & 0xf8);
+    uint32_t obj = be32(img + A_ELEM_CLASS);
+    uint32_t cls = (ret2 & 0xffffff00u) | (uint32_t)(img[obj + 3] & 0xf8);
     uint32_t p = A_ELEM_TBL_19E19;
     for (;;) {
-        if (img[p] == (uint8_t)(d2v & 0xff)) {
-            out[1] = (d1 & 0xffffff00u) | img[p + 1];
-            out[0] = (d0 & 0xffffff00u) | img[p + 2];
-            out[3] = (d3 & 0xffffff00u) | img[p + 3];
+        if (img[p] == (uint8_t)(cls & 0xff)) {
+            out[1] = (ret1 & 0xffffff00u) | img[p + 1];
+            out[0] = (ret0 & 0xffffff00u) | img[p + 2];
+            out[3] = (ret3 & 0xffffff00u) | img[p + 3];
             img[A_ELEM_1AB4C] = img[p + 4];
             img[A_ELEM_1AB4D] = img[p + 5];
-            out[2] = (d2v & 0xffffff00u) | 0xff;
+            out[2] = (cls & 0xffffff00u) | 0xff;
             return 1;
         }
         p += 6;
         if (p == A_ELEM_TBL_19EA9)
             break;
     }
-    out[0] = d0; out[1] = d1; out[2] = d2v; out[3] = d3;
+    out[0] = ret0; out[1] = ret1; out[2] = cls; out[3] = ret3;
     return 0;
 }
 
@@ -159,41 +159,41 @@ int elem_class_find(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_
  * (*A5)*10 de la tabla 0x1a252. Cabecera [alto][ancho], luego una fila superior de
  * `ancho` words, (alto-2) filas [izq][medio x(ancho-2)][der] y una fila inferior de
  * `ancho` words. Fija el stride 0x1a534 = ancho*2. A5 avanza 1 (el indice). */
-void elem_bitmap_build(uint8_t *img, uint32_t *a5_io) {
-    uint32_t a5 = *a5_io;
-    uint32_t idx = img[a5++];
-    uint32_t a2 = A_ELEM_TBL_1A252 + (idx & 0xff) * 10;
-    uint32_t a1 = A_ELEM_BUILD;
+void elem_bitmap_build(uint8_t *img, uint32_t *stream_io) {
+    uint32_t stream = *stream_io;
+    uint32_t idx = img[stream++];
+    uint32_t p = A_ELEM_TBL_1A252 + (idx & 0xff) * 10;
+    uint32_t dest = A_ELEM_BUILD;
 
-    uint32_t d2 = img[a2++];
-    uint32_t d3 = img[a2++];
-    d2 &= 0xff;
-    d3 &= 0xff;
-    wr32(img + A_DAT_1A534, (uint32_t)(d2 << 1));
-    img[a1++] = (uint8_t)d3;
-    img[a1++] = (uint8_t)d2;
+    uint32_t width = img[p++];
+    uint32_t height = img[p++];
+    width &= 0xff;
+    height &= 0xff;
+    wr32(img + A_DAT_1A534, (uint32_t)(width << 1));
+    img[dest++] = (uint8_t)height;
+    img[dest++] = (uint8_t)width;
 
-    uint32_t top = be16(img + a2); a2 += 2;
-    for (uint32_t d5 = (d2 - 1) & 0xffff;; d5 = (d5 - 1) & 0xffff) {
-        wr16(img + a1, (uint16_t)top); a1 += 2;
-        if (d5 == 0) break;
+    uint32_t top = be16(img + p); p += 2;
+    for (uint32_t i = (width - 1) & 0xffff;; i = (i - 1) & 0xffff) {
+        wr16(img + dest, (uint16_t)top); dest += 2;
+        if (i == 0) break;
     }
-    uint32_t mid = be16(img + a2); a2 += 2;
-    uint32_t d2b = (d2 - 3) & 0xffff;
-    for (uint32_t d3b = (d3 - 3) & 0xffff;; d3b = (d3b - 1) & 0xffff) {
-        wr16(img + a1, be16(img + a2)); a1 += 2;
-        for (uint32_t d5 = d2b;; d5 = (d5 - 1) & 0xffff) {
-            wr16(img + a1, (uint16_t)mid); a1 += 2;
-            if (d5 == 0) break;
+    uint32_t mid = be16(img + p); p += 2;
+    uint32_t inner = (width - 3) & 0xffff;
+    for (uint32_t row = (height - 3) & 0xffff;; row = (row - 1) & 0xffff) {
+        wr16(img + dest, be16(img + p)); dest += 2;
+        for (uint32_t i = inner;; i = (i - 1) & 0xffff) {
+            wr16(img + dest, (uint16_t)mid); dest += 2;
+            if (i == 0) break;
         }
-        wr16(img + a1, be16(img + a2 + 2)); a1 += 2;
-        if (d3b == 0) break;
+        wr16(img + dest, be16(img + p + 2)); dest += 2;
+        if (row == 0) break;
     }
-    for (uint32_t d2c = (d2b + 2) & 0xffff;; d2c = (d2c - 1) & 0xffff) {
-        wr16(img + a1, (uint16_t)top); a1 += 2;
-        if (d2c == 0) break;
+    for (uint32_t i2 = (inner + 2) & 0xffff;; i2 = (i2 - 1) & 0xffff) {
+        wr16(img + dest, (uint16_t)top); dest += 2;
+        if (i2 == 0) break;
     }
-    *a5_io = a5;
+    *stream_io = stream;
 }
 
 uint32_t walk_entry(uint8_t *img, uint32_t a4, uint32_t d1,
@@ -213,30 +213,30 @@ void draw_selection_frame(uint8_t *img);
  * de texto desplazada D4*(n) entradas (0x10f8e) y lo blitea en 0x3b1b0+b0*2 con 0x12ad6
  * o 0x12b04 segun b2 (bit7: stride negativo; bit6: variante invertida). Devuelve A1 =
  * 0x3b1ac (constante que el llamante usa para leer la cabecera). */
-uint32_t elem_list_build(uint8_t *img, uint32_t d1) {
-    uint32_t end, a5;
-    walk_entry(img, A_ELEM_TBL_2751E, d1, &end, &a5);
-    elem_bitmap_build(img, &a5);
+uint32_t elem_list_build(uint8_t *img, uint32_t index) {
+    uint32_t end, p;
+    walk_entry(img, A_ELEM_TBL_2751E, index, &end, &p);
+    elem_bitmap_build(img, &p);
     for (;;) {
-        uint32_t n = img[a5];
-        uint32_t a1 = advance_text_entry(img, A_ELEM_TBL_31072, n);
-        uint32_t d3 = img[a1++];
-        uint32_t d2 = img[a1++];
-        uint32_t d0 = (((uint32_t)img[a5 + 2] << 8) | img[a5 + 1]) & 0x3fff;
-        uint32_t a0 = A_ELEM_BUILD + 2 + d0 * 2;
-        uint32_t str = be32(img + A_DAT_1A534);
-        uint32_t d5 = str;
-        if (img[a5 + 2] & 0x80) {
-            a0 += (uint32_t)((str & 0xffff) * (d3 & 0xffff));
-            a0 -= str;
-            d5 = (uint32_t)(-str);
+        uint32_t n = img[p];
+        uint32_t str = advance_text_entry(img, A_ELEM_TBL_31072, n);
+        uint32_t rows = img[str++];
+        uint32_t cols = img[str++];
+        uint32_t off = (((uint32_t)img[p + 2] << 8) | img[p + 1]) & 0x3fff;
+        uint32_t addr = A_ELEM_BUILD + 2 + off * 2;
+        uint32_t stride = be32(img + A_DAT_1A534);
+        uint32_t stride2 = stride;
+        if (img[p + 2] & 0x80) {
+            addr += (uint32_t)((stride & 0xffff) * (rows & 0xffff));
+            addr -= stride;
+            stride2 = (uint32_t)(-stride);
         }
-        if (img[a5 + 2] & 0x40)
-            elem_blit_rev(img, a0, a1, d2, d3, d5);
+        if (img[p + 2] & 0x40)
+            elem_blit_rev(img, addr, str, cols, rows, stride2);
         else
-            elem_blit(img, a0, a1, d2, d3, d5);
-        a5 += 3;
-        if (a5 == end)
+            elem_blit(img, addr, str, cols, rows, stride2);
+        p += 3;
+        if (p == end)
             break;
     }
     return 0x3b1ac;
@@ -250,57 +250,57 @@ uint32_t elem_list_build(uint8_t *img, uint32_t d1) {
 /* Exposicion con las salidas de registro (A6/D0/D1) que 0x18a98 necesita: el
  * original deja D0/D1 = x/y del script (o los de 0x1285a en la rama 0xff) y A6
  * avanzado. El envoltorio clasico devuelve solo A6. */
-uint32_t elem_command(uint8_t *img, uint32_t a6, uint32_t *a6o, uint32_t *d0o,
-                        uint32_t *d1o) {
-    uint32_t d0 = 0, d1 = 0, d3 = 0;
-    d1 = img[a6 + 1];
-    if (d1 == 0xff) {
-        a6 += 2;
+uint32_t elem_command(uint8_t *img, uint32_t script, uint32_t *script_out, uint32_t *x_out,
+                        uint32_t *y_out) {
+    uint32_t px = 0, py = 0, h = 0;
+    py = img[script + 1];
+    if (py == 0xff) {
+        script += 2;
         if (img[A_DAT_1AD0A] != 0) {
-            *a6o = a6; *d0o = d0; *d1o = d3;
-            return a6;
+            *script_out = script; *x_out = px; *y_out = h;
+            return script;
         }
         draw_selection_frame(img);
         uint32_t out[4];
-        if (!elem_class_find(img, d0, d1, 0, d3, out)) {
-            *a6o = a6; *d0o = d0; *d1o = d3;
-            return a6;
+        if (!elem_class_find(img, px, py, 0, h, out)) {
+            *script_out = script; *x_out = px; *y_out = h;
+            return script;
         }
-        d0 = out[0]; d1 = out[1]; d3 = out[3];
+        px = out[0]; py = out[1]; h = out[3];
     } else {
-        d0 = img[a6 + 2];
-        d3 = img[a6 + 3];
-        a6 += 4;
+        px = img[script + 2];
+        h = img[script + 3];
+        script += 4;
     }
-    *a6o = a6; *d0o = d0; *d1o = d3;
+    *script_out = script; *x_out = px; *y_out = h;
 
-    wr16(img + A_ELEM_1A532, d0 & 0xffff);
-    wr16(img + A_ELEM_1A530, d3 & 0xffff);
-    img[A_ELEM_1AB4E] = (uint8_t)(d1 & 0xff);
+    wr16(img + A_ELEM_1A532, px & 0xffff);
+    wr16(img + A_ELEM_1A530, h & 0xffff);
+    img[A_ELEM_1AB4E] = (uint8_t)(py & 0xff);
 
-    uint32_t a1 = elem_list_build(img, (d1 - 1) & 0xffff);
-    uint32_t d2 = 0;
-    a1 += 2;
-    d2 = img[a1++];
-    wr16(img + A_ELEM_1A52C, d2 & 0xffff);
-    d2 = img[a1++];
-    wr16(img + A_ELEM_1A52E, d2 & 0xffff);
-    wr32(img + A_ELEM_1A528, a1);
+    uint32_t hdr = elem_list_build(img, (py - 1) & 0xffff);
+    uint32_t v = 0;
+    hdr += 2;
+    v = img[hdr++];
+    wr16(img + A_ELEM_1A52C, v & 0xffff);
+    v = img[hdr++];
+    wr16(img + A_ELEM_1A52E, v & 0xffff);
+    wr32(img + A_ELEM_1A528, hdr);
 
     uint32_t x = be16(img + A_ELEM_1A532);
     uint32_t y = be16(img + A_ELEM_1A530);
     uint32_t d7;
-    uint32_t a0 = screen_address(img, x, y, &d7);
-    uint32_t dd3 = be16(img + A_ELEM_1A52C);
-    uint32_t dd2 = be16(img + A_ELEM_1A52E);
-    hint_slot_alloc(img, 2, a0, d7, x, y, dd2, dd3);
-    return a6;
+    uint32_t addr = screen_address(img, x, y, &d7);
+    uint32_t h2 = be16(img + A_ELEM_1A52C);
+    uint32_t w2 = be16(img + A_ELEM_1A52E);
+    hint_slot_alloc(img, 2, addr, d7, x, y, w2, h2);
+    return script;
 }
 
 /* 0x128a4 — ---- handlers de comando 0x11xxx (encadenan la salida de 0x128a4) ---- 0x128a4 deja en el fichero de registros lo que sus llamantes encadenan: d2 = ancho (0x... */
-uint32_t elem_command_wrap(uint8_t *img, uint32_t a6) {
-    uint32_t a6o, d0o, d1o;
-    return elem_command(img, a6, &a6o, &d0o, &d1o);
+uint32_t elem_command_wrap(uint8_t *img, uint32_t script) {
+    uint32_t script_out, x_out, y_out;
+    return elem_command(img, script, &script_out, &x_out, &y_out);
 }
 
 void reveal_region(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
@@ -315,22 +315,22 @@ void blit_rect_vbl(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t
  * (walk_entry D1) y la tabla de texto 0x41fb0, bliteando cada bloque de 3 bytes
  * [n][b1][b2] en 0x3b1ac+b0*2 con 0x12ad6/0x12b04 (bit7) y stride fijo 0x28. Fija
  * 0x1a534=0x28, 0x1a530=0x20, 0x1a52e=0x14, 0x1a52c=0x3b y devuelve A1=0x3b1ac. */
-uint32_t elem_bitmap_build2(uint8_t *img, uint32_t d1) {
-    uint32_t end, a5;
-    walk_entry(img, A_ELEM_TBL_23E9C, d1, &end, &a5);
+uint32_t elem_bitmap_build2(uint8_t *img, uint32_t index) {
+    uint32_t end, p;
+    walk_entry(img, A_ELEM_TBL_23E9C, index, &end, &p);
     for (;;) {
-        uint32_t t = img[a5];
-        uint32_t a1 = advance_text_entry(img, A_TEXT_TABLE, t & 0x7f);
-        uint32_t d3 = img[a1++];
-        uint32_t d2 = img[a1++];
-        uint32_t d0 = (((uint32_t)img[a5 + 2] << 8) | img[a5 + 1]) & 0xffff;
-        uint32_t a0 = A_ELEM_BUILD2 + d0 * 2;
+        uint32_t t = img[p];
+        uint32_t str = advance_text_entry(img, A_TEXT_TABLE, t & 0x7f);
+        uint32_t rows = img[str++];
+        uint32_t cols = img[str++];
+        uint32_t off = (((uint32_t)img[p + 2] << 8) | img[p + 1]) & 0xffff;
+        uint32_t addr = A_ELEM_BUILD2 + off * 2;
         if (t & 0x80)
-            elem_blit_rev(img, a0, a1, d2, d3, 0x28);
+            elem_blit_rev(img, addr, str, cols, rows, 0x28);
         else
-            elem_blit(img, a0, a1, d2, d3, 0x28);
-        a5 += 3;
-        if (a5 == end)
+            elem_blit(img, addr, str, cols, rows, 0x28);
+        p += 3;
+        if (p == end)
             break;
     }
     wr32(img + A_DAT_1A534, 0x28);
@@ -343,57 +343,57 @@ uint32_t elem_bitmap_build2(uint8_t *img, uint32_t d1) {
 /* FUN_00012d96 @ 0x12d96: dos blits de texto (0x12a4a + 0x10fec + 0x12510) a y=0x20,
  * en x=0x10 (a1+0x12) y x=0x2d, con 11 columnas y stride 0x28. */
 void elem_blit_pair(uint8_t *img) {
-    uint32_t a1 = elem_bitmap_build2(img, 0);
-    uint32_t d7;
-    uint32_t a0 = screen_address(img, 0x10, be16(img + A_ELEM_1A530), &d7);
-    blit_rect(img, a0, a1 + 0x12, 0xb, 0x3b, d7, 0x28);
+    uint32_t bitmap = elem_bitmap_build2(img, 0);
+    uint32_t phase;
+    uint32_t addr = screen_address(img, 0x10, be16(img + A_ELEM_1A530), &phase);
+    blit_rect(img, addr, bitmap + 0x12, 0xb, 0x3b, phase, 0x28);
 
-    a1 = elem_bitmap_build2(img, 1);
-    a0 = screen_address(img, 0x2d, be16(img + A_ELEM_1A530), &d7);
-    blit_rect(img, a0, a1, 0xb, 0x3b, d7, 0x28);
+    bitmap = elem_bitmap_build2(img, 1);
+    addr = screen_address(img, 0x2d, be16(img + A_ELEM_1A530), &phase);
+    blit_rect(img, addr, bitmap, 0xb, 0x3b, phase, 0x28);
 }
 
 /* FUN_00012dd8 @ 0x12dd8: como 0x12d96 pero con 0x124da (que espera VBL) y x=0x10/0x24,
  * 0x14 columnas. */
 void elem_blit_pair_vbl(uint8_t *img) {
-    uint32_t a1 = elem_bitmap_build2(img, 0);
-    uint32_t d7;
-    uint32_t a0 = screen_address(img, 0x10, be16(img + A_ELEM_1A530), &d7);
-    blit_rect_vbl(img, a0, a1, 0x14, 0x3b, d7);
+    uint32_t bitmap = elem_bitmap_build2(img, 0);
+    uint32_t phase;
+    uint32_t addr = screen_address(img, 0x10, be16(img + A_ELEM_1A530), &phase);
+    blit_rect_vbl(img, addr, bitmap, 0x14, 0x3b, phase);
 
-    a1 = elem_bitmap_build2(img, 1);
-    a0 = screen_address(img, 0x24, be16(img + A_ELEM_1A530), &d7);
-    blit_rect_vbl(img, a0, a1, 0x14, 0x3b, d7);
+    bitmap = elem_bitmap_build2(img, 1);
+    addr = screen_address(img, 0x24, be16(img + A_ELEM_1A530), &phase);
+    blit_rect_vbl(img, addr, bitmap, 0x14, 0x3b, phase);
 }
 
 /* FUN_00012ea2 @ 0x12ea2: lee la caja 0x1ab40..0x1ab43, fija 0x1a56a=1, 0x1a577=0x11,
  * A6 += 1 y cae en 0x12e2e. */
-uint32_t reveal_box_b(uint8_t *img, uint32_t a6) {
-    uint32_t d0 = img[A_DAT_1AB40];
-    uint32_t d1 = img[A_DAT_1AB42];
-    uint32_t d2 = (img[A_DAT_1AB41] - d0) & 0xffff;
-    uint32_t d3 = (img[A_DAT_1AB43] - d1) & 0xffff;
+uint32_t reveal_box_b(uint8_t *img, uint32_t script) {
+    uint32_t x = img[A_DAT_1AB40];
+    uint32_t y = img[A_DAT_1AB42];
+    uint32_t w = (img[A_DAT_1AB41] - x) & 0xffff;
+    uint32_t h = (img[A_DAT_1AB43] - y) & 0xffff;
     wr16(img + A_ANIM_1A56A, 1);
     img[A_ANIM_1A577] = 0x11;
-    reveal_region(img, d0, d1, d2, d3);
-    return a6 + 1;
+    reveal_region(img, x, y, w, h);
+    return script + 1;
 }
 
 /* FUN_00012e08 @ 0x12e08: si 0x1a570 != 0 cae en 0x1222e; si no, selecciona el icono
  * A6[1] (0x120e4), fija 0x1a577=0x11, A6 += 2 y 0x1a56a=0x64 y cae en 0x12e2e. */
-uint32_t reveal_box_a(uint8_t *img, uint32_t a6) {
+uint32_t reveal_box_a(uint8_t *img, uint32_t script) {
     if (img[A_SKIP_TRANSITION] != 0) {
-        uint32_t a6o;
-        hint_blit_entry(img, a6, &a6o);
-        return a6o;
+        uint32_t script_out;
+        hint_blit_entry(img, script, &script_out);
+        return script_out;
     }
-    uint32_t o[8];
-    hint_select_off(img, img[a6 + 1], o);
+    uint32_t out[8];
+    hint_select_off(img, img[script + 1], out);
     img[A_ANIM_1A577] = 0x11;
-    a6 += 2;
+    script += 2;
     wr16(img + A_ANIM_1A56A, 0x64);
-    reveal_region(img, o[3], o[4], o[5], o[6]);
-    return a6;
+    reveal_region(img, out[3], out[4], out[5], out[6]);
+    return script;
 }
 
 
@@ -409,26 +409,26 @@ void elem_blit_rev(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t
                  uint32_t a3);
 
 /* 0x129d6 — text block build */
-void text_block_build(uint8_t *img, uint32_t a5, uint32_t a4) {
+void text_block_build(uint8_t *img, uint32_t p, uint32_t end) {
     for (;;) {
-        uint32_t d4 = img[a5];
-        uint32_t a1 = advance_text_entry(img, 0x31072, d4);
-        uint32_t d3 = img[a1++];
-        uint32_t d2 = img[a1++];
-        uint32_t d0 = (((uint32_t)img[a5 + 2] << 8) | img[a5 + 1]) & 0x3fffu;
-        uint32_t a0 = 0x3b1b0 + d0 * 2;
-        uint32_t d5 = be32(img + A_DAT_1A534);
-        if (img[a5 + 2] & 0x80) {
-            uint32_t d4m = (d5 * d3) & 0xffffffffu;
-            a0 = (a0 + d4m - d5) & 0xffffffffu;
-            d5 = ((~d5) + 1) & 0xffffffffu;
+        uint32_t n = img[p];
+        uint32_t str = advance_text_entry(img, 0x31072, n);
+        uint32_t rows = img[str++];
+        uint32_t cols = img[str++];
+        uint32_t off = (((uint32_t)img[p + 2] << 8) | img[p + 1]) & 0x3fffu;
+        uint32_t addr = 0x3b1b0 + off * 2;
+        uint32_t stride = be32(img + A_DAT_1A534);
+        if (img[p + 2] & 0x80) {
+            uint32_t tmp = (stride * rows) & 0xffffffffu;
+            addr = (addr + tmp - stride) & 0xffffffffu;
+            stride = ((~stride) + 1) & 0xffffffffu;
         }
-        if (img[a5 + 2] & 0x40)
-            elem_blit_rev(img, a0, a1, d2, d3, d5);
+        if (img[p + 2] & 0x40)
+            elem_blit_rev(img, addr, str, cols, rows, stride);
         else
-            elem_blit(img, a0, a1, d2, d3, d5);
-        a5 += 3;
-        if (a5 == a4)
+            elem_blit(img, addr, str, cols, rows, stride);
+        p += 3;
+        if (p == end)
             break;
     }
 }
@@ -465,32 +465,32 @@ void overlay_compose_shift_wrap(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t
 uint32_t scene_mode_load_wrap(uint8_t *img);
 
 /* 0x12ce4 — ciclo de modo/vista $1acca (overlays del retrato) */
-uint32_t view_mode_cycle(uint8_t *img, uint32_t a6) {
+uint32_t view_mode_cycle(uint8_t *img, uint32_t script) {
     sound_play_a(img, 0x1d);
-    uint32_t a6ret = a6 + 1;
-    uint32_t d0 = (img[0x1acca] + 1) & 3;
-    img[0x1acca] = (uint8_t)d0;
+    uint32_t ret = script + 1;
+    uint32_t mode = (img[0x1acca] + 1) & 3;
+    img[0x1acca] = (uint8_t)mode;
 
-    if (d0 == 1) {
-        uint32_t d1 = 0x09;
+    if (mode == 1) {
+        uint32_t m = 0x09;
         if (img[0x1acc6] != 0x18)
-            d1 = 0x66;
-        img[0x1acc6] = (uint8_t)d1;
-        uint32_t a4o, a5o;
-        scene_mode_load(img, &a4o, &a5o);
+            m = 0x66;
+        img[0x1acc6] = (uint8_t)m;
+        uint32_t end, p;
+        scene_mode_load(img, &end, &p);
 
-        uint32_t a1 = elem_bitmap_build2(img, 0);
-        a1 = (a1 + be32(img + 0x1a534) - 2) & 0xffffffffu;
+        uint32_t bitmap = elem_bitmap_build2(img, 0);
+        bitmap = (bitmap + be32(img + 0x1a534) - 2) & 0xffffffffu;
         wr16(img + 0x1a532, 0x10);
-        uint32_t d7;
-        uint32_t a0 = screen_address(img, 0x10, 0x20, &d7);
-        blit_rect_vbl(img, a0, a1, 1, 0x3b, d7);
-        a1 = (a1 - 2) & 0xffffffffu;
+        uint32_t phase;
+        uint32_t addr = screen_address(img, 0x10, 0x20, &phase);
+        blit_rect_vbl(img, addr, bitmap, 1, 0x3b, phase);
+        bitmap = (bitmap - 2) & 0xffffffffu;
         /* el original llega con D0=0x07fd0000|fase y D2=0xffff0001 (valores de
          * 14496/12a4a/124da, independientes del contenido de pantalla) */
-        uint32_t d0in = 0x07fd0000u | (d7 & 0xffff);
+        uint32_t d0in = 0x07fd0000u | (phase & 0xffff);
         uint32_t d2in = 0xffff0001u;
-        overlay_compose_planes_wrap(img, d0in, 0x0a, d2in, 0x3b, a0, a1);
+        overlay_compose_planes_wrap(img, d0in, 0x0a, d2in, 0x3b, addr, bitmap);
         {
             uint32_t c = 0, k = 0x27;
             for (;;) {
@@ -500,25 +500,25 @@ uint32_t view_mode_cycle(uint8_t *img, uint32_t a6) {
             }
             wr32(img + 0x1a82e, d0in);
             wr32(img + 0x1a832, (d2in & 0xffff0000u) | ((5 + 0x28) & 0xffff));
-            wr32(img + 0x1a836, a0);
-            wr32(img + 0x1a83a, (a1 - 2 * c) & 0xffffffffu);
+            wr32(img + 0x1a836, addr);
+            wr32(img + 0x1a83a, (bitmap - 2 * c) & 0xffffffffu);
         }
 
-        a1 = elem_bitmap_build2(img, 1);
+        bitmap = elem_bitmap_build2(img, 1);
         wr16(img + 0x1a532, 0x37);
-        a0 = screen_address(img, 0x37, 0x20, &d7);
-        blit_rect_vbl(img, a0, a1, 1, 0x3b, d7);
-        if (d7 == 0) {
-            d7 = 0x0f;
-            a0 = (a0 - 8) & 0xffffffffu;
+        addr = screen_address(img, 0x37, 0x20, &phase);
+        blit_rect_vbl(img, addr, bitmap, 1, 0x3b, phase);
+        if (phase == 0) {
+            phase = 0x0f;
+            addr = (addr - 8) & 0xffffffffu;
         } else {
-            d7 = (d7 - 1) & 0xffff;
+            phase = (phase - 1) & 0xffff;
         }
-        a1 = (a1 + 2) & 0xffffffffu;
+        bitmap = (bitmap + 2) & 0xffffffffu;
         /* D0=0x45610000|fase2, D2=0xffff0001; D6=0x05010506 (constantes medidas) */
-        uint32_t d0b = 0x45610000u | (d7 & 0xffff);
+        uint32_t d0b = 0x45610000u | (phase & 0xffff);
         uint32_t d2b = 0xffff0001u;
-        overlay_compose_planes32_wrap(img, d0b, 0x0a, d2b, 0x3b, 0x05010506u, a0, a1);
+        overlay_compose_planes32_wrap(img, d0b, 0x0a, d2b, 0x3b, 0x05010506u, addr, bitmap);
         {
             uint32_t lo = d0b & 0xffff, wraps = 0;
             for (uint32_t k = 0; k < 0x28; k++) {
@@ -533,19 +533,19 @@ uint32_t view_mode_cycle(uint8_t *img, uint32_t a6) {
             }
             wr32(img + 0x1a83e, (d0b & 0xffff0000u) | lo);
             wr32(img + 0x1a842, (d2b & 0xffff0000u) | ((5 + 0x28) & 0xffff));
-            wr32(img + 0x1a846, (a0 - 8 * wraps) & 0xffffffffu);
-            wr32(img + 0x1a84a, (a1 + 2 * c) & 0xffffffffu);
+            wr32(img + 0x1a846, (addr - 8 * wraps) & 0xffffffffu);
+            wr32(img + 0x1a84a, (bitmap + 2 * c) & 0xffffffffu);
         }
         sound_stop(img);
-        return a6ret;
+        return ret;
     }
-    if (d0 == 2) {
-        uint32_t d1 = 0x5f;
+    if (mode == 2) {
+        uint32_t m = 0x5f;
         if (img[0x1acc6] != 0x09)
-            d1 = 0x67;
-        img[0x1acc6] = (uint8_t)d1;
-        uint32_t a4o, a5o;
-        scene_mode_load(img, &a4o, &a5o);
+            m = 0x67;
+        img[0x1acc6] = (uint8_t)m;
+        uint32_t end, p;
+        scene_mode_load(img, &end, &p);
 
         (void)elem_bitmap_build2(img, 0);
         uint32_t b0 = be32(img + 0x1a82e), b2 = be32(img + 0x1a832);
@@ -558,15 +558,15 @@ uint32_t view_mode_cycle(uint8_t *img, uint32_t a6) {
         overlay_compose_planes32(img, b0, 0x23, b2, 0x3b, 0xff34u, ba0, ba1);
 
         sound_play_a(img, 0x1e);
-        return a6ret;
+        return ret;
     }
-    if (d0 == 0) {
-        uint32_t d1 = 0x18;
+    if (mode == 0) {
+        uint32_t m = 0x18;
         if (img[0x1acc6] != 0x09)
-            d1 = 0x1e;
-        img[0x1acc6] = (uint8_t)d1;
-        uint32_t a4o, a5o;
-        scene_mode_load(img, &a4o, &a5o);
+            m = 0x1e;
+        img[0x1acc6] = (uint8_t)m;
+        uint32_t end, p;
+        scene_mode_load(img, &end, &p);
         uint32_t b0 = be32(img + 0x1a83e), b2 = be32(img + 0x1a842);
         uint32_t ba0 = be32(img + 0x1a846), ba1 = be32(img + 0x1a84a);
         overlay_compose_masked(img, b0, 0x2b, b2, 0x3b, ba0, ba1);
@@ -576,35 +576,35 @@ uint32_t view_mode_cycle(uint8_t *img, uint32_t a6) {
         overlay_compose_shift(img, b0, 0x2b, b2, 0x3b, ba0, ba1);
         mask_restore_rows(img, ba0, 0x14, 0x3b, b0 & 0xffff);
         sound_stop(img);
-        return a6ret;
+        return ret;
     }
-    if (d0 == 3) {
-        uint32_t d1 = 0x09;
+    if (mode == 3) {
+        uint32_t m = 0x09;
         if (img[0x1acc6] != 0x5f)
-            d1 = 0x66;
-        img[0x1acc6] = (uint8_t)d1;
-        uint32_t a4o, a5o;
-        scene_mode_load(img, &a4o, &a5o);
+            m = 0x66;
+        img[0x1acc6] = (uint8_t)m;
+        uint32_t end, p;
+        scene_mode_load(img, &end, &p);
         wr32(img + 0x1a534, 0x28);
 
-        uint32_t d7;
-        uint32_t a0a = screen_address(img, 0x24, 0x20, &d7);
-        overlay_compose_masked_wrap(img, d7, 0x09, 0x14, 0x3b, a0a);
-        /* registro final de 117de: D0=(d0&0xf+0x24)&0xf, D2=0x50-0x24,
+        uint32_t phase;
+        uint32_t a0a = screen_address(img, 0x24, 0x20, &phase);
+        overlay_compose_masked_wrap(img, phase, 0x09, 0x14, 0x3b, a0a);
+        /* registro final de 117de: D0=(mode&0xf+0x24)&0xf, D2=0x50-0x24,
          * A0/A1 con +8 por cada vuelta del nibble (2), A1 = A0-0x8000 */
-        wr32(img + 0x1a83e, (((d7 & 0xf) + 0x24) & 0xf) | (d7 & 0xffffffF0u));
+        wr32(img + 0x1a83e, (((phase & 0xf) + 0x24) & 0xf) | (phase & 0xffffffF0u));
         wr32(img + 0x1a842, (((0x14 << 2) - 0x24) & 0xffff));
         wr32(img + 0x1a846, (a0a + 0x10) & 0xffffffffu);
         wr32(img + 0x1a84a, ((a0a - 0x8000) + 0x10) & 0xffffffffu);
 
-        uint32_t a0b = screen_address(img, 0x10, 0x20, &d7);
-        overlay_compose_shift_wrap(img, d7, 0x09, 0x14, 0x3b, a0b);
-        wr32(img + 0x1a82e, d7 & 0xffffffffu);
+        uint32_t a0b = screen_address(img, 0x10, 0x20, &phase);
+        overlay_compose_shift_wrap(img, phase, 0x09, 0x14, 0x3b, a0b);
+        wr32(img + 0x1a82e, phase & 0xffffffffu);
         wr32(img + 0x1a832, (((0x14 << 2) - 0x24) & 0xffff));
         wr32(img + 0x1a836, a0b);
         wr32(img + 0x1a83a, (a0b - 0x8000) & 0xffffffffu);
         sound_stop(img);
-        return a6ret;
+        return ret;
     }
-    return a6ret;
+    return ret;
 }

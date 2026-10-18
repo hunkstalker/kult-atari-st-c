@@ -30,29 +30,29 @@ static uint32_t reveal_gate(uint32_t units) {
 }
 
 /* FUN_00012ef6 @ 0x12ef6 */
-void reveal_dot(uint8_t *img, uint32_t a0, uint32_t d4, uint32_t d7) {
-    uint32_t a3 = a0 - 0x8000u;
-    uint16_t k = (uint16_t)(d7 & 15);
-    uint16_t m = (uint16_t)d4;
-    m = (uint16_t)((m >> k) | (m << (16 - k)));   /* ror.w d7,d4 */
+void reveal_dot(uint8_t *img, uint32_t dest, uint32_t mask, uint32_t phase) {
+    uint32_t src = dest - 0x8000u;
+    uint16_t k = (uint16_t)(phase & 15);
+    uint16_t m = (uint16_t)mask;
+    m = (uint16_t)((m >> k) | (m << (16 - k)));   /* ror.w phase,mask */
     uint16_t n = (uint16_t)~m;
     for (int i = 0; i < 4; i++) {
-        uint16_t v = (uint16_t)(be16(img + a3) & m);
-        uint16_t d = be16(img + a0);
-        wr16(img + a0, (uint16_t)((d & n) | v));
-        a3 += 2;
-        a0 += 2;
+        uint16_t v = (uint16_t)(be16(img + src) & m);
+        uint16_t d = be16(img + dest);
+        wr16(img + dest, (uint16_t)((d & n) | v));
+        src += 2;
+        dest += 2;
     }
 }
 
 /* FUN_00012e2e @ 0x12e2e */
-void reveal_region(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3) {
-    d0 = (d0 << 2) & 0xffff;
-    d2 = (d2 << 2) & 0xffff;
-    wr16(img + A_REV_X0, (uint16_t)d0);
-    wr16(img + A_REV_Y0, (uint16_t)d1);
-    wr16(img + A_REV_W, (uint16_t)d2);
-    uint32_t total = (uint16_t)(d2 * d3);         /* mulu.w d2,d3 */
+void reveal_region(uint8_t *img, uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
+    x = (x << 2) & 0xffff;
+    w = (w << 2) & 0xffff;
+    wr16(img + A_REV_X0, (uint16_t)x);
+    wr16(img + A_REV_Y0, (uint16_t)y);
+    wr16(img + A_REV_W, (uint16_t)w);
+    uint32_t total = (uint16_t)(w * h);         /* mulu.w w,h */
     wr16(img + A_REV_TOTAL, (uint16_t)total);
 
     uint32_t step = img[A_ANIM_1A577] & 0xff;
@@ -64,10 +64,10 @@ void reveal_region(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t
     uint32_t acc = 0;
     for (;;) {
         uint32_t w = width ? width : 0x10000;      /* divu.w: cociente en word bajo */
-        uint32_t q = acc / w, r = acc % w;
-        uint32_t d7;
-        uint32_t a0 = screen_address_raw(img, (x0 + r) & 0xffff, (y0 + q) & 0xffff, &d7);
-        reveal_dot(img, a0, 0x8000, d7);
+        uint32_t row = acc / w, col = acc % w;
+        uint32_t phase;
+        uint32_t addr = screen_address_raw(img, (x0 + col) & 0xffff, (y0 + row) & 0xffff, &phase);
+        reveal_dot(img, addr, 0x8000, phase);
         cpu_delay(reveal_gate(delay));           /* dbf de espera del original (KULT_REVEAL_GATE) */
         acc = (acc + step) & 0xffff;
         if (acc == total) break;
@@ -79,15 +79,15 @@ void reveal_region(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t
 /* FUN_00012fb6 @ 0x12fb6: escribe 4 words en A0: para cada uno, AND con la máscara
  * invertida (rotada de 0x8000 por D7) y OR con la parte correspondiente de D0. Puro
  * bucle de píxeles. */
-void masked_word4(uint8_t *img, uint32_t a0, uint32_t d0, uint32_t d7) {
-    uint32_t d4 = ror16(0x8000, d7);
-    uint32_t d5 = (~d4) & 0xffff;
-    d0 = ror16(d0, d7);
+void masked_word4(uint8_t *img, uint32_t dest, uint32_t bits, uint32_t phase) {
+    uint32_t mask = ror16(0x8000, phase);
+    uint32_t inv = (~mask) & 0xffff;
+    bits = ror16(bits, phase);
     for (int i = 0; i < 4; i++) {
-        uint32_t v = (be16(img + a0) & d5) | (d0 & d4);
-        wr16(img + a0, v & 0xffff);
-        a0 += 2;
-        d0 = rol16(d0, 4);
+        uint32_t v = (be16(img + dest) & inv) | (bits & mask);
+        wr16(img + dest, v & 0xffff);
+        dest += 2;
+        bits = rol16(bits, 4);
     }
 }
 
@@ -98,10 +98,10 @@ uint32_t elem_command_wrap(uint8_t *img, uint32_t a6);
 uint32_t elem_blit_vbl(uint8_t *img, uint32_t a6);
 
 /* 0x12f28 — reveal pixelado del elemento (dbf 0x64 / skip $1a570) */
-uint32_t reveal_pixel(uint8_t *img, uint32_t a6) {
+uint32_t reveal_pixel(uint8_t *img, uint32_t script) {
     if (img[A_SKIP_TRANSITION] != 0)
-        return elem_blit_vbl(img, a6);
-    a6 = elem_command_wrap(img, a6);
+        return elem_blit_vbl(img, script);
+    script = elem_command_wrap(img, script);
     uint32_t x = be16(img + A_ELEM_1A532);
     uint32_t w = be16(img + A_ELEM_1A52E);
     uint32_t h = be16(img + A_ELEM_1A52C);
@@ -110,19 +110,19 @@ uint32_t reveal_pixel(uint8_t *img, uint32_t a6) {
     uint32_t total = (h * ((w << 2) & 0xffff)) & 0xffff;
     wr16(img + A_DAT_1A49E, total);
 
-    uint32_t a1 = be32(img + A_ELEM_1A528);
+    uint32_t src = be32(img + A_ELEM_1A528);
     uint32_t width = be16(img + A_ELEM_1A52E);
     uint32_t acc = 0;
     for (;;) {
         uint32_t bit = acc & 3;
         uint32_t off = (acc >> 1) & 0xfffffffeu;
         uint32_t div = width ? width : 0x10000;
-        uint32_t q = acc / div, r = acc % div;
-        uint32_t d7;
-        uint32_t a0 = screen_address_raw(img, (be16(img + A_ELEM_1A532) + r) & 0xffff,
-                                          (be16(img + A_ELEM_1A530) + q) & 0xffff, &d7);
-        uint32_t v = (be16(img + a1 + off) << bit) & 0xffff;
-        masked_word4(img, a0, v, d7);
+        uint32_t row = acc / div, col = acc % div;
+        uint32_t phase;
+        uint32_t addr = screen_address_raw(img, (be16(img + A_ELEM_1A532) + col) & 0xffff,
+                                          (be16(img + A_ELEM_1A530) + row) & 0xffff, &phase);
+        uint32_t v = (be16(img + src + off) << bit) & 0xffff;
+        masked_word4(img, addr, v, phase);
         cpu_delay(reveal_gate(0x64));            /* dbf 0x64 del original */
         acc = (acc + 0x11) & 0xffff;
         if (acc == total)
@@ -130,5 +130,5 @@ uint32_t reveal_pixel(uint8_t *img, uint32_t a6) {
         if (acc > total)
             acc = (acc - total) & 0xffff;
     }
-    return a6;
+    return script;
 }
