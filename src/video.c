@@ -172,7 +172,6 @@ void palette_cycle(uint8_t *img) {
  * vector $456 en $1a4d4 y lo apunta a 0x160c2, $502 = 0x1019a, $1a579 = $4bd,
  * Super(restore), XBIOS Kbdvbase -> $1a446 (handler mouse a 0x13686 guardando el
  * anterior en $1a44a) e Ikbdws(0x19) (sin efecto en imagen). */
-#include "os.h"
 
 void crt0_init(uint8_t *img) {
     wr16(img + 0x1a558, 0);                       /* XBIOS Getrez: low-res */

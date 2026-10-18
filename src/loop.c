@@ -17,6 +17,7 @@
 #include "addrs.h"
 #include "kult_port.h"
 #include "os.h"
+#include "kult_internal.h"
 
 
 /* Devuelve 1 si encontrado. d1o = clase (o 0xff), d2o = indice+1. Conserva los bytes
@@ -817,6 +818,7 @@ void portrait_intro(uint8_t *img) {
  * 0x19cd1..0x19cf7 -> $1acaa/$1acac y escribe la entrada en $1aa72, limpia el bit7
  * del objeto indexado por $1aa73&0xf, fija $1a806 y busca/anima (0x177bc/0x17856). */
 uint32_t track_select_a(uint8_t *img, uint32_t a6) {
+    (void)a6;
     uint32_t a1 = be32(img + 0x1a80a) + 4;
     uint32_t a2 = 0x1aa72;
     if (img[a2] != 0)
@@ -874,6 +876,7 @@ l1723c:
  * 0x19cd1..0x19cf7 -> $1acae/$1acb0 y escribe la entrada en $1aa8b, limpia el bit7
  * del objeto ($1aa8c&0xf) y busca/anima con 0x177bc(0x19)/0x17856. */
 uint32_t track_select_b(uint8_t *img, uint32_t a6) {
+    (void)a6;
     uint32_t a1 = be32(img + 0x1a80e) + 4;
     uint32_t a2 = 0x1aa72;
     {
@@ -1039,11 +1042,6 @@ void icon_list_build(uint8_t *img, uint32_t a1);
 void wait_vbl(uint8_t *img);
 uint32_t screen_address_raw(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
 
-static uint32_t ror16b(uint32_t v, uint32_t n) {
-    n &= 15;
-    return n ? (((v >> n) | (v << (16 - n))) & 0xffff) : (v & 0xffff);
-}
-
 void icon_scale_loop(uint8_t *img, uint32_t a5, uint32_t d5) {
     uint32_t a1 = 0xd8f0;
     for (uint32_t d6 = 0xff;; d6 = (d6 - 1) & 0xffff) {
@@ -1072,7 +1070,7 @@ void icon_scale_loop(uint8_t *img, uint32_t a5, uint32_t d5) {
                     a0b = (a0b - a5) & 0xffffffffu;
                     wr16(img + a1, off);
                     wr16(img + a1 + 2, d7 & 0xffff);
-                    uint32_t m = ror16b(0x8000, d7);
+                    uint32_t m = ror16(0x8000, d7);
                     uint32_t vb = be16(img + a1 + 8);
                     if (vb < 0x600) {
                         wr16(img + a0b, be16(img + a0b) | m);

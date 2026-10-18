@@ -13,6 +13,7 @@
 
 #include "machine.h"
 #include "addrs.h"
+#include "kult_internal.h"
 
 void copy_scratch_rows(uint8_t *img, uint32_t a0, uint32_t d4, uint32_t d5);
 
@@ -243,11 +244,6 @@ uint32_t scale_prep(uint8_t *img, uint32_t a6) {
     return a6 + 2;
 }
 
-static uint32_t movep_read_l(uint8_t *img, uint32_t a) {
-    return ((uint32_t)img[a] << 24) | ((uint32_t)img[a + 2] << 16) |
-           ((uint32_t)img[a + 4] << 8) | img[a + 6];
-}
-
 /* FUN_0001398e @ 0x1398e: construye en 0xd8f0 una lista de entradas
  * [word offset][word max(1,*0x1a1f2)][long movep(fila)] de 8 filas (stride 0xa0)
  * por grupo, avanzando A2 +1/+7 y A0 +0x500 por banda; cierra con un long 0. */
@@ -306,13 +302,6 @@ void hint_select_off(uint8_t *img, uint32_t d0, uint32_t *o);
 void hint_blit_entry(uint8_t *img, uint32_t a6, uint32_t *a6_out);
 void wait_vbl(uint8_t *img);
 void scale_list_build(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t d7, uint32_t a0);
-static void movep_write_l(uint8_t *img, uint32_t a, uint32_t v) {
-    img[a] = (v >> 24) & 0xff;
-    img[a + 2] = (v >> 16) & 0xff;
-    img[a + 4] = (v >> 8) & 0xff;
-    img[a + 6] = v & 0xff;
-}
-
 uint32_t scale_anim(uint8_t *img, uint32_t a6) {
     if (img[A_SKIP_TRANSITION] != 0) {
         uint32_t a6o;

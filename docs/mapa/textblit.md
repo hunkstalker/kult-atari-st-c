@@ -6,7 +6,7 @@ textblit.c — the register-driven proportional text blitters.  FUN_00011196 @ 0
 
 | dir | nombre | qué hace | pruebas |
 |---|---|---|---|
-| `0x11196` | `bit_reverse_word` | — | test_textblit |
+| `0x11196` | `bit_reverse_word` | movep: bytes alternos (alto en +0, bajo en +2, ...) | test_textblit |
 | `0x11050` | `text_blit_fwd` | — | test_textblit |
 | `0x11102` | `text_blit_rev` | — | test_textblit |
 | `0x14138` | `run_text_entry_ex` | FUN_00014138 @ 0x14138: process one script/text entry at A6.  A6[0] selects a D4-entry skip in the text table at 0x41fb0; the entry's first two bytes are read (D3/D2), A6[1] is the character/position and A6[2] its flags. The function then computes the screen address (0x10fec) and dispatches to the forward blitter (FUN_00011050) or the bit-reversed one (FUN_00011102) depending on A6[1] bit 7.  The `_ex` form also reports the registers the original leaves for its caller: A0 (the 0x10fec screen address, before the -0x8000 back-buffer shift), D2/D3 (the entry's columns/rows) and D7 (the pixel phase).  The original preserves them across the blit with the `movem` at 0x141b0/0x141d6, and FUN_000141dc (0x141dc) feeds them straight into FUN_0001215e, so the reconstruction has to hand them back. | — |

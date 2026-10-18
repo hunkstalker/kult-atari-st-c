@@ -15,6 +15,7 @@
 #include "machine.h"
 #include "addrs.h"
 #include "kult_port.h"
+#include "kult_internal.h"
 
 uint32_t screen_address_raw(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
 
@@ -75,27 +76,18 @@ void reveal_region(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t
 }
 
 
-static uint32_t ror16b(uint32_t v, uint32_t n) {
-    n &= 15;
-    return n ? (((v >> n) | (v << (16 - n))) & 0xffff) : (v & 0xffff);
-}
-static uint32_t rol16b(uint32_t v, uint32_t n) {
-    n &= 15;
-    return n ? (((v << n) | (v >> (16 - n))) & 0xffff) : (v & 0xffff);
-}
-
 /* FUN_00012fb6 @ 0x12fb6: escribe 4 words en A0: para cada uno, AND con la máscara
  * invertida (rotada de 0x8000 por D7) y OR con la parte correspondiente de D0. Puro
  * bucle de píxeles. */
 void masked_word4(uint8_t *img, uint32_t a0, uint32_t d0, uint32_t d7) {
-    uint32_t d4 = ror16b(0x8000, d7);
+    uint32_t d4 = ror16(0x8000, d7);
     uint32_t d5 = (~d4) & 0xffff;
-    d0 = ror16b(d0, d7);
+    d0 = ror16(d0, d7);
     for (int i = 0; i < 4; i++) {
         uint32_t v = (be16(img + a0) & d5) | (d0 & d4);
         wr16(img + a0, v & 0xffff);
         a0 += 2;
-        d0 = rol16b(d0, 4);
+        d0 = rol16(d0, 4);
     }
 }
 

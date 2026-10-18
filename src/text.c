@@ -25,18 +25,10 @@
 
 #include "machine.h"
 #include "addrs.h"
+#include "kult_internal.h"
 
 uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7);
 void mask_restore_rows(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7);
-
-static uint32_t ror16(uint32_t v, uint32_t n) {
-    n &= 15;
-    return n ? (((v >> n) | (v << (16 - n))) & 0xffff) : (v & 0xffff);
-}
-static uint32_t rol16(uint32_t v, uint32_t n) {
-    n &= 15;
-    return n ? (((v << n) | (v >> (16 - n))) & 0xffff) : (v & 0xffff);
-}
 
 /* 0x10838 — dibuja el glifo de D0. */
 void print_char(uint8_t *img, uint32_t d0) {

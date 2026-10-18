@@ -16,45 +16,13 @@
 #include "machine.h"
 #include "addrs.h"
 #include "os.h"
+#include "kult_internal.h"
 
 uint32_t advance_text_entry(uint8_t *img, uint32_t a1, uint32_t d4);
 uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
 
-static uint32_t ror32(uint32_t v, uint32_t n) {
-    n &= 31;
-    return n ? ((v >> n) | (v << (32 - n))) : v;
-}
-static uint32_t rol32(uint32_t v, uint32_t n) {
-    n &= 31;
-    return n ? ((v << n) | (v >> (32 - n))) : v;
-}
-static uint32_t swap_words(uint32_t v) {
-    return (v << 16) | (v >> 16);
-}
-
 /* the 0x55b02 scratch is read back with `move.l (a5)`, four consecutive bytes */
-static uint32_t read_long(uint8_t *img, uint32_t a) {
-    return ((uint32_t)img[a] << 24) | ((uint32_t)img[a + 1] << 16) |
-           ((uint32_t)img[a + 2] << 8) | img[a + 3];
-}
-
-static void movep_write_w(uint8_t *img, uint32_t a, uint32_t v) {
-    img[a] = (v >> 8) & 0xff;
-    img[a + 2] = v & 0xff;
-}
-
 /* movep: bytes alternos (alto en +0, bajo en +2, ...) */
-static uint32_t movep_read_l(uint8_t *img, uint32_t a) {
-    return ((uint32_t)img[a] << 24) | ((uint32_t)img[a + 2] << 16) |
-           ((uint32_t)img[a + 4] << 8) | img[a + 6];
-}
-static void movep_write_l(uint8_t *img, uint32_t a, uint32_t v) {
-    img[a] = (v >> 24) & 0xff;
-    img[a + 2] = (v >> 16) & 0xff;
-    img[a + 4] = (v >> 8) & 0xff;
-    img[a + 6] = v & 0xff;
-}
-
 void bit_reverse_word(uint32_t d0, uint32_t d1, uint32_t *d0o, uint32_t *d1o) {
     d0 &= 0xffff;
     d1 &= 0xffff;

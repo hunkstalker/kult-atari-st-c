@@ -17,20 +17,10 @@
 
 #include "machine.h"
 #include "addrs.h"
+#include "kult_internal.h"
 
 uint32_t screen_address_raw(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7);
 void wait_vbl(uint8_t *img);
-
-static uint32_t movep_read_l(uint8_t *img, uint32_t a) {
-    return ((uint32_t)img[a] << 24) | ((uint32_t)img[a + 2] << 16) |
-           ((uint32_t)img[a + 4] << 8) | img[a + 6];
-}
-static void movep_write_l(uint8_t *img, uint32_t a, uint32_t v) {
-    img[a] = (v >> 24) & 0xff;
-    img[a + 2] = (v >> 16) & 0xff;
-    img[a + 4] = (v >> 8) & 0xff;
-    img[a + 6] = v & 0xff;
-}
 
 /* 0x13d0e — trazo Bresenham. */
 void reveal_line(uint8_t *img) {

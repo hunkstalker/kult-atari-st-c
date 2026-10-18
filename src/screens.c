@@ -80,10 +80,7 @@ uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7) {
  * Both read their operands from image globals and touch no hardware, so a differential
  * case pokes the two pointers and a couple of sentinel longs into the buffers.
  */
-#include <stdint.h>
 
-#include "machine.h"
-#include "addrs.h"
 #include "os.h"
 
 #define SCREEN_LONGS 8000
