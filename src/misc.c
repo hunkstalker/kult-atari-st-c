@@ -49,9 +49,13 @@ uint32_t hint_blit_entry_b(uint8_t *img, uint32_t a6) {
 }
 
 /* Avanzan A6 y caen en el cuerpo real. */
+/* 0x16512 — Avanzan A6 y caen en el cuerpo real. */
 uint32_t hint_icons_wrap(uint8_t *img, uint32_t a6) { hint_icons(img); return a6 + 1; }
+/* 0x16554 — draw hint icons wrap */
 uint32_t draw_hint_icons_wrap(uint8_t *img, uint32_t a6) { draw_hint_icons(img); return a6 + 1; }
+/* 0x16576 — update icon list wrap */
 uint32_t update_icon_list_wrap(uint8_t *img, uint32_t a6) { update_icon_list(img); return a6 + 1; }
+/* 0x18d26 — draw selection frame wrap */
 uint32_t draw_selection_frame_wrap(uint8_t *img, uint32_t a6) { draw_selection_frame(img); return a6 + 1; }
 
 /* FUN_00017472 @ 0x17472: limpia 0x1aa8b y 0x1acae. */

@@ -6,13 +6,13 @@ textbox.c — el cuerpo de la caja de texto.  FUN_00010e66 @ 0x10e66: dibuja el 
 
 | dir | nombre | qué hace | pruebas |
 |---|---|---|---|
-| `0x10e66` | `text_box_body` | — | test_textbox |
-| `0x10440` | `draw_text_box_variant` | — | test_textbox |
-| `0x1042c` | `draw_text_box` | — | test_textbox |
-| `0x10dfa` | `text_box_icon` | — | test_textbox |
-| `0x10b6c` | `text_window` | — | — |
+| `0x10e66` | `text_box_body` | marco + palabras + borde inferior de la caja de texto | test_textbox |
+| `0x10440` | `draw_text_box_variant` | idem (otra ruta de entrada) | test_textbox |
+| `0x1042c` | `draw_text_box` | calcula geometria de caja de texto y la dibuja | test_textbox |
+| `0x10dfa` | `text_box_icon` | text box icon | test_textbox |
+| `0x10b6c` | `text_window` | ventana de texto con adorno/flecha (bits 0xe0) | — |
 | `0x10b52` | `text_window_entry` | FUN_00010b52 @ 0x10b52 (cmd idx 78): text index de A6[1] sobre el banco 0x3c534, copia 0x1a482 a 0x1a484 y dibuja la ventana (0x10b6c). Devuelve A6 + 5. | test_textbox |
-| `0x13f86` | `scene_text_box` | — | test_textbox |
+| `0x13f86` | `scene_text_box` | caja/overlay autodimensionado de la escena | test_textbox |
 
 ## Estado (globales A_* usadas)
 

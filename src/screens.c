@@ -162,6 +162,7 @@ void script_call(uint8_t *img, uint32_t *a6) {
  * screen_ptr_b-0x22 (cae en load_named_screen). FUN_00013572 @ 0x13572: solo estas dos
  * últimas asignaciones (el nombre lo trae ya quien llame). */
 void load_resource(uint8_t *img);
+/* 0x13568 — carga FOND.PI1 (fondo de sala) en screen_ptr_b */
 void load_fond(uint8_t *img) {
     wr32(img + A_CUR_FILENAME, 0x1a41e);
     wr32(img + A_LOAD_BUFFER, (be32(img + A_SCREEN_PTR_B) - 0x22) & 0xffffffffu);
@@ -169,6 +170,7 @@ void load_fond(uint8_t *img) {
     load_resource(img);
 }
 
+/* 0x13572 — prepara buffer (len 0x7d22) y llama a load_resource */
 void load_named_screen(uint8_t *img) {
     wr32(img + A_LOAD_BUFFER, (be32(img + A_SCREEN_PTR_B) - 0x22) & 0xffffffffu);
     wr32(img + A_LOAD_LENGTH, 0x7d22);
@@ -192,6 +194,7 @@ void copy_screen_rev(uint8_t *img) {
  * y a1 = origen. */
 void blit_mask_setup(uint8_t *img, uint32_t d2, uint32_t d7);
 void blit_mask_row(uint8_t *img, uint32_t a0, uint32_t a1);
+/* 0x12190 — mask row blit */
 void mask_row_blit(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7) {
     blit_mask_setup(img, d2, d7);
     uint32_t n = (d3 - 1) & 0xffff;
@@ -291,12 +294,14 @@ static void screen_copies(uint8_t *img, uint32_t a3) {
     }
 }
 
+/* 0x15944 — mide y dibuja una caja de texto autodimensionada. 15944, walk_entry sobre la tabla 0x24982 (indice 0x1acc7-1), recorre bloques de 3 bytes: los bytes 0x32..0x... */
 void copy_rows(uint8_t *img) {
     uint32_t a3 = be32(img + A_SCREEN_PTR_B);
     img[0x1a573] = 0;
     screen_copies(img, a3);
 }
 
+/* 0x15934 — copy rows a */
 void copy_rows_a(uint8_t *img) {
     img[0x1a573] = 1;
     screen_copies(img, be32(img + A_SCREEN_PTR_A));
@@ -308,6 +313,7 @@ void copy_rows_a(uint8_t *img) {
 void track_advance(uint8_t *img);
 void wait_vbl(uint8_t *img);
 
+/* 0x18a30 — screen clean */
 void screen_clean(uint8_t *img) {
     track_advance(img);
     uint32_t a5 = be32(img + A_SCREEN_PTR_A);
@@ -355,6 +361,7 @@ void wait_vbl(uint8_t *img);
 void sound_play_a(uint8_t *img, uint32_t d4);
 void icon_list_reset(uint8_t *img);
 
+/* 0x18a98 — attract */
 uint32_t attract(uint8_t *img, uint32_t a6) {
     img[0x1ad0d] = 5;
     uint32_t a1 = be32(img + A_SCREEN_PTR_B);

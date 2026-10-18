@@ -6,11 +6,11 @@ dispatch.c — el despacho de comandos y la VM de bytes del script.  run_command
 
 | dir | nombre | qué hace | pruebas |
 |---|---|---|---|
-| `0x10630` | `vm_run` | — | test_dispatch, test_dispatch_wiring, test_textblit |
+| `0x10630` | `vm_run` | vm run | test_dispatch, test_dispatch_wiring, test_textblit |
 | `0x104f4` | `inline_cmd_walk` | FUN_000104f4 @ 0x104f4 (byte 18): the_command = word inline (a6[1..2]), walk_entry con (templ, cmd-1) y devuelve A5 (el nuevo stream). | test_dispatch |
-| `0x103ae` | `run_command_keep_sp` | — | test_dispatch |
+| `0x103ae` | `run_command_keep_sp` | repite la carga de A:CLEAR.BIN (0x291c B en 0x1a752) hasta que exista (si falla lanza 0x918e); al exito reinicia la pila (A7 = 0x1d1fe), marca $1ad0f, avanza... | test_dispatch |
 | `0x10390` | `dispatch_a6` | FUN_00010390 @ 0x10390: handler de byte que lee un word de a6[1..2], lo marca con el nibble 0xf000 (comando de plantilla) y salta al despacho. | test_dispatch |
-| `0x186ee` | `dispatch_cmd` | — | test_dispatch |
+| `0x186ee` | `dispatch_cmd` | dispatch cmd | test_dispatch |
 
 ## Estado (globales A_* usadas)
 

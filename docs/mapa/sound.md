@@ -6,7 +6,7 @@ sound.c — envoltorio de escritura del PSG (0x1929a).  FUN_0001929a @ 0x1929a (
 
 | dir | nombre | qué hace | pruebas |
 |---|---|---|---|
-| `0x1929a` | `ym_write` | — | test_sound |
+| `0x1929a` | `ym_write` | escribe registro/dato en $FF8800/$FF8802 (reg 7 = mixer) | test_sound |
 | `0x19282` | `ym_reset` | FUN_00019282 @ 0x19282: silencia/resetea el PSG: escribe D1 (0 inicial) en los registros 0xd..0 y luego 0x18 en el mixer (registro 7). D1 NO se recarga en el bucle: ym_write lo pisa con el resultado del RMW al pasar por el registro 7, y los registros 6..0 reciben ese valor (el ledger del oraculo lo confirma). | test_sound |
 | `0x18fc4` | `sound_timer_start` | FUN_00018fc4 @ 0x18fc4: entrada canonica (D1 = 0). | test_sound |
 | `0x18fc6` | `sound_timer_start_body` | FUN_00018fc6 @ 0x18fc6: entrada con D1 explicito (la usa 0x18f7a). | test_sound |
@@ -14,11 +14,11 @@ sound.c — envoltorio de escritura del PSG (0x1929a).  FUN_0001929a @ 0x1929a (
 | `0x1909e` | `sound_off` | FUN_0001909e @ 0x1909e: apaga el sonido: limpia 0x484, resetea el PSG (0x19282), silencia el mixer (ym_write 7 con 0x3f) y para el Timer A (0x19084). | test_sound |
 | `0x1906a` | `sound_vector` | FUN_0001906a @ 0x1906a: arranca el Timer A (0x18fc4), apunta el vector $134 a la variante 0x190f6 y reinicia el puntero de sample a 0x192ca. | test_sound |
 | `0x18f7a` | `supexec_b` | ---- envoltorios XBIOS Supexec (0x18f6e..0x18fa4) ----  Todos saltan el `trap #14/$26` cuando 0x1ab4f != 0 (el original tambien): el candidato ejecuta la rutina destino directamente. Cada envoltorio elige una entrada distinta; 0x18f7a usa 0x18fc6 (D1 explicito) y 0x18f8e la canonica 0x18fc4. | test_sound |
-| `0x18f84` | `sound_stop_supexec` | — | test_sound |
-| `0x18f8e` | `sound_play_a` | — | test_sound |
-| `0x18f98` | `sound_play_b` | — | test_sound |
-| `0x18fa2` | `supexec_a` | — | test_sound |
-| `0x18fa4` | `sound_stop` | — | test_sound |
+| `0x18f84` | `sound_stop_supexec` | sound stop supexec | test_sound |
+| `0x18f8e` | `sound_play_a` | ciclo de "modo/vista" $1acca (0..3). Cada rama fija $1acc6, corre 0x14496 y pinta con los blitters 111b6/114ba/117fe/11afa (o sus envoltorios). Los casos 1/3... | test_sound |
+| `0x18f98` | `sound_play_b` | sound play b | test_sound |
+| `0x18fa2` | `supexec_a` | supexec a | test_sound |
+| `0x18fa4` | `sound_stop` | sound stop | test_sound |
 | `0x18f6e` | `supexec_wrap` | FUN_00018f6e @ 0x18f6e: handler de byte que lee D4/D1 de A6[1]/A6[2], A6 += 3 y cae en 0x18f7a. | test_sound |
 | `0x190b8` | `sound_isr_load` | FUN_000190b8 @ 0x190b8: carga el siguiente bloque de samples (entrada propia). | test_sound |
 | `0x1910e` | `sound_isr_fwd` | FUN_0001910e @ 0x1910e: ISR PCM hacia delante (vector $134). | test_sound |

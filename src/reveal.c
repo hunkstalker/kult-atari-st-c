@@ -97,6 +97,7 @@ void masked_word4(uint8_t *img, uint32_t a0, uint32_t d0, uint32_t d7) {
 uint32_t elem_command_wrap(uint8_t *img, uint32_t a6);
 uint32_t elem_blit_vbl(uint8_t *img, uint32_t a6);
 
+/* 0x12f28 — reveal pixelado del elemento (dbf 0x64 / skip $1a570) */
 uint32_t reveal_pixel(uint8_t *img, uint32_t a6) {
     if (img[A_SKIP_TRANSITION] != 0)
         return elem_blit_vbl(img, a6);

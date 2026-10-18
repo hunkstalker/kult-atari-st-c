@@ -23,6 +23,7 @@ uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out)
 
 /* the 0x55b02 scratch is read back with `move.l (a5)`, four consecutive bytes */
 /* movep: bytes alternos (alto en +0, bajo en +2, ...) */
+/* 0x11196 — permutacion de palabra (resultado en D0/D1) */
 void bit_reverse_word(uint32_t d0, uint32_t d1, uint32_t *d0o, uint32_t *d1o) {
     d0 &= 0xffff;
     d1 &= 0xffff;
@@ -47,6 +48,7 @@ void bit_reverse_word(uint32_t d0, uint32_t d1, uint32_t *d0o, uint32_t *d1o) {
     *d1o = d1;
 }
 
+/* 0x11050 — blit de texto directo (A0/A1/A3/D2/D3/D7) */
 void text_blit_fwd(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t a3,
                      uint32_t d2w, uint32_t d3w, uint32_t d7w) {
     uint32_t a5 = A_BLIT_SCRATCH;
@@ -98,6 +100,7 @@ void text_blit_fwd(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t a3,
     }
 }
 
+/* 0x11102 — idem con palabra invertida por FUN_00011196 */
 void text_blit_rev(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t a3,
                      uint32_t d2w, uint32_t d3w, uint32_t d7w) {
     uint32_t a5 = A_BLIT_SCRATCH;
@@ -211,6 +214,7 @@ void run_text_entry_ex(uint8_t *img, uint32_t a6,
         text_blit_fwd(img, a0, a1, a3, d2, d3, d7);
 }
 
+/* 0x14138 — lee entrada de script A6, calcula pantalla y blitea texto */
 void run_text_entry(uint8_t *img, uint32_t a6) {
     run_text_entry_ex(img, a6, 0, 0, 0, 0);
 }
@@ -361,6 +365,7 @@ uint32_t wipe_f(uint8_t *img, uint32_t a6) {
 /* FUN_000141dc @ 0x141dc: run FUN_00014138 on A6+1, then the masked row blit
  * (FUN_0001215e) with the A0/D2/D3/D7 that FUN_00014138 left behind. */
 void mask_restore_rows(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7);
+/* 0x141dc — dispatch.c — el despacho de comandos y la VM de bytes del script. run_command @ 0x103a8 / run_command_keep_sp @ 0x103ae: leen `the_command` ($1a50e) y despac... */
 void text_entry_blit(uint8_t *img, uint32_t a6) {
     uint32_t a0, d2, d3, d7;
     run_text_entry_ex(img, a6 + 1, &a0, &d2, &d3, &d7);
@@ -392,10 +397,12 @@ void text_blit_entry(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4, uint32
     text_blit_fwd(img, a0, a1, a3, d2, d3, d7);
 }
 
+/* 0x11016 — text blit ovl a */
 void text_blit_ovl_a(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4) {
     text_blit_entry(img, d0, d1, d4, 0x8000);
 }
 
+/* 0x11020 — busca en la tabla 0x1a8f0 la entrada [0x40][$1acd2] y blitea los dos iconos (0x11020 + 0x11016) en (0x4a,0xe) con d4 = 0xad (0xac si no la encuentra), y cuen... */
 void text_blit_ovl_b(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4) {
     text_blit_entry(img, d0, d1, d4, 0);
 }
@@ -433,6 +440,7 @@ void text_end(uint8_t *img) { (void)img; }
  * overlay 0x11020 en (0x4b, 0x9b); alterna el flag 0x1a74e (el color 0x16/0x17). */
 void wait_vbl(uint8_t *img);
 void text_blit_ovl_b(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d4);
+/* 0x122ee — prompt */
 void prompt(uint8_t *img) {
     if (img[0x1acc6] == 0x87)
         return;
@@ -447,6 +455,7 @@ void prompt(uint8_t *img) {
  * sale por GEMDOS Cnecin (trap #1/$8). A5/A6 los preserva el `movem.l` de entrada. */
 void wait_frame(uint8_t *img);
 void prompt(uint8_t *img);
+/* 0x12292 — wipe grande de texto. Primer 0x16dbc (d4=3, x=0x23, y=0xad) + 0x16b2e(2,7); segundo 0x16dbc (d4=0x77, x=0x20, y=0x5e) + 0x16b2e(3,0x47); prompt (0x12292) y 7... */
 void prompt_wait(uint8_t *img) {
     if (img[0x1acc6] == 0x87) {
         uint32_t key;
@@ -474,6 +483,7 @@ void prompt_wait(uint8_t *img) {
 uint32_t text_transition(uint8_t *img, uint32_t *a6, uint32_t d0, uint32_t d1, uint32_t d4,
                      uint32_t *a5_out);
 
+/* 0x16abe — (cmd idx 10): rejilla de texto 0x16abe + espera de clic (0x167be) + repintados, y despacho por la tabla de objetos o por el umbral (0x9005) en la cola 0x15022. */
 uint32_t grid_bands(uint8_t *img, uint32_t a6) {
     uint32_t d0 = img[A_DAT_1AB40];
     uint32_t d1 = img[A_DAT_1AB42];
@@ -512,6 +522,7 @@ void prompt_wait(uint8_t *img);
 void wait_vbl_even(uint8_t *img);
 void row_blit(uint8_t *img, uint32_t a3, uint32_t d2, uint32_t d3);
 
+/* 0x16b9c — wipe 72 */
 uint32_t wipe_72(uint8_t *img, uint32_t a6) {
     uint32_t a5;
     uint32_t a0 = text_transition(img, &a6, 0x23, 0xad, 3, &a5);

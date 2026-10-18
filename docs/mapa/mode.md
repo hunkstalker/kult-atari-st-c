@@ -6,13 +6,13 @@ mode.c — modo de escena y lista de objetos (bloque 0x1442c..0x14588).  FUN_000
 
 | dir | nombre | qué hace | pruebas |
 |---|---|---|---|
-| `0x14588` | `command_state_reset` | — | test_mode |
-| `0x14496` | `scene_mode_load` | — | test_mode |
-| `0x1443e` | `scene_mode_set` | — | test_mode |
-| `0x1442c` | `cmd74_wrap` | — | test_mode |
-| `0x1460a` | `scene_mode_apply` | — | test_mode |
-| `0x146d0` | `scene_mode_draw` | — | test_mode |
-| `0x14602` | `scene_mode_draw_wrap` | — | test_mode |
+| `0x14588` | `command_state_reset` | reinicia globals de comando (0xa01c/0xf7/0x9048/...) | test_mode |
+| `0x14496` | `scene_mode_load` | camina 0x1ad38 y publica cabecera/objetos del modo | test_mode |
+| `0x1443e` | `scene_mode_set` | fija A_MODE_FLAG + marcador 0x1a695 y carga el modo | test_mode |
+| `0x1442c` | `cmd74_wrap` | cmd74 wrap | test_mode |
+| `0x1460a` | `scene_mode_apply` | procesa el modo tras input (formulario, objeto, overlays) | test_mode |
+| `0x146d0` | `scene_mode_draw` | cuerpo: cursores, transicion, formulario, iconos | test_mode |
+| `0x14602` | `scene_mode_draw_wrap` | scene mode draw wrap | test_mode |
 
 ## Estado (globales A_* usadas)
 

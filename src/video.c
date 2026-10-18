@@ -92,6 +92,7 @@ void set_palette(uint8_t *img);
 void wait_vbl(uint8_t *img);
 void run_command_keep_sp(uint8_t *img, uint32_t a6);
 
+/* 0x16310 — (cmd idx 9): umbral 2, ciclo de paleta 0x16310 y flag $1ad0f. */
 void palette_cycle(uint8_t *img) {
     sound_play_b(img, 0x17);
     {

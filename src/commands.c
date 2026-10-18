@@ -73,6 +73,7 @@ uint32_t grid_bands(uint8_t *img, uint32_t a6);
 void copy_screen(uint8_t *img);
 static void tail_15022(uint8_t *img);
 
+/* 0x14f74 — grid wait */
 uint32_t grid_wait(uint8_t *img, uint32_t a6) {
     if (anim_threshold(img, a6, 3) == 2)
         return a6;
@@ -115,6 +116,7 @@ uint32_t grid_wait(uint8_t *img, uint32_t a6) {
  * $1ad0f. */
 void palette_cycle(uint8_t *img);
 
+/* 0x14f5e — anim threshold2 */
 uint32_t anim_threshold2(uint8_t *img, uint32_t a6) {
     (void)anim_threshold(img, a6, 2);
     palette_cycle(img);
@@ -137,6 +139,7 @@ void set_cursor_clip(uint8_t *img, uint32_t a0, uint32_t d0);
 void handle_frame_input(uint8_t *img);
 uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
 
+/* 0x14e66 — overlay menu */
 uint32_t overlay_menu(uint8_t *img, uint32_t a6) {
     wr16(img + A_THE_COMMAND, 0);
     uint32_t d7;
@@ -197,6 +200,7 @@ static void tail_150ae(uint8_t *img, uint32_t a6) {
     run_command_keep_sp(img, a6);
 }
 
+/* 0x150ae — obj action */
 uint32_t obj_action(uint8_t *img, uint32_t a6) {
     if (anim_threshold(img, a6, 2) == 2)
         return a6;
@@ -406,6 +410,7 @@ uint32_t row_transition(uint8_t *img, uint32_t a6) {
 int32_t load_scena(uint8_t *img);
 int32_t save_scena(uint8_t *img);
 
+/* 0x15594 — load room */
 uint32_t load_room(uint8_t *img) {
     sound_stop(img);
     int32_t status = load_scena(img);
@@ -414,6 +419,7 @@ uint32_t load_room(uint8_t *img) {
     return 0;
 }
 
+/* 0x155c4 — save room */
 uint32_t save_room(uint8_t *img) {
     sound_stop(img);
     int32_t status = save_scena(img);

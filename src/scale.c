@@ -55,6 +55,7 @@ static void scale_setup(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t *d2o,
     wr32(img + 0x1a494, 0);
 }
 
+/* 0x13a18 — scale 16 16 */
 void scale_16_16(uint8_t *img, uint32_t d2in, uint32_t d3in, uint32_t d7,
                  uint32_t a2) {
     uint32_t d2, d6, d7start;
@@ -140,6 +141,7 @@ void scale_16_16(uint8_t *img, uint32_t d2in, uint32_t d3in, uint32_t d7,
     copy_scratch_rows(img, a5, (be16(img + 0x1a556) - 1) & 0xffff, d2);
 }
 
+/* 0x13bc2 — scale blit */
 void scale_blit(uint8_t *img, uint32_t d2in, uint32_t d3in, uint32_t d7,
                  uint32_t a1in) {
     uint32_t d2, d6, d7start;
@@ -214,6 +216,7 @@ uint32_t elem_command_wrap(uint8_t *img, uint32_t a6);
 uint32_t elem_blit_vbl(uint8_t *img, uint32_t a6);
 uint32_t screen_address(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
 
+/* 0x13702 — scale prep */
 uint32_t scale_prep(uint8_t *img, uint32_t a6) {
     uint32_t slot = 0x1a850;
     for (uint32_t k = 9;; k = (k - 1) & 0xffff) {
@@ -302,6 +305,7 @@ void hint_select_off(uint8_t *img, uint32_t d0, uint32_t *o);
 void hint_blit_entry(uint8_t *img, uint32_t a6, uint32_t *a6_out);
 void wait_vbl(uint8_t *img);
 void scale_list_build(uint8_t *img, uint32_t d2, uint32_t d3, uint32_t d7, uint32_t a0);
+/* 0x138a6 — scale anim */
 uint32_t scale_anim(uint8_t *img, uint32_t a6) {
     if (img[A_SKIP_TRANSITION] != 0) {
         uint32_t a6o;
@@ -378,6 +382,7 @@ void blit_rect_vbl(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t
                  uint32_t d7);
 uint32_t screen_address_raw(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d7out);
 
+/* 0x13740 — scale loop */
 uint32_t scale_loop(uint8_t *img, uint32_t a6) {
     if (img[A_SKIP_TRANSITION] != 0)
         return elem_blit_vbl(img, a6);

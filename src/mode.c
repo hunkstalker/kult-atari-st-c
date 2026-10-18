@@ -25,6 +25,7 @@
 void walk_entry(uint8_t *img, uint32_t a4, uint32_t d1, uint32_t *a4o,
                   uint32_t *a5o);
 
+/* 0x14588 — reinicia globals de comando (0xa01c/0xf7/0x9048/...) */
 void command_state_reset(uint8_t *img) {
     wr16(img + A_DAT_1ABFA, 0);
     wr16(img + A_DAT_1AB5C, 0xa01c);
@@ -46,6 +47,7 @@ void command_state_reset(uint8_t *img) {
     img[A_DAT_1ACFF] = 0;
 }
 
+/* 0x14496 — camina 0x1ad38 y publica cabecera/objetos del modo */
 void scene_mode_load(uint8_t *img, uint32_t *a4_out, uint32_t *a5_out) {
     uint32_t a4 = A_MODE_TABLE, a5;
     do {
@@ -99,6 +101,7 @@ void scene_mode_load(uint8_t *img, uint32_t *a4_out, uint32_t *a5_out) {
     *a5_out = a5;
 }
 
+/* 0x1443e — fija A_MODE_FLAG + marcador 0x1a695 y carga el modo */
 uint32_t scene_mode_set(uint8_t *img, uint32_t a6, uint32_t *a4_out, uint32_t *a5_out) {
     uint32_t d0 = img[a6 + 1];
     img[A_DAT_1ACCB] = img[A_MODE_FLAG];
@@ -114,6 +117,7 @@ uint32_t scene_mode_set(uint8_t *img, uint32_t a6, uint32_t *a4_out, uint32_t *a
     return a6;
 }
 
+/* 0x1442c — cmd74 wrap */
 uint32_t cmd74_wrap(uint8_t *img, uint32_t a6) {
     uint8_t saved = img[A_DAT_1ACC7];
     uint32_t a4, a5;
@@ -157,6 +161,7 @@ void hint_blit_2(uint8_t *img, uint32_t *a6);
 void hint_blit_stroke(uint8_t *img, uint32_t *a6);
 void hint_blit_3(uint8_t *img, uint32_t *a6);
 
+/* 0x1460a — procesa el modo tras input (formulario, objeto, overlays) */
 uint32_t scene_mode_apply(uint8_t *img, uint32_t a6) {
     img[A_DAT_1A572] = 0;
     uint32_t d1 = 0;
@@ -231,12 +236,14 @@ static void body_146d2(uint8_t *img, uint32_t a6) {
     draw_hint_icons(img);
 }
 
+/* 0x146d0 — cuerpo: cursores, transicion, formulario, iconos */
 uint32_t scene_mode_draw(uint8_t *img, uint32_t a6) {
     a6 += 1;
     body_146d2(img, a6);
     return a6;
 }
 
+/* 0x14602 — scene mode draw wrap */
 void scene_mode_draw_wrap(uint8_t *img, uint32_t a6) {
     a6 = scene_mode_apply(img, a6);
     body_146d2(img, a6);

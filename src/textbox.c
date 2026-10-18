@@ -15,6 +15,7 @@ void box_vline(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3)
 uint32_t print_line(uint8_t *img, uint32_t a5);
 void print_char(uint8_t *img, uint32_t d0);
 
+/* 0x10e66 — marco + palabras + borde inferior de la caja de texto */
 void text_box_body(uint8_t *img, uint32_t a5) {
     wr32(img + A_COLOR_TABLE, 0x1d3a2);
     wr32(img + A_SCREEN_DRAW_BASE, 0);
@@ -146,6 +147,7 @@ static void textbox_tail(uint8_t *img, uint32_t a5) {
     restore_rect(img);
 }
 
+/* 0x10440 — idem (otra ruta de entrada) */
 void draw_text_box_variant(uint8_t *img, uint32_t the_command) {
     uint32_t d4 = the_command & 0x3ff;
     uint32_t a5 = position_text(img, 0x3ec8a, d4);
@@ -155,6 +157,7 @@ void draw_text_box_variant(uint8_t *img, uint32_t the_command) {
 /* FUN_0001042c @ 0x1042c: variante que lee el indice de texto de A6[1] (via 0x10fb4,
  * que puede consumir un byte extra) y cae en la misma cola. Devuelve A6 avanzado. */
 uint32_t text_index_arg(uint8_t *img, uint32_t a5, uint32_t d4, uint32_t *a6);
+/* 0x1042c — calcula geometria de caja de texto y la dibuja */
 uint32_t draw_text_box(uint8_t *img, uint32_t a6) {
     uint32_t d4 = img[a6 + 1];
     a6 += 1;
@@ -169,6 +172,7 @@ uint32_t draw_text_box(uint8_t *img, uint32_t a6) {
  * direccion de pantalla de (x,y) y entrada de icono en 0x120a8. Devuelve A6 + 4. */
 void hint_slot_alloc(uint8_t *img, uint32_t d4, uint32_t a0, uint32_t d7,
                  uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
+/* 0x10dfa — text box icon */
 uint32_t text_box_icon(uint8_t *img, uint32_t a6) {
     a6 += 1;
     uint32_t d4 = img[a6];
@@ -204,6 +208,7 @@ void text_blit_rev_entry(uint8_t *img, uint32_t d4, uint32_t d0, uint32_t d1);
 void hint_slot_alloc(uint8_t *img, uint32_t d4, uint32_t a0, uint32_t d7,
                  uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
 
+/* 0x10b6c — ventana de texto con adorno/flecha (bits 0xe0) */
 void text_window(uint8_t *img, uint32_t a5, uint32_t a6) {
     wr32(img + A_COLOR_TABLE, 0x1d382);
     wr32(img + A_SCREEN_DRAW_BASE, 0);
@@ -358,6 +363,7 @@ void overlay_a_draw(uint8_t *img, uint32_t a6);
 void box_hline_back(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
 void box_vline_back(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
 
+/* 0x13f86 — caja/overlay autodimensionado de la escena */
 void scene_text_box(uint8_t *img) {
     copy_rows(img);
     wr16(img + A_DAT_1A49E, img[0x1acf1]);

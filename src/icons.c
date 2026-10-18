@@ -57,6 +57,7 @@ void icon_table(uint8_t *img) {
     } while (a5 != end);
 }
 
+/* 0x1652e — icon apply */
 void icon_apply(uint8_t *img, uint32_t a2) {
     if (be32(img + a2) == 0)
         return;
@@ -71,6 +72,7 @@ void icon_apply(uint8_t *img, uint32_t a2) {
     mask_row_blit(img, (a0 + 0x8000) & 0xffffffffu, d2, d3, d7);
 }
 
+/* 0x16514 — hint icons */
 void hint_icons(uint8_t *img) {
     uint32_t a2 = 0x1a776;
     for (uint32_t d0 = 0x0f; ; d0 = (d0 - 1) & 0xffff) {
@@ -80,6 +82,7 @@ void hint_icons(uint8_t *img) {
     }
 }
 
+/* 0x16556 — ctx: itera 16 entradas (DAT_0001a776) llamando FUN_000124f8 */
 void draw_hint_icons(uint8_t *img) {
     uint32_t a2 = 0x1a776;
     for (uint32_t d0 = 0x0f; ; d0 = (d0 - 1) & 0xffff) {
@@ -141,6 +144,7 @@ void icon_anim_b(uint8_t *img, uint32_t *a6) {
 
 /* FUN_00018316 @ 0x18316: lee tres words de 0x16230 y los guarda en A1+4/+6/+8. */
 uint32_t pal_next_word(uint8_t *img);
+/* 0x18316 — y 0x18342 (A5 = 0/0x8000): recorre 256 descriptores de 0xa bytes en 0xd8f0. Borra dos longs de pantalla con la mascara 0x7fff7fff rotada por la fase (word +2... */
 void icon_list_build(uint8_t *img, uint32_t a1) {
     wr16(img + a1 + 4, pal_next_word(img) & 0xffff);
     wr16(img + a1 + 6, pal_next_word(img) & 0xffff);
@@ -166,6 +170,7 @@ void icon_list_reset(uint8_t *img) {
  * para restaurar/repintar. */
 void box_vline(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
 void box_hline(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
+/* 0x18d28 — marco del objeto/hint seleccionado (0x1a81e) */
 void draw_selection_frame(uint8_t *img) {
     uint32_t a2 = be32(img + A_SELECTED_ICON_PTR);
     if (be32(img + a2) == 0)

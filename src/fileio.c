@@ -11,6 +11,7 @@
 #include "os.h"
 #include "addrs.h"
 
+/* 0x1076a — load_fond @ 0x13568: fija el nombre 0x1a41e y carga una pantalla de 0x7d22 bytes en screen_ptr_b-0x22 (cae en load_named_screen). FUN_00013572 @ 0x13572: sol... */
 void load_resource(uint8_t *img) {
     int32_t h = os_fopen(img, be32(img + A_CUR_FILENAME));
     wr16(img + A_FILE_HANDLE, (uint16_t)h);
@@ -73,6 +74,7 @@ int32_t load_resource_list_a(uint8_t *img) {
     return load_resource_list(img, 0x1a3aa);
 }
 
+/* 0x106ea — A5=0x1a3e4 -> load_resource_list */
 int32_t load_resource_list_b(uint8_t *img) {
     return load_resource_list(img, 0x1a3e4);
 }
@@ -158,6 +160,7 @@ void hint_table_relocate(uint8_t *img);
 void icon_table(uint8_t *img);
 void draw_hint_icons(uint8_t *img);
 
+/* 0x16ed8 — carga SCENA.BIN (hints + 2 x 32000 B) */
 int32_t load_scena(uint8_t *img) {
     img[A_DAT_1AD0D] = 1;
     wr32(img + A_CUR_FILENAME, 0x1a414);           /* "SCENA.BIN" */
@@ -188,6 +191,7 @@ error:
     return 1;
 }
 
+/* 0x16fb4 — guarda SCENA.BIN (inverso de 0x16ed8) */
 int32_t save_scena(uint8_t *img) {
     img[A_DAT_1AD0D] = 1;
     draw_hint_icons(img);                              /* draw_hint_icons */
@@ -228,6 +232,7 @@ error:
 void run_command_keep_sp(uint8_t *img, uint32_t a6);
 uint32_t pal_next_byte(uint8_t *img);
 
+/* 0x1682a — ctx: bucle A:CLEAR.BIN + the_command=0x918e */
 void reset_clear(uint8_t *img) {
     wr32(img + A_LOAD_BUFFER, 0x1a752);
     wr32(img + A_LOAD_LENGTH, 0x291c);

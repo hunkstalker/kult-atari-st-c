@@ -25,6 +25,7 @@ void blit_mask_setup(uint8_t *img, uint32_t d2, uint32_t d7);
 void wait_vbl(uint8_t *img);
 void blit_mask_rows(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d3);
 
+/* 0x126e0 — grid fill */
 void grid_fill(uint8_t *img, uint32_t d2w, uint32_t d3w, uint32_t d7w, uint32_t a1) {
     uint32_t a3 = be32(img + A_DAT_1A534);
     uint32_t a0 = A_SAVE_DESC;
@@ -66,6 +67,7 @@ void grid_fill(uint8_t *img, uint32_t d2w, uint32_t d3w, uint32_t d7w, uint32_t 
     }
 }
 
+/* 0x1276c — pattern fill */
 void pattern_fill(uint8_t *img, uint32_t d2w, uint32_t d3w, uint32_t d7w,
                  uint32_t d6w, uint32_t a0) {
     uint32_t outer = (d2w - 1) & 0xffff;
@@ -99,6 +101,7 @@ void pattern_fill(uint8_t *img, uint32_t d2w, uint32_t d3w, uint32_t d7w,
     wait_vbl(img);
 }
 
+/* 0x11ece — row blit a */
 void row_blit_a(uint8_t *img, uint32_t d1, uint32_t a0, uint32_t a1) {
     uint32_t d3 = 1;
     for (;;) {
@@ -111,6 +114,7 @@ void row_blit_a(uint8_t *img, uint32_t d1, uint32_t a0, uint32_t a1) {
     }
 }
 
+/* 0x11ee8 — row blit b */
 void row_blit_b(uint8_t *img, uint32_t d1, uint32_t a0, uint32_t a1) {
     uint32_t d3 = 1;
     for (;;) {
@@ -293,6 +297,7 @@ uint32_t elem_command(uint8_t *img, uint32_t a6, uint32_t *a6o, uint32_t *d0o,
     return a6;
 }
 
+/* 0x128a4 — ---- handlers de comando 0x11xxx (encadenan la salida de 0x128a4) ---- 0x128a4 deja en el fichero de registros lo que sus llamantes encadenan: d2 = ancho (0x... */
 uint32_t elem_command_wrap(uint8_t *img, uint32_t a6) {
     uint32_t a6o, d0o, d1o;
     return elem_command(img, a6, &a6o, &d0o, &d1o);
@@ -403,6 +408,7 @@ void elem_blit(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
 void elem_blit_rev(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
                  uint32_t a3);
 
+/* 0x129d6 — text block build */
 void text_block_build(uint8_t *img, uint32_t a5, uint32_t a4) {
     for (;;) {
         uint32_t d4 = img[a5];
@@ -458,6 +464,7 @@ void overlay_compose_shift_wrap(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t
                  uint32_t a0);
 uint32_t scene_mode_load_wrap(uint8_t *img);
 
+/* 0x12ce4 — ciclo de modo/vista $1acca (overlays del retrato) */
 uint32_t view_mode_cycle(uint8_t *img, uint32_t a6) {
     sound_play_a(img, 0x1d);
     uint32_t a6ret = a6 + 1;

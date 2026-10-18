@@ -11,9 +11,9 @@ misc.c — envoltorios y entradas alternativas pequenas (varias familias).  0x11
 | `0x12324` | `gemdos_cnecin` | FUN_00012324 @ 0x12324: GEMDOS Cnecin (trap #1/$8); devuelve la tecla en D0. | test_misc |
 | `0x12fea` | `hint_blit_entry_b` | FUN_00012fea @ 0x12fea: cae en 0x1222e (icono A6[1]). | test_misc |
 | `0x16512` | `hint_icons_wrap` | Avanzan A6 y caen en el cuerpo real. | test_misc |
-| `0x16554` | `draw_hint_icons_wrap` | — | test_misc |
-| `0x16576` | `update_icon_list_wrap` | — | test_misc |
-| `0x18d26` | `draw_selection_frame_wrap` | — | test_misc |
+| `0x16554` | `draw_hint_icons_wrap` | draw hint icons wrap | test_misc |
+| `0x16576` | `update_icon_list_wrap` | update icon list wrap | test_misc |
+| `0x18d26` | `draw_selection_frame_wrap` | draw selection frame wrap | test_misc |
 | `0x17472` | `clear_globals` | FUN_00017472 @ 0x17472: limpia 0x1aa8b y 0x1acae. | test_misc |
 
 ## Estado (globales A_* usadas)

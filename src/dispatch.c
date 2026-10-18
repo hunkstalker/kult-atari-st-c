@@ -288,6 +288,7 @@ static uint32_t byte_handler(uint32_t b, uint8_t *img, uint32_t a6) {
     }
 }
 
+/* 0x10630 — vm run */
 uint32_t vm_run(uint8_t *img, uint32_t a6) {
     for (;;) {
         uint32_t b = img[a6];
@@ -476,6 +477,7 @@ static void kult_dbg_cmd(uint32_t cmd, int implemented) {
                 (unsigned)(cmd & 0x3ff) - 1, implemented ? "ok" : "SIN HANDLER");
 }
 
+/* 0x103ae — repite la carga de A:CLEAR.BIN (0x291c B en 0x1a752) hasta que exista (si falla lanza 0x918e); al exito reinicia la pila (A7 = 0x1d1fe), marca $1ad0f, avanza... */
 void run_command_keep_sp(uint8_t *img, uint32_t a6) {
     uint32_t d1 = be16(img + A_THE_COMMAND);
     if (getenv("KULT_DBG_RUN"))
@@ -508,6 +510,7 @@ void dispatch_a6(uint8_t *img, uint32_t a6) {
  * texto) por el despacho y restaura la paleta actual. */
 void set_palette_entry(uint8_t *img, uint32_t d0);
 void set_palette_current(uint8_t *img);
+/* 0x186ee — dispatch cmd */
 void dispatch_cmd(uint8_t *img) {
     set_palette_entry(img, 0x10);
     wr16(img + A_THE_COMMAND, 0x916b);

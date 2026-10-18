@@ -6,10 +6,10 @@ stubs.c — funciones que son un `rts` pelado (no-ops verificables). 0x135e0, 0x
 
 | dir | nombre | qué hace | pruebas |
 |---|---|---|---|
-| `0x135e0` | `noop_135e0` | — | test_stubs |
-| `0x160c0` | `noop_160c0` | — | test_stubs |
-| `0x16dba` | `noop_16dba` | — | test_stubs |
-| `0x19312` | `noop_19312` | — | test_stubs |
+| `0x135e0` | `noop_135e0` | `rts` (stub sin efecto) | test_stubs |
+| `0x160c0` | `noop_160c0` | `rts` (stub sin efecto) | test_stubs |
+| `0x16dba` | `noop_16dba` | `rts` (stub sin efecto) | test_stubs |
+| `0x19312` | `noop_19312` | `rts` (stub sin efecto; FDC fuera de alcance) | test_stubs |
 
 ## Estado (globales A_* usadas)
 

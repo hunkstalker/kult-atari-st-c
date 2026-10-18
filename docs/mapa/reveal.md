@@ -9,7 +9,7 @@ reveal.c — el efecto "reveal" pixelado.  FUN_00012ef6 @ 0x12ef6: mezcla 4 pala
 | `0x12ef6` | `reveal_dot` | FUN_00012ef6 @ 0x12ef6 | test_reveal |
 | `0x12e2e` | `reveal_region` | FUN_00012e2e @ 0x12e2e | test_reveal |
 | `0x12fb6` | `masked_word4` | FUN_00012fb6 @ 0x12fb6: escribe 4 words en A0: para cada uno, AND con la máscara invertida (rotada de 0x8000 por D7) y OR con la parte correspondiente de D0. Puro bucle de píxeles. | test_reveal |
-| `0x12f28` | `reveal_pixel` | — | test_reveal |
+| `0x12f28` | `reveal_pixel` | reveal pixelado del elemento (dbf 0x64 / skip $1a570) | test_reveal |
 
 ## Estado (globales A_* usadas)
 

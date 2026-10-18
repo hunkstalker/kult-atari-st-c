@@ -6,12 +6,12 @@ scale.c — escaladores de elemento (0x13a18/0x13bc2) y sus preparaciones.  FUN_
 
 | dir | nombre | qué hace | pruebas |
 |---|---|---|---|
-| `0x13a18` | `scale_16_16` | — | test_scale |
-| `0x13bc2` | `scale_blit` | — | test_scale |
-| `0x13702` | `scale_prep` | — | test_scale |
+| `0x13a18` | `scale_16_16` | scale 16 16 | test_scale |
+| `0x13bc2` | `scale_blit` | scale blit | test_scale |
+| `0x13702` | `scale_prep` | scale prep | test_scale |
 | `0x1398e` | `scale_list_build` | FUN_0001398e @ 0x1398e: construye en 0xd8f0 una lista de entradas [word offset][word max(1,*0x1a1f2)][long movep(fila)] de 8 filas (stride 0xa0) por grupo, avanzando A2 +1/+7 y A0 +0x500 por banda; cierra con un long 0. | test_scale |
-| `0x138a6` | `scale_anim` | — | test_scale |
-| `0x13740` | `scale_loop` | — | test_scale |
+| `0x138a6` | `scale_anim` | scale anim | test_scale |
+| `0x13740` | `scale_loop` | scale loop | test_scale |
 
 ## Estado (globales A_* usadas)
 

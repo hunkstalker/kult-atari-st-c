@@ -377,10 +377,15 @@ uint32_t anim_bank_build(uint8_t *img, uint32_t a6) {
     return a6;
 }
 
+/* 0x15b94 — anim h7 */
 uint32_t anim_h7(uint8_t *img, uint32_t a6) { wr16(img + A_ANIM_1A46E, 0xffff); img[A_ANIM_1A578] = 1; return anim_engine(img, a6); }
+/* 0x15bcc — anim h1 */
 uint32_t anim_h1(uint8_t *img, uint32_t a6) { wr16(img + A_ANIM_1A46E, 0xffff); img[A_ANIM_1A578] = 0; return anim_engine(img, a6); }
+/* 0x15ba6 — anim h6 */
 uint32_t anim_h6(uint8_t *img, uint32_t a6) { wr16(img + A_ANIM_1A46E, be16(img + A_ANIM_1A478)); img[A_ANIM_1A578] = 0; return anim_engine(img, a6); }
+/* 0x15bb2 — anim h2 */
 uint32_t anim_h2(uint8_t *img, uint32_t a6) { wr16(img + A_ANIM_1A46E, 1); img[A_ANIM_1A578] = 0; return anim_engine(img, a6); }
+/* 0x15bbc — anim h4 */
 uint32_t anim_h4(uint8_t *img, uint32_t a6) { wr16(img + A_ANIM_1A46E, (uint16_t)(be16(img + A_ANIM_1A476) - 1)); img[A_ANIM_1A578] = 0; return anim_engine(img, a6); }
 
 uint32_t anim_bank_build(uint8_t *img, uint32_t a6);
@@ -479,6 +484,7 @@ uint32_t anim_threshold(uint8_t *img, uint32_t a6, uint32_t d0) {
  * (0 en la vía corta). D1 = primer byte: bit7 = indirecto por tabla 0x1a752 (índice
  * bits0-4), bit6 = saltar D4 entradas de texto (0x10f8e), bit5 = word (2 bytes). */
 uint32_t advance_text_entry(uint8_t *img, uint32_t a1, uint32_t d4);
+/* 0x15f6c — lee un argumento del script (directo/indirecto/texto) */
 uint32_t script_arg(uint8_t *img, uint32_t *a6, uint32_t *a0_out) {
     uint32_t p = *a6;
     uint32_t d1 = img[p++];
@@ -576,6 +582,7 @@ void script_store(uint8_t *img, uint32_t *a6) {
 /* FUN_000160aa @ 0x160aa: evalúa una expresión; si D6 == 0 vuelve una posición y salta a
  * 0x1350c (a6 = TEMPL + word), si no avanza 2. */
 void script_push(uint8_t *img, uint32_t *a6);
+/* 0x160aa — salta a plantilla (0x1350c) o avanza 2 si D6 != 0 */
 void script_jump_zero(uint8_t *img, uint32_t *a6) {
     uint32_t p = *a6 + 1;
     uint32_t a0b;

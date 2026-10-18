@@ -186,6 +186,7 @@ void run_command_keep_sp(uint8_t *img, uint32_t a6);
 void fix_sample_flag(uint8_t *img);
 void sample_menu(uint8_t *img, uint32_t a6, uint32_t d2, uint32_t d3);
 
+/* 0x14ac6 — Un handler de byte de la VM (tabla 0x19f62): recibe a6 y devuelve el a6 nuevo. El avance de A6 es el neto del handler original (los `addq`/push-pop), dato qu... */
 uint32_t sample_menu_a(uint8_t *img, uint32_t a6) {
     uint32_t a5 = be32(img + 0x1a4e0);
     uint32_t d2 = 0xfe00, d3 = 0x8000;

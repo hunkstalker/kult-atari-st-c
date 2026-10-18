@@ -14,19 +14,19 @@ anim.c — FUN_000159d2 @ 0x159d2: intérprete de animación.  Lee una entrada d
 | `0x12ad6` | `elem_blit` | FUN_00012ad6 @ 0x12ad6: blitter de bytes directo (D2+1 columnas x D3+1 filas). | test_anim |
 | `0x12b04` | `elem_blit_rev` | FUN_00012b04 @ 0x12b04: variante invertida (permuta el byte con 0x12b40 y escribe hacia atrás desde A0+2*D2). | test_anim |
 | `0x15abe` | `anim_bank_build` | FUN_00015abe @ 0x15abe (handler idx 0): limpia el banco de sprites, elige la entrada `idx` de la tabla 0x27fe2 (walk_entry), copia sus 2 primeros bytes como cabecera del banco y, por cada subentrada de 3 bytes [idx][x_hi|x_flag][x_lo], toma el bitmap idx de la tabla 0x28ad2 y lo blitea (0x12ad6/0x12b04 según el bit7 del byte alto del offset). | test_anim |
-| `0x15b94` | `anim_h7` | — | — |
-| `0x15bcc` | `anim_h1` | — | — |
-| `0x15ba6` | `anim_h6` | — | — |
-| `0x15bb2` | `anim_h2` | — | — |
-| `0x15bbc` | `anim_h4` | — | — |
+| `0x15b94` | `anim_h7` | anim h7 | — |
+| `0x15bcc` | `anim_h1` | anim h1 | — |
+| `0x15ba6` | `anim_h6` | anim h6 | — |
+| `0x15bb2` | `anim_h2` | anim h2 | — |
+| `0x15bbc` | `anim_h4` | anim h4 | — |
 | `0x159d2` | `anim_entry_a` | FUN_000159d2 @ 0x159d2: prólogo que lee D1/D0/D2 del script y cae en el cuerpo. | test_anim |
 | `0x159e2` | `anim_entry_b` | FUN_000159e2 @ 0x159e2: entrada gemela con D0/D1/D2 ya en registros; conserva A6. | test_anim |
 | `0x14f24` | `anim_threshold` | FUN_00014f24 @ 0x14f24: gestiona el umbral 0x1ad20. Si D0 <= 0x1ad20 lo resta y, cuando cambia el nibble alto (o 0x1ad20 < D0), dispara la animacion 0x159e2 con D0/D1/D2 = 0x4a/0x44/0x47. La rama de disparo hace `addq.l #4,a7` en el original (se salta el resto de su llamante), asi que su test usa stop_pc=0x14f5c. | test_anim |
-| `0x15f6c` | `script_arg` | — | test_anim |
+| `0x15f6c` | `script_arg` | lee un argumento del script (directo/indirecto/texto) | test_anim |
 | `0x15fd4` | `script_alu` | FUN_00015fd4 @ 0x15fd4: ALU sobre D6/D0 según los bits de D7. Con bit6 = 0 es aritmética (add/sub/and/or/eor); con bit6 = 1 es una comparación -> D6 = 0xffff si alguna condición se cumple, si no 0. Devuelve D6. | test_anim |
 | `0x1606e` | `script_expr` | FUN_0001606e @ 0x1606e: evalúa una expresión: D6 = primer argumento (0x15f6c) y luego, mientras el byte operador (a6)+ no tenga el bit7, aplica 0x15fd4 con el siguiente argumento. Devuelve D6 y actualiza a6/a0. | test_anim |
 | `0x16088` | `script_store` | FUN_00016088 @ 0x16088: lee una dirección (0x15f6c) y el valor (0x1606e) y guarda: word si el bit31 de la dirección está puesto, byte si no. | test_anim |
-| `0x160aa` | `script_jump_zero` | — | test_anim |
+| `0x160aa` | `script_jump_zero` | salta a plantilla (0x1350c) o avanza 2 si D6 != 0 | test_anim |
 
 ## Estado (globales A_* usadas)
 

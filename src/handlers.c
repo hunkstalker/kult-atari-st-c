@@ -28,11 +28,13 @@ void elem_blit_pair(uint8_t *img);
 void elem_blit_pair_vbl(uint8_t *img);
 void hint_blit_entry(uint8_t *img, uint32_t a6, uint32_t *a6_out);
 
+/* 0x1228a — prompt wait entry */
 uint32_t prompt_wait_entry(uint8_t *img, uint32_t a6) {
     prompt_wait(img);
     return a6 + 1;
 }
 
+/* 0x121fa — icon blit handler */
 uint32_t icon_blit_handler(uint8_t *img, uint32_t a6) {
     uint32_t o[8];
     hint_select_off(img, img[a6 + 1], o);
@@ -44,6 +46,7 @@ uint32_t icon_blit_handler(uint8_t *img, uint32_t a6) {
     return a6 + 2;
 }
 
+/* 0x12436 — mask rows handler */
 void mask_rows_handler(uint8_t *img) {
     wr16(img + A_BLIT_MASK_FIRST, be16(img + A_DAT_1A49E));
     wr16(img + A_BLIT_MASK_LAST, be16(img + A_ANIM_1A4A0));
@@ -53,6 +56,7 @@ void mask_rows_handler(uint8_t *img) {
     blit_mask_rows(img, a0, A_SAVE_DESC, d3);
 }
 
+/* 0x127fa — masked save row */
 void masked_save_row(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32_t d7) {
     wr32(img + A_DAT_1A4B2, a0);
     wr16(img + A_SAVE_1A4A4, d3 & 0xffff);
@@ -78,6 +82,7 @@ void masked_save_row(uint8_t *img, uint32_t a0, uint32_t d2, uint32_t d3, uint32
     }
 }
 
+/* 0x127e0 — masked save */
 void masked_save(uint8_t *img, uint32_t a0, uint32_t a1, uint32_t d2, uint32_t d3,
                  uint32_t d7) {
     uint32_t ab = a0 - 0x8000;
@@ -234,11 +239,13 @@ static void wait_count(uint8_t *img, uint32_t d5) {
     }
 }
 
+/* 0x12240 — wait button a */
 uint32_t wait_button_a(uint8_t *img, uint32_t a6) {
     wait_count(img, img[a6 + 1]);
     return a6 + 2;                 /* adda.l #1,a6 de entrada + addq.l #1,a6 de salida */
 }
 
+/* 0x1224e — wait button b */
 uint32_t wait_button_b(uint8_t *img, uint32_t a6) {
     wait_count(img, 4);
     return a6 + 1;                 /* addq.l #1,a6 de salida */
@@ -347,6 +354,7 @@ void scroll_up(uint8_t *img, uint32_t d1in, uint32_t d2in, uint32_t d3in,
     }
 }
 
+/* 0x11e5e — scroll down */
 void scroll_down(uint8_t *img, uint32_t d1in, uint32_t d2in, uint32_t d3in,
                  uint32_t d7in, uint32_t a0in) {
     uint32_t d1 = d1in & 0xffff, a0 = a0in;
@@ -607,6 +615,7 @@ int rect_hit_test(uint8_t *img, uint32_t a4, uint32_t d0, uint32_t d1) {
         return 0;
     return 1;
 }
+/* 0x1478a — rect hit test a */
 int rect_hit_test_a(uint8_t *img, uint32_t a4) {
     return rect_hit_test(img, a4, (be16(img + A_CURSOR_X) >> 2) & 0xff,
                        be16(img + A_CURSOR_Y) & 0xff);
@@ -648,6 +657,7 @@ static uint32_t action_select(uint8_t *img, uint32_t a4, uint32_t d2) {
     return 0;
 }
 
+/* 0x147ce — cursor select b */
 uint32_t cursor_select_b(uint8_t *img, uint32_t a4) {
     return action_select(img, a4, 1);
 }
@@ -718,10 +728,12 @@ void action_bar_hit_test(uint8_t *img, uint32_t d3) {
 /* FUN_00015588 @ 0x15588 (cmd idx 5) y FUN_000155b8 @ 0x155b8 (idx 6): fijan
  * the_command a 0xc35c/0xc35d y entran al despacho. */
 void run_command_keep_sp(uint8_t *img, uint32_t a6);
+/* 0x15588 — mode flag wrap */
 void mode_flag_wrap(uint8_t *img) {
     wr16(img + A_THE_COMMAND, 0xc35c);
     run_command_keep_sp(img, 0);
 }
+/* 0x155b8 — mode queue wrap */
 void mode_queue_wrap(uint8_t *img) {
     wr16(img + A_THE_COMMAND, 0xc35d);
     run_command_keep_sp(img, 0);

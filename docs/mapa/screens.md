@@ -17,16 +17,16 @@ screens.c — buffers de pantalla y direccionamiento planar.  copy_screen       
 | `0x1350c` | `script_push` | FUN_0001350c @ 0x1350c: salta a la plantilla número (a6[2]<<8 | a6[1]): a6 = TEMPL+d0. El word leído es el destino (no se usa aquí). Devuelve el A6 nuevo por out-param. | test_loader |
 | `0x13522` | `script_pop` | FUN_00013522 @ 0x13522: como 0x1350c pero antes apila el A6 de retorno (a6+3) y el fin de script actual ($1a4e0) en la pila de llamadas en 0x1a7d6. | test_loader |
 | `0x13552` | `script_call` | FUN_00013552 @ 0x13552: desapila de 0x1a7d6: restaura $1a4e0 y A6 (vuelve de 0x13522). | test_loader |
-| `0x13568` | `load_fond` | — | test_loader |
-| `0x13572` | `load_named_screen` | — | test_loader |
+| `0x13568` | `load_fond` | carga FOND.PI1 (fondo de sala) en screen_ptr_b | test_loader |
+| `0x13572` | `load_named_screen` | prepara buffer (len 0x7d22) y llama a load_resource | test_loader |
 | `0x121b6` | `copy_screen_rev` | FUN_000121b6 @ 0x121b6: copia 0x1f40 longs de screen_ptr_a a screen_ptr_b (la inversa de copy_screen / 0x121c6). | — |
-| `0x12190` | `mask_row_blit` | — | — |
+| `0x12190` | `mask_row_blit` | mask row blit | — |
 | `0x16b76` | `row_blit` | FUN_00016b76 @ 0x16b76: copia D3+1 filas de (D2+1)*8 bytes desde A3-0x8000 a A3, con stride de destino 0xa0. | — |
 | `0x16b2e` | `or_rows` | FUN_00016b2e @ 0x16b2e: OR de una fila de (D2+1) grupos de 4 words desde el descriptor 0xd8f0+A5 sobre el destino A3: por grupo lee 4 words (movem.w), calcula la mascara ~(d4|d5|d6|d7) y escribe ((dst & mask) | word) en 4 words consecutivos. Destino avanza 0xa0 por fila (D3+1 filas), fuente 0x40. | — |
-| `0x15944` | `copy_rows` | — | — |
-| `0x15934` | `copy_rows_a` | — | test_family151 |
-| `0x18a30` | `screen_clean` | — | test_loop |
-| `0x18a98` | `attract` | — | test_loop |
+| `0x15944` | `copy_rows` | mide y dibuja una caja de texto autodimensionada. 15944, walk_entry sobre la tabla 0x24982 (indice 0x1acc7-1), recorre bloques de 3 bytes: los bytes 0x32..0x... | — |
+| `0x15934` | `copy_rows_a` | copy rows a | test_family151 |
+| `0x18a30` | `screen_clean` | screen clean | test_loop |
+| `0x18a98` | `attract` | attract | test_loop |
 
 ## Estado (globales A_* usadas)
 

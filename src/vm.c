@@ -15,6 +15,7 @@
 
 void run_text_entry(uint8_t *img, uint32_t a6);
 
+/* 0x12950 — walk entry */
 void walk_entry(uint8_t *img, uint32_t a4, uint32_t d1, uint32_t *a4o, uint32_t *a5o) {
     uint32_t n = d1 & 0xffff;
     if (n != 0) {
@@ -28,6 +29,7 @@ void walk_entry(uint8_t *img, uint32_t a4, uint32_t d1, uint32_t *a4o, uint32_t 
     *a4o = a4 + img[a4];
 }
 
+/* 0x13f56 — suena 0xf2, repinta el texto 0x13f56 y copia 0x3c filas de 0x28 longs desde screen_ptr_b+0x5500 a screen_ptr_a+0x5500 (VBL por fila, retrocediendo 0x140), gu... */
 void run_text_table(uint8_t *img, uint32_t a6, uint32_t d0, uint32_t d1) {
     (void)a6;
     wr16(img + A_DAT_1A49E, d0 & 0xffff);
@@ -38,6 +40,7 @@ void run_text_table(uint8_t *img, uint32_t a6, uint32_t d0, uint32_t d1) {
         run_text_entry(img, p);
 }
 
+/* 0x13f4c — D0=0, D1=A6[1] -> FUN_00013f56 */
 void text_table_entry(uint8_t *img, uint32_t a6) {
     uint32_t d1 = img[a6 + 1] & 0xff;
     run_text_table(img, a6 + 2, 0, d1);
