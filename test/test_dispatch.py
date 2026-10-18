@@ -24,7 +24,7 @@ BACK = 0x78000
 _u8p = ctypes.POINTER(ctypes.c_uint8)
 harness._lib.vm_run.argtypes = [_u8p, ctypes.c_uint32]
 harness._lib.vm_run.restype = ctypes.c_uint32
-harness._lib.run_command_keep_sp.argtypes = [_u8p]
+harness._lib.run_command_keep_sp.argtypes = [_u8p, ctypes.c_uint32]
 harness._lib.run_command_keep_sp.restype = None
 
 
@@ -114,7 +114,7 @@ def test_run_command_zero_nibble():
     pokes = {TEMPL + 0x10: bytes([0]), SCRIPT_END: (SCRIPT + 100).to_bytes(4, "big")}
     pokes[COMMAND] = (0x0010).to_bytes(2, "big")
     diffs, _ = differential(RUN, {"_pokes": pokes},
-                            lambda lib, buf: lib.run_command_keep_sp(buf))
+                            lambda lib, buf: lib.run_command_keep_sp(buf, 0))
     assert not diffs, report(diffs)
 
 
@@ -122,7 +122,7 @@ def test_run_command_ab_noop():
     """0xa035 -> índice 52 de cmd_jump_table = 0x11014 (rts)."""
     pokes = {COMMAND: (0xA035).to_bytes(2, "big")}
     diffs, _ = differential(RUN, {"_pokes": pokes},
-                            lambda lib, buf: lib.run_command_keep_sp(buf))
+                            lambda lib, buf: lib.run_command_keep_sp(buf, 0))
     assert not diffs, report(diffs)
 
 
@@ -134,7 +134,7 @@ def test_run_command_ab_copy_screen():
     pokes = _screen_pokes()
     pokes[COMMAND] = (0xA06A).to_bytes(2, "big")
     diffs, _ = differential(RUN, {"_pokes": pokes},
-                            lambda lib, buf: lib.run_command_keep_sp(buf))
+                            lambda lib, buf: lib.run_command_keep_sp(buf, 0))
     assert not diffs, report(diffs)
 
 # NOTA: la rama 0xf000/otra restaura A7 desde $1a826 (solo válido por run_command
@@ -163,7 +163,7 @@ def test_run_command_text_box():
     }
     pokes.update(console_key("a"))
     diffs, _ = differential(RUN, {"_pokes": pokes},
-                            lambda lib, buf: lib.run_command_keep_sp(buf))
+                            lambda lib, buf: lib.run_command_keep_sp(buf, 0))
     assert not diffs, report(diffs)
 
 
@@ -349,7 +349,7 @@ def test_run_command_ab_wired():
         pokes2 = dict(pokes)
         pokes2[COMMAND] = cmd.to_bytes(2, "big")
         diffs, _ = differential(RUN, {"_pokes": pokes2},
-                                lambda lib, buf: lib.run_command_keep_sp(buf))
+                                lambda lib, buf: lib.run_command_keep_sp(buf, 0))
         assert not diffs, f"cmd={cmd:#x}\n{report(diffs)}"
 
 

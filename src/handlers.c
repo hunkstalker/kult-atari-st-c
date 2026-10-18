@@ -442,7 +442,8 @@ uint32_t overlay_dispatch_4(uint8_t *img, uint32_t script) {
     uint32_t y = (out[4] + out[6] - 1) & 0xffff;
     uint32_t phase;
     uint32_t addr = screen_address(img, out[3], y, &phase);
-    scroll_up(img, (out[6] - 1) & 0xffff, out[5], out[6], out[2], addr);
+    /* 0x1200a pasa el D7 recalculado por 0x10fec (no la fase almacenada out[2]). */
+    scroll_up(img, (out[6] - 1) & 0xffff, out[5], out[6], phase, addr);
     addr += 0xa0;
     blit_mask_row(img, addr, addr - 0x8000);
     return script + 2;
@@ -829,15 +830,15 @@ void hint_blit_stroke(uint8_t *, uint32_t *);
 void supexec_b(uint8_t *, uint32_t, uint32_t);
 
 /* FUN_0001687e @ 0x1687e: nombre del objeto sin sonido ni filtro. */
-void obj_name(uint8_t *img, uint32_t script) {
+uint32_t obj_name(uint8_t *img, uint32_t script) {
     script += 1;
     uint32_t str = text_index_arg(img, 0x3c534, img[script], &script);
     text_window(img, str, 0x1996c);
-    script += 1;
+    return script + 1;
 }
 
 /* FUN_000168a0 @ 0x168a0: nombre con sonido (0xe6) y espera de tecla. */
-void obj_name_snd(uint8_t *img, uint32_t script) {
+uint32_t obj_name_snd(uint8_t *img, uint32_t script) {
     supexec_b(img, 0xe6, 0x18);
     script += 1;
     uint32_t str = text_index_arg(img, 0x3c534, img[script], &script);
@@ -846,12 +847,12 @@ void obj_name_snd(uint8_t *img, uint32_t script) {
     (void)prompt_wait_entry(img, 0x19970);
     uint32_t ptr = 0x19970;
     hint_blit_stroke(img, &ptr);
-    script += 1;
+    return script + 1;
 }
 
 /* FUN_000168d4 @ 0x168d4: como 0x168a0 pero sin sonido y con el bit 6 de 0x19973
  * (el color del nombre) limpio. */
-void obj_name_clean(uint8_t *img, uint32_t script) {
+uint32_t obj_name_clean(uint8_t *img, uint32_t script) {
     script += 1;
     uint32_t str = text_index_arg(img, 0x3c534, img[script], &script);
     obj_name_table(img);
@@ -860,5 +861,5 @@ void obj_name_clean(uint8_t *img, uint32_t script) {
     (void)prompt_wait_entry(img, 0x19970);
     uint32_t ptr = 0x19970;
     hint_blit_stroke(img, &ptr);
-    script += 1;
+    return script + 1;
 }

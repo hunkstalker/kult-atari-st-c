@@ -18,13 +18,13 @@
 #include "addrs.h"
 
 void  walk_entry(uint8_t *, uint32_t, uint32_t, uint32_t *, uint32_t *);
-void  copy_screen_a6(uint8_t *);      /* copy_screen (byte handler 68 / cmd 105) */
+uint32_t copy_screen_a6(uint8_t *, uint32_t);      /* copy_screen (byte handler 68 / cmd 105) */
 void  noop_11014(uint8_t *);      /* rts (byte/cmd handler) */
 void  text_entry_blit(uint8_t *, uint32_t);
 void  run_text_entry_1(uint8_t *, uint32_t);
 void  text_table_entry(uint8_t *, uint32_t);
 void  anim_entry_a(uint8_t *, uint32_t);
-void  set_palette_from_entry(uint8_t *, uint32_t);
+uint32_t set_palette_from_entry(uint8_t *, uint32_t);
 void  draw_text_box_variant(uint8_t *, uint32_t);
 void  clear_flag(uint8_t *);
 void  mode_flag_wrap(uint8_t *);
@@ -58,7 +58,7 @@ void     script_store(uint8_t *, uint32_t *);
 void     script_jump_zero(uint8_t *, uint32_t *);
 void     hint_blit_3(uint8_t *, uint32_t *);
 uint32_t reveal_box_b(uint8_t *, uint32_t);
-void     set_palette_advance(uint8_t *);
+uint32_t set_palette_advance(uint8_t *, uint32_t);
 void     icon_anim_a(uint8_t *, uint32_t *);
 void     icon_anim_b(uint8_t *, uint32_t *);
 
@@ -77,14 +77,14 @@ uint32_t scale_loop(uint8_t *, uint32_t);
 uint32_t scale_prep(uint8_t *, uint32_t);
 uint32_t obj_find_or_exit(uint8_t *, uint32_t);
 uint32_t track5_apply(uint8_t *, uint32_t);
-void obj_name_snd(uint8_t *, uint32_t);
+uint32_t obj_name_snd(uint8_t *, uint32_t);
 uint32_t object_info_card(uint8_t *, uint32_t);
 uint32_t icon_reveal_h(uint8_t *, uint32_t);
 uint32_t icon_reveal_v(uint8_t *, uint32_t);
 uint32_t scale_anim(uint8_t *, uint32_t);
 uint32_t cmd74_wrap(uint8_t *, uint32_t);
 uint32_t prepare_room(uint8_t *, uint32_t);
-void obj_name(uint8_t *, uint32_t);
+uint32_t obj_name(uint8_t *, uint32_t);
 uint32_t obj_wait(uint8_t *, uint32_t);
 uint32_t text_window_entry(uint8_t *, uint32_t);
 uint32_t wait_button_b(uint8_t *, uint32_t);
@@ -124,7 +124,7 @@ uint32_t bank_blit_a(uint8_t *, uint32_t);
 uint32_t draw_hint_icons_wrap(uint8_t *, uint32_t);
 uint32_t attract(uint8_t *, uint32_t);
 uint32_t obj_refresh(uint8_t *, uint32_t);
-void obj_name_clean(uint8_t *, uint32_t);
+uint32_t obj_name_clean(uint8_t *, uint32_t);
 uint32_t cmd135(uint8_t *, uint32_t);
 uint32_t obj_dec(uint8_t *, uint32_t);
 uint32_t draw_selection_frame_wrap(uint8_t *, uint32_t);
@@ -203,12 +203,12 @@ static uint32_t byte_handler(uint32_t b, uint8_t *img, uint32_t script) {
     case 59: n = script; script_store(img, &n); return n;
     case 60: n = script; script_jump_zero(img, &n); return n;
     case 64: n = script; hint_blit_3(img, &n); return n;
-    case 68: copy_screen_a6(img);     return addr_add(script, 1);   /* 0x121c4: addq.l #1,script + copy_screen */
+    case 68: return copy_screen_a6(img, script);   /* 0x121c4: addq.l #1,script + copy_screen */
     case 84: return reveal_box_b(img, script);
-    case 90: set_palette_advance(img); return addr_add(script, 1);       /* 0x162d8: addq.l #1,script */
+    case 90: return set_palette_advance(img, script);       /* 0x162d8: addq.l #1,script */
     case 92: n = script; icon_anim_a(img, &n); return n;
     case 93: n = script; icon_anim_b(img, &n); return n;
-    case 94: set_palette_from_entry(img, script); return addr_add(script, 2);   /* 0x162ce: d0=script[1], script+=2 */
+    case 94: return set_palette_from_entry(img, script);   /* 0x162ce: d0=script[1], script+=2 */
     case 103: return load_eche_bank_cmd(img, script);
     case 95: run_text_entry_1(img, script); return addr_add(script, 4);   /* 0x141ea: +1, blit, +3 */
     /* Resto de la tabla 0x19f62 (byte b -> base + long[b-1]). Cableado completo
@@ -228,14 +228,14 @@ static uint32_t byte_handler(uint32_t b, uint8_t *img, uint32_t script) {
     case 14: return scale_loop(img, script);
     case 16: return scale_prep(img, script);
     case 22: return track5_apply(img, script);
-    case 23: obj_name_snd(img, script); return addr_add(script, 2);
+    case 23: return obj_name_snd(img, script);
     case 24: return object_info_card(img, script);
     case 30: return icon_reveal_h(img, script);
     case 31: return icon_reveal_v(img, script);
     case 34: return scale_anim(img, script);
     case 37: return cmd74_wrap(img, script);
     case 38: return prepare_room(img, script);
-    case 39: obj_name(img, script); return addr_add(script, 2);
+    case 39: return obj_name(img, script);
     case 40: return obj_wait(img, script);
     case 41: return text_window_entry(img, script);
     case 44: return wait_button_b(img, script);
@@ -275,7 +275,7 @@ static uint32_t byte_handler(uint32_t b, uint8_t *img, uint32_t script) {
     case 89: return draw_hint_icons_wrap(img, script);
     case 91: return attract(img, script);
     case 96: return obj_refresh(img, script);
-    case 97: obj_name_clean(img, script); return addr_add(script, 2);
+    case 97: return obj_name_clean(img, script);
     case 98: return cmd135(img, script);
     case 99: return obj_dec(img, script);
     case 100: return draw_selection_frame_wrap(img, script);
@@ -424,7 +424,7 @@ static void cmd_handler(uint8_t *img, uint32_t idx, uint32_t script) {
     case 102: (void)text_table_paint(img, script); break;
     case 103: (void)scene_mode_apply(img, script); break;
     case 104: (void)scene_mode_draw(img, script); break;
-    case 105: copy_screen_a6(img); break;
+    case 105: (void)copy_screen_a6(img, script); break;
     case 106: (void)wipe_72(img, script); break;
     case 107: (void)wipe_f(img, script); break;
     case 108: (void)wipe_d(img, script); break;
@@ -446,7 +446,7 @@ static void cmd_handler(uint8_t *img, uint32_t idx, uint32_t script) {
     case 124: (void)bank_blit_b(img, script); break;
     case 125: (void)bank_blit_a(img, script); break;
     case 126: (void)draw_hint_icons_wrap(img, script); break;
-    case 127: set_palette_advance(img); break;
+    case 127: (void)set_palette_advance(img, script); break;
     case 128: (void)attract(img, script); break;
     case 129: { uint32_t n = script; icon_anim_a(img, &n); } break;
     case 130: { uint32_t n = script; icon_anim_b(img, &n); } break;

@@ -523,6 +523,11 @@ def test_fun_1200a():
         pokes = _icon_pokes(16, 3)
         pokes[0x1a570] = bytes([skip])
         _run_dispatch(0x1200A, harness._lib.overlay_dispatch_4, pokes, waits)
+    # H-1: con d7 almacenado != (x<<2)&0xf, 0x10fec recalcula la fase (no out[2]).
+    for d7 in (3, 7, 0x0b):
+        pokes = _icon_pokes(16, 3, x=8, d7=d7)
+        pokes[0x1a570] = bytes([0])
+        _run_dispatch(0x1200A, harness._lib.overlay_dispatch_4, pokes, 3)
 
 
 def test_fun_12044():
