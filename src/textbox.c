@@ -396,15 +396,18 @@ void scene_text_box(uint8_t *img) {
         /* D6 = A6[1] & 0x7f: 14138 lo guarda con bit7 y lo enmascara al ajustar
          * la posicion (0x1416c); sin la mascara el ancho de la caja se dispara. */
         uint32_t v = img[script + 1] & 0x7f;
-        /* D5 = (A6[2]<<1)&0xff ya ajustado por 14138 (el -8 de 'S'); ver v2. */
+        /* D5 ya ajustado por 14138 (el -8 de 'S'); el original usa `cmp.b`
+         * (byte), asi que la palabra alta de v2 (0xffff con flags bit7) no
+         * cuenta. */
+        uint32_t v2b = v2 & 0xffu;
         if (v < img[0x1ab40])
             img[0x1ab40] = (uint8_t)v;
         uint32_t t = (v + w) & 0xff;
         if (t >= img[0x1ab41])
             img[0x1ab41] = (uint8_t)t;
-        if (v2 < img[0x1ab42])
-            img[0x1ab42] = (uint8_t)v2;
-        t = (v2 + h) & 0xff;
+        if (v2b < img[0x1ab42])
+            img[0x1ab42] = (uint8_t)v2b;
+        t = (v2b + h) & 0xff;
         if (t >= img[0x1ab43])
             img[0x1ab43] = (uint8_t)t;
         script += 3;
