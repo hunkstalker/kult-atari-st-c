@@ -40,6 +40,7 @@ test/                 pruebas diferenciales (harness.py + test_*.py) + convencio
 tools/recreate_kit/   arnés + oráculo (Musashi); GPL-2.0
 tools/gen_addrs.py    genera include/addrs.h desde work/names.txt
 tools/gen_mapa.py     genera docs/mapa/ desde src/, names.txt y test/
+tools/regscan.py      mide la deuda de legibilidad por módulo (docs/LEGIBILIDAD.md)
 reference/test_f4/    469 pruebas del intento anterior (referencia, no se ejecutan)
 work/                 PRG original (gitignored) + names.txt (registro de nombres)
 docs/                 plan, prompt de sesión, referencia, mapa/, VISIBILIDAD

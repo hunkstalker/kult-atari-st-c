@@ -78,6 +78,10 @@ Regla de oro: una pieza está hecha solo si su prueba diferencial pasa.
   sincronizados.
 - **Identificación total:** cada parte del juego debe poder localizarse por su
   nombre y su procedencia.
+- **Legibilidad (port):** el C se moderniza a estándar de *port* (nombres
+  semánticos, control de flujo legible) sin cambiar comportamiento; la traza al
+  ASM vive en `names.txt` + el comentario `/* 0xADDR */` + el decomp congelado.
+  Plan por módulos y seguimiento: **`docs/LEGIBILIDAD.md`** (`tools/regscan.py`).
 
 ### 4.1 Convenciones confirmadas en el piloto de la paleta (2026-10-17)
 

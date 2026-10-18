@@ -15,6 +15,11 @@ addrs:
 mapa:
 	$(PY) tools/gen_mapa.py
 
+# Mide la deuda de legibilidad por modulo (docs/LEGIBILIDAD.md).
+.PHONY: regscan
+regscan:
+	$(PY) tools/regscan.py
+
 # Core con la API publica restringida por version-script (build on-target).
 # El build diferencial (build/libkult.so) NO usa esto: necesita todos los simbolos.
 CORE     := build/libkultcore.so
