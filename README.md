@@ -4,12 +4,17 @@ Este repositorio es la **reimplementación en C legible y documentado** del jueg
 *Kult: The Temple of Flying Saucers* (Exxos/ERE, 1989), hecha **a partir del
 ensamblador** del decomp canónico.
 
-## Los dos proyectos (no confundir)
+## Los proyectos (no confundir)
+
+El trabajo se reparte en **cuatro** repos; la fuente canónica es
+**`docs/PROYECTOS.md`**:
 
 | repo | contenido | garantía |
 |---|---|---|
-| **`/app/kult-atari-st-decomp`** | el decomp **en ensamblador** (ASM) | **byte a byte** idéntico al original |
-| **este repo** (`kult-atari-st-c`) | **reimplementación en C** legible | **mismo comportamiento** (verificado en el emulador) |
+| **`/app/kult-atari-st-decomp`** | decomp **en ensamblador** (ASM) del ST | **byte a byte** idéntico al original |
+| **este repo** (`kult-atari-st-c`) | **reimplementación en C** legible del ST | **mismo comportamiento** (verificado en el emulador) |
+| **`/app/kult-port-pc-compilation`** | **la compilación**: Atari ST + Amiga, mejoras y todos los idiomas | por capas sobre el core verificado |
+| **`/app/kult-port-legacy`** | predecesor de modding (referencia) | solo referencia |
 
 - El ASM del decomp es la **verdad/especificación**. Este C **no** es byte a byte
   (el original fue escrito en ensamblador; ningún C da esos bytes) pero **hace lo
@@ -43,8 +48,8 @@ tools/gen_mapa.py     genera docs/mapa/ desde src/, names.txt y test/
 tools/regscan.py      mide la deuda de legibilidad por módulo (docs/LEGIBILIDAD.md)
 reference/test_f4/    469 pruebas del intento anterior (referencia, no se ejecutan)
 work/                 PRG original (gitignored) + names.txt (registro de nombres)
-docs/                 ESTADO, PLAN, PROMPT_SESION, REVISION, REFERENCIA_F4,
-                      LEGIBILIDAD, VISIBILIDAD, mapa/ (fichas por módulo)
+docs/                 PROYECTOS, PLAN_COMPILACION, ESTADO, PLAN, PROMPT_SESION,
+                      REVISION, REFERENCIA_F4, LEGIBILIDAD, VISIBILIDAD, mapa/
 ```
 
 ## Estado
@@ -62,10 +67,11 @@ docs/                 ESTADO, PLAN, PROMPT_SESION, REVISION, REFERENCIA_F4,
 - Estado detallado y cómo continuar: **`docs/ESTADO.md`**.
 - Plan y método: `docs/PLAN.md` · legibilidad: `docs/LEGIBILIDAD.md` ·
   visibilidad on-target: `docs/VISIBILIDAD.md`.
-- **Siguiente:** **fase 3** — reimplementar sobre esta base las modificaciones
-  del proyecto previo tomando **kult-port** (previsiblemente
-  `kult-port-legacy`) como **referencia**. La revisión del C está cerrada
-  (`docs/REVISION.md` §7/§9/§11).
+- **Siguiente:** **la compilación** (`kult-port-pc-compilation`), que nace de
+  este core y une **Atari ST + Amiga**, con mejoras y todos los idiomas. Plan:
+  **`docs/PLAN_COMPILACION.md`**. La revisión del C de este repo está cerrada
+  internamente (`docs/REVISION.md` §7/§9/§11), **pendiente de validación del
+  usuario**.
 
 ## Cómo se verifica
 

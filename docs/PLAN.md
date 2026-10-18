@@ -5,17 +5,20 @@ sesión nueva, ver `docs/PROMPT_SESION.md`.
 
 ## 0. Resumen
 
-Dos repos, con papeles distintos:
+Cuatro repos, con papeles distintos (fuente canónica: **`docs/PROYECTOS.md`**):
 
 | repo | papel | garantía |
 |---|---|---|
 | `/app/kult-atari-st-decomp` (A) | decomp canónico **en ensamblador** | **byte a byte** con el original |
-| `/app/kult-atari-st-c` (B, este) | **reimplementación en C** legible | **mismo comportamiento** |
+| `/app/kult-atari-st-c` (B, este) | **reimplementación en C** legible (base) | **mismo comportamiento** |
+| `/app/kult-port-pc-compilation` | **la compilación** (Atari ST + Amiga, idiomas, mejoras) | por capas sobre el core verificado |
+| `/app/kult-port-legacy` | predecesor de modding (referencia) | solo referencia |
 
 - **A no se toca**: es la verdad/especificación. Su `matching/` reproduce el PRG
   original byte a byte (sha256 `2e85f223…`).
 - **B es el trabajo**: escribir, desde A, un C moderno, legible, documentado y
-  con **todo identificado**, fiel en comportamiento.
+  con **todo identificado**, fiel en comportamiento. Plan de la compilación que
+  nace de B: **`docs/PLAN_COMPILACION.md`**.
 - A se identificará **de paso** en B (nombres y documentación viven aquí); A se
   queda como referencia congelada.
 
@@ -140,11 +143,11 @@ Piezas implicadas (en A `matching/`):
    cubrió; el detalle de tandas está en `docs/LEGIBILIDAD.md`.
    - **Revisión del C** — HECHA: `docs/REVISION.md` (§7 P0, §9 P1, §11 P2;
      0 ALTA/MEDIA abiertos).
-3. **Futuro** — reimplementar sobre esta base C limpia las modificaciones del
-   proyecto previo, tomando **kult-port** (previsiblemente renombrado
-   `kult-port-legacy`) como **referencia** (guardado por ranuras, textos ES,
-   overlay F1, etc.). El plan detallado se hará al abrir la fase 3;
-   kult-port queda **fuera de alcance** mientras tanto.
+3. **La compilación** — proyecto `kult-port-pc-compilation`, que **nace de este
+   C** y **une Atari ST + Amiga**, con mejoras y **todos los idiomas**.
+   `kult-port-legacy` (ex `kult-port`) queda como **referencia** (guardado por
+   ranuras, textos ES, overlay F1, etc.). Plan definitivo:
+   **`docs/PLAN_COMPILACION.md`**.
 
 ## 8. Legal
 

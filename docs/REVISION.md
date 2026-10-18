@@ -1,17 +1,19 @@
-# REVISIÓN del C (previa a la fase 3 de kult-port)
+# REVISIÓN del C (previa a la compilación)
 
-> **Estado: CERRADA.** P0 (§7), P1 (§9) y P2 (§11) auditados, 0 ALTA/MEDIA
-> abiertos. 499 pruebas verdes, `make regscan` `ids_reg=0`, `make core` OK.
-> Se abre la **fase 3** (re-aplicar kult-port).
+> **Estado: cerrada internamente.** P0 (§7), P1 (§9) y P2 (§11) auditados, 0
+> ALTA/MEDIA abiertos. 499 pruebas verdes, `make regscan` `ids_reg=0`,
+> `make core` OK. **Pendiente de validación del usuario** (preguntas y
+> verificaciones). La compilación (`kult-port-pc-compilation`) nace de este core;
+> plan en **`docs/PLAN_COMPILACION.md`**.
 
-Objetivo: auditar el C ya escrito y **renombrado** —antes de re-aplicar encima
-las mejoras de kult-port— para asegurar que es fiel, correcto y legible. No se
-modifica el comportamiento salvo que la revisión encuentre un fallo real
-(entonces: arreglo + prueba + commit).
+Objetivo: auditar el C ya escrito y **renombrado** —antes de construir encima la
+compilación— para asegurar que es fiel, correcto y legible. No se modifica el
+comportamiento salvo que la revisión encuentre un fallo real (entonces: arreglo +
+prueba + commit).
 
 Los §1–§6 son el plan y el método; §7, §9 y §11 son el registro de hallazgos de
-P0, P1 y P2. La revisión se hizo en sesiones nuevas y limpias, sin tocar
-kult-port.
+P0, P1 y P2. La revisión se hizo en sesiones nuevas y limpias, sin tocar el
+predecesor (`kult-port-legacy`).
 
 ## 1. Por qué revisar (riesgos conocidos)
 
@@ -152,7 +154,8 @@ rutas no probadas / riesgo de UB; **BAJA** = nombre/comentario/estilo.
   justificación (p. ej. reconstrucción de una cola del original).
 - `make test` verde (499), `make regscan` `ids_reg=0`, `make core` OK.
 - `docs/REVISION.md` con el **registro de hallazgos** (§7/§9/§11) y
-  `docs/ESTADO.md` actualizado. La revisión quedó cerrada y se abre la fase 3.
+  `docs/ESTADO.md` actualizado. Revisión cerrada internamente; **pendiente de
+  validación del usuario**. Después, la compilación (`docs/PLAN_COMPILACION.md`).
 
 ## 7. Registro de hallazgos
 
@@ -365,7 +368,7 @@ nada (una hipótesis, un cambio), igual que en P0.
 - `make test` verde (492+), `make regscan` `ids_reg=0`, `make core` OK.
 - Registro §7 ampliado y `docs/ESTADO.md` actualizado.
 
-Solo al cerrar P1 (y P2) se abre la **fase 3** (re-aplicar kult-port).
+Solo al cerrar P1 (y P2) se abre **la compilación** (`docs/PLAN_COMPILACION.md`).
 
 ---
 
@@ -447,7 +450,7 @@ Los hooks `cpu_delay`/`KULT_REVEAL_GATE` (reveal) y `frame_gate_delay`/
 - `make test` 494 verde, `make regscan` `ids_reg=0`, `make core` OK.
 - Falta **P2** (`palette`, `cursor`, `input`, `delay`, `boxdraw`, `line`,
   `maskblit`, `sprite`, `text`, `overlay`, `screens`, `state`, `stubs`) para
-  cerrar la revisión y abrir la fase 3.
+  cerrar la revisión y abrir la compilación.
 
 ---
 
@@ -506,7 +509,7 @@ Orden: de menor a mayor. `overlay` va último (blitters con muchas trampas).
 - ALTA/MEDIA arreglados **con prueba** o *intencional* justificado.
 - `make test` verde (494+), `make regscan` `ids_reg=0`, `make core` OK.
 - Registro §7/§9/§11 ampliado y `docs/ESTADO.md` actualizado.
-- **Entonces** se abre la **fase 3** (re-aplicar kult-port).
+- **Entonces** se abre **la compilación** (plan en `docs/PLAN_COMPILACION.md`).
 
 ---
 
@@ -628,5 +631,6 @@ añadieron casos de cobertura (fases, clip, índices con palabra alta, fase 15,
   ALTA/MEDIA se justifica *intencional* por ser inobservable/inalcanzable o no
   construible en el arnés (H-SCR1, H-LN1, H-TX1..TX3). No queda ningún ALTA/MEDIA
   abierto. Los BAJA se arreglan o se documentan.
-- La revisión del C queda **cerrada**: se abre la **fase 3** (re-aplicar las
-  mejoras de `kult-port` sobre esta base, con plan detallado hecho entonces).
+- La revisión del C queda **cerrada internamente** (pendiente de validación del
+  usuario): se abre **la compilación**, que nace de esta base; plan definitivo en
+  `docs/PLAN_COMPILACION.md`.

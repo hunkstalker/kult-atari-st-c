@@ -31,7 +31,7 @@ make core                      # build on-target con la API restringida
 ```
 
 El arnés necesita `work/disk_a/KULT.PRG` (copia del usuario, gitignored); si
-falta, copiarlo desde `/app/kult-port/work/disk_a/KULT.PRG`.
+falta, copiarlo desde `/app/kult-port-legacy/work/disk_a/KULT.PRG`.
 
 ## Estructura de `src/`
 
@@ -95,13 +95,13 @@ mapa (el harness necesita `dlsym`). Detalle en `docs/VISIBILIDAD.md`.
      (palabras altas residuales, `bgt`/V y `dbra` inalcanzables) y H-SCR2/H-SE1
      (BAJA) arreglados. **0 ALTA/MEDIA abiertos.**
    Resultado: **499 pruebas** verdes, `make regscan` `ids_reg=0`, `make core` OK,
-   0 warnings.
-2. **Siguiente: fase 3 del PLAN (revisión ya cerrada).** Reimplementar sobre
-   esta base C limpia las modificaciones del proyecto previo, tomando
-   **kult-port** (previsiblemente renombrado `kult-port-legacy`) como
-   **referencia** (guardado por ranuras, textos ES, overlay F1, etc.), con plan
-   detallado hecho al abrir la fase. Mientras tanto, kult-port queda **fuera de
-   alcance** (no se toca).
+   0 warnings. **Queda pendiente la validación del usuario** (sus preguntas y
+   verificaciones); por eso este repo **no se congela** todavía.
+2. **Siguiente: la compilación** (`kult-port-pc-compilation`, nuevo repo), que
+   **nace de este C** y **une Atari ST + Amiga**, con mejoras y **todos los
+   idiomas**. Plan definitivo: **`docs/PLAN_COMPILACION.md`**; topología de
+   repos: **`docs/PROYECTOS.md`**. El predecesor `kult-port` se renombró a
+   **`kult-port-legacy`** y queda como **referencia** (no se toca).
 - Trampas conocidas del oráculo/kit: `docs/REFERENCIA_F4.md` (sección final).
 - Al auditar apareció una clase de fallo recurrente del import+renombrado:
   llamada a la **función hermana equivocada** (H-V1: `sound_play_b` por
@@ -121,4 +121,9 @@ mapa (el harness necesita `dlsym`). Detalle en `docs/VISIBILIDAD.md`.
 8. **Revisión P2 del C** (`docs/REVISION.md` §11): 13 módulos; H-MB1 (truncado
    `lsl.w` de `hint_entry`) y H-OV1 (desplazamientos lógicos mod 64 del 68k)
    arreglados con prueba, 2 BAJA arreglados y 7 intencionales justificados;
-   494 → 499 pruebas. **Revisión del C cerrada; se abre la fase 3.**
+   494 → 499 pruebas. **Revisión cerrada internamente; se abre la compilación.**
+9. **Topología y compilación** (`docs/PROYECTOS.md`, `docs/PLAN_COMPILACION.md`):
+   `kult-port` → `kult-port-legacy` (referencia); el proyecto nuevo
+   `kult-port-pc-compilation` une Atari ST + Amiga con todos los idiomas y nace de
+   este C. Determinación Amiga: hace falta su **spec (decomp) + core**; primer
+   hito = comparación por rutina Amiga↔ST.

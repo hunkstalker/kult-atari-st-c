@@ -14,24 +14,26 @@ Reimplementación en **C legible** de *Kult: The Temple of Flying Saucers*
 - **Este repo:** el C, verificado con **diferencial** contra el oráculo (Musashi)
   del kit (`tools/recreate_kit`): compara memoria + registros + ledger de
   efectos off-image (paleta, PSG, IKBD…).
-- **`/app/kult-port`:** proyecto predecesor de modding; **no se toca**. Sus
-  mejoras (guardado por ranuras, textos ES, overlay F1…) se re-aplicarán en la
-  **fase 3**, solo tras cerrar la revisión.
+- **`/app/kult-port-legacy`:** ex `kult-port`, predecesor de modding; **no se
+  toca**, queda como **referencia**. La compilación nueva vive en
+  `kult-port-pc-compilation` (ver **`docs/PROYECTOS.md`** y
+  **`docs/PLAN_COMPILACION.md`**).
 
 ## Estado (a día de hoy)
 
 - **Todo el juego portado:** 33 módulos, ~12.5k líneas, 499 pruebas
   diferenciales verdes, 0 warnings, `make regscan` `ids_reg=0`, `make core` OK.
-- **Revisión del C: CERRADA.** P0 (§7), P1 (§9) y P2 (§11) auditados; 0
-  ALTA/MEDIA abiertos. Registro completo en `docs/REVISION.md`.
+- **Revisión del C: cerrada internamente.** P0 (§7), P1 (§9) y P2 (§11)
+  auditados; 0 ALTA/MEDIA abiertos. Registro completo en `docs/REVISION.md`.
+  **Pendiente de validación del usuario** (sus preguntas/verificaciones).
 - Detalle de estado y censo: `docs/ESTADO.md`.
 
-## Tarea siguiente: fase 3 (re-aplicar kult-port)
+## Tarea siguiente: la compilación
 
-La revisión está cerrada; se abre la **fase 3**: reimplementar sobre esta base C
-limpia las mejoras del proyecto previo (`kult-port`, previsiblemente
-`kult-port-legacy`) con un plan detallado hecho al empezar. La revisión y sus
-métodos quedan documentados en `docs/REVISION.md` §3–§5 y §11.
+Este repo es la **base** de **la compilación** (`kult-port-pc-compilation`), que
+une **Atari ST + Amiga**, mejoras y **todos los idiomas**. Nace de este C
+verificado; `kult-port-legacy` es solo referencia. Plan definitivo:
+**`docs/PLAN_COMPILACION.md`**; topología de repos: **`docs/PROYECTOS.md`**.
 
 ## Método por función (resumen)
 
@@ -63,22 +65,24 @@ make mapa / make addrs         # regenerar fichas / direcciones
 ```
 
 El arnés necesita `work/disk_a/KULT.PRG` (copia del usuario, gitignored); si
-falta, copiarlo desde `/app/kult-port/work/disk_a/KULT.PRG`.
+falta, copiarlo desde `/app/kult-port-legacy/work/disk_a/KULT.PRG`.
 
 ## Reglas de trabajo
 
 - **Reproducir/medir antes de tocar.** Una hipótesis, un cambio.
 - **Toda corrección deja su prueba diferencial** (salvo divergencia inobservable,
   que se marca *intencional* con justificación en el registro).
-- Commit por módulo; no tocar `/app/kult-port` ni el decomp ASM.
+- Commit por módulo; no tocar `/app/kult-atari-st-decomp` ni `/app/kult-port-legacy`.
 - `make regscan` debe seguir en `ids_reg=0`. **Todo en español.**
 
 ## Documentos clave
 
 | archivo | para qué |
 |---|---|
+| `docs/PROYECTOS.md` | **topología canónica de los 4 repos** y reglas |
+| `docs/PLAN_COMPILACION.md` | **plan de la compilación** (`kult-port-pc-compilation`) |
 | `docs/ESTADO.md` | estado exacto, censo, cómo continuar |
-| `docs/REVISION.md` | **plan de revisión** (§10 = P2) y **registro** (§7/§9) |
+| `docs/REVISION.md` | plan de revisión y **registro** (§7/§9/§11) |
 | `docs/PROMPT_SESION.md` | prompt listo para pegar en una sesión nueva |
 | `docs/PLAN.md` | plan maestro y convenciones (§4.1) |
 | `docs/REFERENCIA_F4.md` | trampas del oráculo/kit (leer la sección final) |
