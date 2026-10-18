@@ -13,6 +13,12 @@ state.c — helpers de estado pequeños (limpiezas de flags/globales).  clear_fl
 
 ## Estado (globales A_* usadas)
 
+- `A_CLIP_X`
+- `A_CLIP_Y`
+- `A_CURSOR_SPRITE_PTR`
+- `A_DAT_1ACD3`
+- `A_LIST_1A8F0`
+- `A_OBJ_TBL`
 - `A_PTR_1A806`
 - `A_W_1ACAA`
 

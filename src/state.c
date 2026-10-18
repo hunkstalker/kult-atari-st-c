@@ -25,12 +25,12 @@ void clear_flag(uint8_t *img) {
 /* 0x15192 — limpia el bit 7 del byte 1 de cada una de las 41 entradas de 5 bytes
  * en 0x1aa72, y el flag 0x1acd3. */
 void clear_object_flags(uint8_t *img) {
-    uint32_t p = 0x1aa72;
+    uint32_t p = A_OBJ_TBL;
     for (int i = 0; i < 0x29; i++) {              /* move.w #$28,d0; dbf -> 41 iteraciones */
         img[p + 1] &= 0x7f;
         p += 5;
     }
-    img[0x1acd3] = 0;
+    img[A_DAT_1ACD3] = 0;
 }
 
 /* 0x14a98 — fija el origen de recorte (0x19700/0x19702) y el puntero del sprite
@@ -39,15 +39,15 @@ void clear_object_flags(uint8_t *img) {
 void set_cursor_clip(uint8_t *img, uint32_t unused, uint32_t index) {
     (void)unused;
     uint32_t off = (index << 2) & 0xffffffffu;
-    uint32_t p = 0x196dc + off;
-    wr16(img + 0x19700, be16(img + p));
-    wr16(img + 0x19702, be16(img + p + 2));
-    wr32(img + 0x199ca, 0x1949c + ((off << 4) & 0xffffffffu));
+    uint32_t p = 0x196dc + off;                  /* tabla de clips (sin nombre en names.txt) */
+    wr16(img + A_CLIP_X, be16(img + p));
+    wr16(img + A_CLIP_Y, be16(img + p + 2));
+    wr32(img + A_CURSOR_SPRITE_PTR, 0x1949c + ((off << 4) & 0xffffffffu));  /* sprites */
 }
 
 /* 0x14bdc — recorre 0x3f entradas de 6 bytes en 0x1a8f0 y cambia 0x81 por 0x80. */
 void fix_sample_flag(uint8_t *img) {
-    uint32_t p = 0x1a8f0;
+    uint32_t p = A_LIST_1A8F0;
     for (int i = 0; i < 0x3f; i++) {
         if (img[p] == 0x81)
             img[p] = 0x80;
