@@ -196,7 +196,7 @@ void elem_bitmap_build(uint8_t *img, uint32_t *stream_io) {
     *stream_io = stream;
 }
 
-uint32_t walk_entry(uint8_t *, uint32_t, uint32_t,
+void walk_entry(uint8_t *, uint32_t, uint32_t,
                       uint32_t *, uint32_t *);
 uint32_t advance_text_entry(uint8_t *, uint32_t, uint32_t);
 void elem_blit(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t,
@@ -419,7 +419,8 @@ void text_block_build(uint8_t *img, uint32_t p, uint32_t end) {
         uint32_t addr = 0x3b1b0 + off * 2;
         uint32_t stride = be32(img + A_DAT_1A534);
         if (img[p + 2] & 0x80) {
-            uint32_t tmp = (stride * rows) & 0xffffffffu;
+            /* `mulu.w d3,d4` del original: producto de las palabras bajas. */
+            uint32_t tmp = (uint32_t)((stride & 0xffffu) * (rows & 0xffffu));
             addr = (addr + tmp - stride) & 0xffffffffu;
             stride = ((~stride) + 1) & 0xffffffffu;
         }
