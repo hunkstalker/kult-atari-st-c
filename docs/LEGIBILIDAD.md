@@ -148,51 +148,38 @@ Cada tanda = un commit. Dentro de cada módulo, función a función.
 
 ## 6. Progreso
 
-**Tanda 1 — hojas y base: HECHA** (`ids_reg` antes→después, medido con `make regscan`):
-
-| módulo | antes | después | goto |
-|---|---:|---:|---:|
-| screens.c | 390 | 25 | 0 |
-| maskblit.c | 233 | 3 | 0 |
-| sprite.c | 162 | 2 | 0 |
-| boxdraw.c | 110 | 3 | 0 |
-| line.c | 106 | 3 | 0 |
-| misc.c | 48 | 14 | 0 |
-| vm.c | 31 | 10 | 0 |
-| cursor.c | 26 | 3 | 0 |
-| state.c | 11 | 2 | 0 |
-| palette.c | 9 | 0 | 0 |
-| input.c | 5 | 3 | 0 |
-| delay.c | 4 | 0 | 0 |
-| stubs.c | 0 | 0 | 0 |
-
-Totales: `ids_reg` **8801 → 7734**, `goto` 95 (sin cambios; Tanda 2+).
-Residuales pequeños (p. ej. `screens.c` 25) son variables sueltas menores; se
-afinan al tocar cada módulo.
+`ids_reg` medido con `make regscan` (solo código, sin comentarios).
 
 | tanda | módulos | estado |
 |---|---|---|
 | 1 | palette, screens, cursor, input, delay, stubs, state, boxdraw, line, sprite, maskblit, misc, vm | **HECHA** |
-| 2 | textblit (resto), text, textbox, textform, icons, video, select, mode | **HECHA** |
+| 2 | textblit, text, textbox, textform, icons, video, select, mode | **HECHA** |
 | 3 | element, anim, scale, reveal, overlay, commands, handlers | **HECHA** |
-| 4 | dispatch, sound, music (+goto), fileio (+goto), loop (+goto) | pendiente |
+| 4 | dispatch, sound, fileio | **HECHA** |
+| 4 | loop, music | pendiente |
 
-**Tanda 3 — escena/elementos/animación: HECHA** (`ids_reg` antes→después):
+Totales: **`ids_reg` 8801 → 3198**, `goto` 95 (los de `select.c`/`text.c`/
+`fileio.c` se conservan por fidelidad; §2).
 
-| módulo | antes | después | goto |
-|---|---:|---:|---:|
-| element.c | 576 | 111 | 0 |
-| anim.c | 655 | 147 | 0 |
-| scale.c | 332 | 66 | 0 |
-| overlay.c | 569 | 194 | 0 |
-| commands.c | 364 | 49 | 3 |
-| handlers.c | 567 | 120 | 0 |
-| reveal.c | 64 | 4 | 0 |
+### Tanda 1 — hojas y base
 
-Totales: `ids_reg` **8801 → 3706**. Queda la Tanda 4 (`loop` 1547, `music` 581,
-`dispatch` 416, `sound` 98, `fileio` 23, …).
+| módulo | antes | después |
+|---|---:|---:|
+| screens.c | 390 | 25 |
+| maskblit.c | 233 | 3 |
+| sprite.c | 162 | 2 |
+| boxdraw.c | 110 | 3 |
+| line.c | 106 | 3 |
+| misc.c | 48 | 14 |
+| vm.c | 31 | 10 |
+| cursor.c | 26 | 3 |
+| state.c | 11 | 2 |
+| palette.c | 9 | 0 |
+| input.c | 5 | 3 |
+| delay.c | 4 | 0 |
+| stubs.c | 0 | 0 |
 
-**Tanda 2 — vídeo/texto: HECHA** (`ids_reg` antes→después):
+### Tanda 2 — vídeo/texto
 
 | módulo | antes | después | goto |
 |---|---:|---:|---:|
@@ -205,6 +192,26 @@ Totales: `ids_reg` **8801 → 3706**. Queda la Tanda 4 (`loop` 1547, `music` 581
 | mode.c | 109 | 17 | 0 |
 | video.c | 89 | 4 | 0 |
 
-Totales: `ids_reg` **8801 → 6142**. Los `goto` de `select.c` (30) y `text.c` (5)
-se **conservan** (colas compartidas del original, ver §2); el conteo de `goto`
-baja en Tanda 4 al convertir los bucles simples.
+### Tanda 3 — escena/elementos/animación
+
+| módulo | antes | después | goto |
+|---|---:|---:|---:|
+| element.c | 576 | 111 | 0 |
+| anim.c | 655 | 147 | 0 |
+| scale.c | 332 | 66 | 0 |
+| overlay.c | 569 | 194 | 0 |
+| commands.c | 364 | 49 | 3 |
+| handlers.c | 567 | 120 | 0 |
+| reveal.c | 64 | 4 | 0 |
+
+### Tanda 4 — núcleo y sonido
+
+| módulo | antes | después | goto |
+|---|---:|---:|---:|
+| dispatch.c | 416 | 22 | 0 |
+| sound.c | 98 | 3 | 0 |
+| fileio.c | 23 | 4 | 10 |
+
+Pendiente: `loop.c` (1547) y `music.c` (581), los dos mayores. Los residuales
+pequeños (p. ej. `screens.c` 25) son variables sueltas menores que se afinan al
+tocar cada módulo.

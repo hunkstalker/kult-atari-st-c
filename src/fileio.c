@@ -49,13 +49,13 @@ void save_clear_bin(uint8_t *img) {
  * DTA), set load_buffer/load_length, then load it (Fopen/Fread/Fclose). Returns 0, or -1 on the
  * first missing file. The original's tail re-checks a fixed opcode in the image; its only
  * observable is D0=0, which the return states. */
-int32_t load_resource_list(uint8_t *img, uint32_t a5) {
+int32_t load_resource_list(uint8_t *img, uint32_t table) {
     os_fsetdta(KULT_DTA);
-    while (img[a5] != 0x24) {                    /* '$' terminates the table */
-        wr32(img + A_CUR_FILENAME, a5);
-        if (os_fsfirst(img, a5) < 0)
+    while (img[table] != 0x24) {                    /* '$' terminates the table */
+        wr32(img + A_CUR_FILENAME, table);
+        if (os_fsfirst(img, table) < 0)
             return -1;
-        wr32(img + A_LOAD_BUFFER, be32(img + a5 + 10));
+        wr32(img + A_LOAD_BUFFER, be32(img + table + 10));
         wr32(img + A_LOAD_LENGTH, be32(img + KULT_DTA_SIZE));
         int32_t h = os_fopen(img, be32(img + A_CUR_FILENAME));
         wr16(img + A_FILE_HANDLE, (uint16_t)h);
@@ -63,7 +63,7 @@ int32_t load_resource_list(uint8_t *img, uint32_t a5) {
             return -1;
         os_fread(img, (uint16_t)h, be32(img + A_LOAD_LENGTH), be32(img + A_LOAD_BUFFER));
         os_fclose(img, (uint16_t)h);
-        a5 += 0xe;
+        table += 0xe;
     }
     return 0;
 }
@@ -84,12 +84,12 @@ void run_command_keep_sp(uint8_t *img, uint32_t a6);
 /* FUN_00010682 @ 0x10682: si $1a57c != 0xff y el digito (d0 + '0') cambia, lo guarda
  * en la tabla 0x1a404 (char en +4, d1 en +0xa) y repite load_resource_list(0x1a404)
  * lanzando el comando 0x918e mientras falte el fichero; restaura $1a4e0 al salir. */
-void load_eche_bank(uint8_t *img, uint32_t d0, uint32_t d1) {
+void load_eche_bank(uint8_t *img, uint32_t digit, uint32_t val) {
     uint32_t saved = be32(img + A_TEMPL_PTR);
-    uint8_t c = (uint8_t)((d0 & 0xff) + 0x30);
+    uint8_t c = (uint8_t)((digit & 0xff) + 0x30);
     if (img[0x1a57c] != 0xff && c != img[0x1a57c]) {
         img[0x1a408] = c;
-        wr32(img + 0x1a40e, d1);
+        wr32(img + 0x1a40e, val);
         img[0x1a57c] = c;
         for (;;) {
             if (load_resource_list(img, 0x1a404) >= 0)
@@ -107,9 +107,9 @@ void load_eche_bank_wrap(uint8_t *img, uint32_t d0) {
 }
 
 /* FUN_00010668 @ 0x10668: d0 = a6[1], cae en 0x1066e; devuelve a6 + 2. */
-uint32_t load_eche_bank_cmd(uint8_t *img, uint32_t a6) {
-    load_eche_bank_wrap(img, img[a6 + 1]);
-    return a6 + 2;
+uint32_t load_eche_bank_cmd(uint8_t *img, uint32_t script) {
+    load_eche_bank_wrap(img, img[script + 1]);
+    return script + 2;
 }
 
 /* Las primitivas GEMDOS del loader (0x107b6..0x10828), por si se invocan sueltas.
@@ -195,9 +195,9 @@ error:
 int32_t save_scena(uint8_t *img) {
     img[A_DAT_1AD0D] = 1;
     draw_hint_icons(img);                              /* draw_hint_icons */
-    for (uint32_t a0 = 0x1a752; a0 != 0x1a82e; a0 += 4) {
-        if (be32(img + a0) != 0)
-            wr32(img + a0, (uint32_t)(be32(img + a0) - 0x101a8));
+    for (uint32_t p = 0x1a752; p != 0x1a82e; p += 4) {
+        if (be32(img + p) != 0)
+            wr32(img + p, (uint32_t)(be32(img + p) - 0x101a8));
     }
     wr32(img + A_CUR_FILENAME, 0x1a414);           /* "SCENA.BIN" */
     if (gemdos_fcreate(img) < 0)

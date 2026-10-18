@@ -23,17 +23,17 @@ void load_eche_bank_wrap(uint8_t *img, uint32_t d0);
 uint32_t advance_text_entry(uint8_t *img, uint32_t a1, uint32_t d4);
 
 /* 0x1929a — escribe registro/dato en $FF8800/$FF8802 (reg 7 = mixer) */
-void ym_write(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d0_out,
-                uint32_t *d1_out) {
+void ym_write(uint8_t *img, uint32_t reg_in, uint32_t data, uint32_t *reg_out,
+                uint32_t *data_out) {
     (void)img;
-    uint32_t reg = d0 & 0xff;
+    uint32_t reg = reg_in & 0xff;
     if (reg == 7) {
         uint32_t bus = OS_PSG_DATA_READ;
-        d1 = ((d1 ^ bus) & 0x3f) ^ bus;
+        data = ((data ^ bus) & 0x3f) ^ bus;
     }
-    psg_port_write(reg, (uint8_t)d1);
-    if (d0_out) *d0_out = d0;
-    if (d1_out) *d1_out = d1;
+    psg_port_write(reg, (uint8_t)data);
+    if (reg_out) *reg_out = reg_in;
+    if (data_out) *data_out = data;
 }
 
 /* FUN_00019282 @ 0x19282: silencia/resetea el PSG: escribe D1 (0 inicial) en los
@@ -41,10 +41,10 @@ void ym_write(uint8_t *img, uint32_t d0, uint32_t d1, uint32_t *d0_out,
  * bucle: ym_write lo pisa con el resultado del RMW al pasar por el registro 7, y los
  * registros 6..0 reciben ese valor (el ledger del oraculo lo confirma). */
 void ym_reset(uint8_t *img) {
-    uint32_t d1 = 0;
-    for (uint32_t d0 = 0xd;; d0 = (d0 - 1) & 0xffff) {
-        ym_write(img, d0, d1, 0, &d1);
-        if (d0 == 0)
+    uint32_t data = 0;
+    for (uint32_t reg = 0xd;; reg = (reg - 1) & 0xffff) {
+        ym_write(img, reg, data, 0, &data);
+        if (reg == 0)
             break;
     }
     ym_write(img, 7, 0x18, 0, 0);
@@ -61,43 +61,43 @@ void ym_reset(uint8_t *img) {
  * punteros 0x1a4e8 si D4 bit7, y carga el recurso con 0x1066e si $1a57c != 0xff),
  * avanza la entrada (0x10f8e deja A2 en $1a4dc), arma el Timer A del MFP y publica
  * los punteros 0x192ca/0x192ce/0x192c6/0x192c2 y el vector $134 = 0x1910e. */
-static void sound_start_body(uint8_t *img, uint32_t d1, uint32_t d4) {
-    uint32_t a1 = 0x55b0a;
-    if (d4 & 0x80) {
-        uint32_t d0 = (d4 & 0x70) >> 2;
-        d4 &= 0x0f;
-        a1 = be32(img + 0x1a4e8 + d0);
-        d0 = (d0 >> 2) & 0xff;
+static void sound_start_body(uint8_t *img, uint32_t reload, uint32_t bank) {
+    uint32_t p = 0x55b0a;
+    if (bank & 0x80) {
+        uint32_t idx = (bank & 0x70) >> 2;
+        bank &= 0x0f;
+        p = be32(img + 0x1a4e8 + idx);
+        idx = (idx >> 2) & 0xff;
         if (img[0x1a57c] != 0xff) {
-            load_eche_bank_wrap(img, d0);
-            a1 = 0x64c8e;
+            load_eche_bank_wrap(img, idx);
+            p = 0x64c8e;
         }
     }
-    a1 = advance_text_entry(img, a1, d4);
+    p = advance_text_entry(img, p, bank);
     wr32(img + 0x192ca, be32(img + A_CUR_STR_END));
-    img[0x192ce] = img[a1];
-    a1++;
+    img[0x192ce] = img[p];
+    p++;
     hw_write8(0xfffa19, 0);
     hw_write8(0xfffa13, 0x20);
     hw_write8(0xfffa07, 0x20);
     hw_write8(0xfffa19, 2);
-    if ((d1 & 0xff) != 0)
-        img[a1] = (uint8_t)d1;
-    hw_write8(0xfffa1f, img[a1]);
-    a1++;
-    wr32(img + 0x192c6, a1);
-    wr32(img + 0x192c2, a1);
+    if ((reload & 0xff) != 0)
+        img[p] = (uint8_t)reload;
+    hw_write8(0xfffa1f, img[p]);
+    p++;
+    wr32(img + 0x192c6, p);
+    wr32(img + 0x192c2, p);
     wr32(img + 0x134, 0x1910e);
 }
 
 /* FUN_00018fc4 @ 0x18fc4: entrada canonica (D1 = 0). */
-void sound_timer_start(uint8_t *img, uint32_t d4) {
-    sound_start_body(img, 0, d4);
+void sound_timer_start(uint8_t *img, uint32_t bank) {
+    sound_start_body(img, 0, bank);
 }
 
 /* FUN_00018fc6 @ 0x18fc6: entrada con D1 explicito (la usa 0x18f7a). */
-void sound_timer_start_body(uint8_t *img, uint32_t d1, uint32_t d4) {
-    sound_start_body(img, d1, d4);
+void sound_timer_start_body(uint8_t *img, uint32_t reload, uint32_t bank) {
+    sound_start_body(img, reload, bank);
 }
 
 /* FUN_00019084 @ 0x19084: para el Timer A: TACR=0, IERB=0, IERA=0 y limpia 0x192d0.
@@ -120,8 +120,8 @@ void sound_off(uint8_t *img) {
 
 /* FUN_0001906a @ 0x1906a: arranca el Timer A (0x18fc4), apunta el vector $134 a la
  * variante 0x190f6 y reinicia el puntero de sample a 0x192ca. */
-void sound_vector(uint8_t *img, uint32_t d4) {
-    sound_timer_start(img, d4);
+void sound_vector(uint8_t *img, uint32_t bank) {
+    sound_timer_start(img, bank);
     wr32(img + 0x134, 0x190f6);
     wr32(img + 0x192c6, be32(img + 0x192ca));
 }
@@ -131,9 +131,9 @@ void sound_vector(uint8_t *img, uint32_t d4) {
  * Todos saltan el `trap #14/$26` cuando 0x1ab4f != 0 (el original tambien): el
  * candidato ejecuta la rutina destino directamente. Cada envoltorio elige una
  * entrada distinta; 0x18f7a usa 0x18fc6 (D1 explicito) y 0x18f8e la canonica 0x18fc4. */
-void supexec_b(uint8_t *img, uint32_t d1, uint32_t d4) {
+void supexec_b(uint8_t *img, uint32_t reload, uint32_t bank) {
     if (img[A_FRAME_1AB4F] == 0)
-        sound_timer_start_body(img, d1, d4);
+        sound_timer_start_body(img, reload, bank);
 }
 /* 0x18f84 — sound stop supexec */
 void sound_stop_supexec(uint8_t *img) {
@@ -141,20 +141,20 @@ void sound_stop_supexec(uint8_t *img) {
         sound_off(img);
 }
 /* 0x18f8e — ciclo de "modo/vista" $1acca (0..3). Cada rama fija $1acc6, corre 0x14496 y pinta con los blitters 111b6/114ba/117fe/11afa (o sus envoltorios). Los casos 1/3... */
-void sound_play_a(uint8_t *img, uint32_t d4) {
+void sound_play_a(uint8_t *img, uint32_t bank) {
     if (img[A_FRAME_1AB4F] == 0)
-        sound_timer_start(img, d4);
+        sound_timer_start(img, bank);
 }
 /* 0x18f98 — sound play b */
-void sound_play_b(uint8_t *img, uint32_t d4) {
+void sound_play_b(uint8_t *img, uint32_t bank) {
     if (img[A_FRAME_1AB4F] == 0)
-        sound_vector(img, d4);
+        sound_vector(img, bank);
 }
 /* 0x18fa2 — supexec a */
-void supexec_a(uint8_t *img, uint32_t *a6) {
+void supexec_a(uint8_t *img, uint32_t *script) {
     if (img[A_FRAME_1AB4F] == 0)
         sound_timer_stop(img);
-    *a6 += 1;
+    *script += 1;
 }
 /* 0x18fa4 — sound stop */
 void sound_stop(uint8_t *img) {
@@ -164,12 +164,12 @@ void sound_stop(uint8_t *img) {
 
 /* FUN_00018f6e @ 0x18f6e: handler de byte que lee D4/D1 de A6[1]/A6[2], A6 += 3 y cae
  * en 0x18f7a. */
-uint32_t supexec_wrap(uint8_t *img, uint32_t a6) {
-    uint32_t d4 = img[a6 + 1];
-    uint32_t d1 = img[a6 + 2];
-    a6 += 3;
-    supexec_b(img, d1, d4);
-    return a6;
+uint32_t supexec_wrap(uint8_t *img, uint32_t script) {
+    uint32_t bank = img[script + 1];
+    uint32_t reload = img[script + 2];
+    script += 3;
+    supexec_b(img, reload, bank);
+    return script;
 }
 
 /* ---- ISR del Timer A (0x190b8 / 0x190f6 / 0x1910e) ----
@@ -180,11 +180,11 @@ uint32_t supexec_wrap(uint8_t *img, uint32_t a6) {
  * $ff8800/$ff8802/$ff8804/$ff8806: dos registros PSG por long, con los pares
  * [reg1][val1][reg2][val2] de la tabla 0x19184. */
 
-static void pcm_movep(uint8_t *img, uint32_t d0) {
-    /* La base del `move.l (d16,pc,d0.w),d0` es la direccion de la PALABRA DE EXTENSION
+static void pcm_movep(uint8_t *img, uint32_t idx) {
+    /* La base del `move.l (d16,pc,idx.w),idx` es la direccion de la PALABRA DE EXTENSION
      * (0x19130 + 0x52 = 0x19182), no la de la instruccion siguiente: los longs de la
      * tabla van en 0x19182 + (byte & 0xfc). */
-    uint32_t v = be32(img + 0x19182 + (d0 & 0xfc));
+    uint32_t v = be32(img + 0x19182 + (idx & 0xfc));
     psg_port_write((v >> 24) & 0xff, (v >> 16) & 0xff);
     psg_port_write((v >> 8) & 0xff, v & 0xff);
 }
@@ -192,15 +192,15 @@ static void pcm_movep(uint8_t *img, uint32_t d0) {
 /* Cuerpo de 0x190b8: carga el siguiente bloque de la lista de samples (palabra 0 nula
  * -> parar). Sin el epilogo, que comparten las tres entradas. */
 static void pcm_body_190b8(uint8_t *img) {
-    uint32_t a0 = be32(img + 0x1930e);
-    if (be16(img + a0) != 0) {
-        hw_write8(0xfffa1f, img[a0 + 1]);
-        a0 += 2;
-        uint32_t d0 = be16(img + a0); a0 += 2;
-        wr32(img + 0x192c6, (d0 + be32(img + 0x192be)) & 0xffffffffu);
-        d0 = be16(img + a0); a0 += 2;
-        wr32(img + 0x192ca, (d0 + be32(img + 0x192be)) & 0xffffffffu);
-        wr32(img + 0x1930e, a0);
+    uint32_t p = be32(img + 0x1930e);
+    if (be16(img + p) != 0) {
+        hw_write8(0xfffa1f, img[p + 1]);
+        p += 2;
+        uint32_t off = be16(img + p); p += 2;
+        wr32(img + 0x192c6, (off + be32(img + 0x192be)) & 0xffffffffu);
+        off = be16(img + p); p += 2;
+        wr32(img + 0x192ca, (off + be32(img + 0x192be)) & 0xffffffffu);
+        wr32(img + 0x1930e, p);
     } else {
         img[0x192cf] = 0;
         sound_timer_stop(img);
@@ -232,11 +232,11 @@ void sound_isr_load(uint8_t *img) {
 
 /* FUN_0001910e @ 0x1910e: ISR PCM hacia delante (vector $134). */
 void sound_isr_fwd(uint8_t *img) {
-    uint32_t a0 = be32(img + 0x192c6);
-    if (a0 < be32(img + 0x192ca)) {
-        uint32_t d0 = img[a0++];
-        wr32(img + 0x192c6, a0);
-        pcm_movep(img, d0 & 0xfc);
+    uint32_t p = be32(img + 0x192c6);
+    if (p < be32(img + 0x192ca)) {
+        uint32_t byte = img[p++];
+        wr32(img + 0x192c6, p);
+        pcm_movep(img, byte & 0xfc);
     } else {
         pcm_tail(img);
     }
@@ -245,11 +245,11 @@ void sound_isr_fwd(uint8_t *img) {
 
 /* FUN_000190f6 @ 0x190f6: ISR PCM hacia atras (vector $134, variante 0x1906a). */
 void sound_isr_back(uint8_t *img) {
-    uint32_t a0 = be32(img + 0x192c6);
-    if (a0 >= be32(img + 0x192c2)) {
-        uint32_t d0 = img[--a0];
-        wr32(img + 0x192c6, a0);
-        pcm_movep(img, d0 & 0xfc);
+    uint32_t p = be32(img + 0x192c6);
+    if (p >= be32(img + 0x192c2)) {
+        uint32_t byte = img[--p];
+        wr32(img + 0x192c6, p);
+        pcm_movep(img, byte & 0xfc);
     } else {
         pcm_tail(img);
     }
