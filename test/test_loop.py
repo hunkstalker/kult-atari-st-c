@@ -1981,7 +1981,7 @@ def test_fun_16abe():
     assert info["ret"] == info["regs"]["a6"]
 
 
-def test_fun_14f74():
+def _f14f74_pokes(acec=0x40, acd2=0x01):
     pokes = _grid_pokes()
     pokes.update({
         0x1AD20: bytes([0x15]),
@@ -1989,8 +1989,8 @@ def test_fun_14f74():
         0x1ACC7: bytes([0x00]),
         0x1A466: (0x40000).to_bytes(4, "big"),
         0x40002: bytes([0x00, 0x00]),
-        0x1ACEC: bytes([0x40]),
-        0x1ACD2: bytes([0x01]),
+        0x1ACEC: bytes([acec]),
+        0x1ACD2: bytes([acd2]),
         0x1AB50: (0).to_bytes(2, "big"),
         0x1ACC9: bytes([0x00]),
         0x1AB4F: bytes([0x00]),
@@ -2009,13 +2009,20 @@ def test_fun_14f74():
     })
     pokes[0x55B0A] = bytes([0x00, 0x08, 0x03, 0x55, 0x11, 0x22, 0x33, 0x44])
     pokes[0x40000] = bytes(8)
-    diffs, info = differential(
-        FUN_14F74, {"a6": 0x30000, "_pokes": pokes},
-        lambda lib, buf: lib.grid_wait(buf, 0x30000),
-        schedule=_wait_schedule(), wait_sites=[IKBD_SITE, VBL_SITE],
-        max_insns=3_000_000)
-    assert not diffs, report(diffs)
-    assert info["ret"] == info["regs"]["a6"]
+    return pokes
+
+
+def test_fun_14f74():
+    # (0x40,0x01): tanto ASM como C saltan 0x9005; (0x10,0x05): 0x1acec<0x3f hace
+    # que 0x15022 despache sin 0x9005 (el C viejo lo sustituia por 0x9005).
+    for acec, acd2 in ((0x40, 0x01), (0x10, 0x05)):
+        diffs, info = differential(
+            FUN_14F74, {"a6": 0x30000, "_pokes": _f14f74_pokes(acec, acd2)},
+            lambda lib, buf: lib.grid_wait(buf, 0x30000),
+            schedule=_wait_schedule(), wait_sites=[IKBD_SITE, VBL_SITE],
+            max_insns=3_000_000)
+        assert not diffs, f"acec={acec:#x} acd2={acd2:#x}\n{report(diffs)}"
+        assert info["ret"] == info["regs"]["a6"]
 
 
 FUN_18A30 = 0x18A30

@@ -101,7 +101,8 @@ uint32_t grid_wait(uint8_t *img, uint32_t script) {
     icon_state_b(img, script, 0);
     if (img[A_SEL_1ACC9] != 0) {
         uint32_t off = ((uint32_t)(img[A_SEL_1ACC9] - 1) & 0xffu) * 0xau;
-        wr16(img + A_THE_COMMAND, be16(img + A_DAT_1AB62 + off + 8));
+        /* El original lee el campo +0 de la entrada de la tabla (a0,d0.l), no +8. */
+        wr16(img + A_THE_COMMAND, be16(img + A_DAT_1AB62 + off));
         if (be16(img + A_THE_COMMAND) != 0) {
             tail_15022(img);
             return script;
@@ -118,7 +119,10 @@ void palette_cycle(uint8_t *);
 
 /* 0x14f5e — anim threshold2 */
 uint32_t anim_threshold2(uint8_t *img, uint32_t script) {
-    (void)anim_threshold(img, script, 2);
+    /* 0x14f24 hace `addq.l #4,a7` (salta al llamante) cuando devuelve 2; entonces
+     * 0x16310 y el flag no se ejecutan. */
+    if (anim_threshold(img, script, 2) == 2)
+        return script;
     palette_cycle(img);
     img[A_DAT_1AD0F] = 0xff;
     return script;
@@ -659,7 +663,8 @@ restore:
 /* FUN_00015022 (codelet compartido): despacha; si el modo es valido y no es 1,
  * convierte en el comando 0x9005. */
 static void tail_15022(uint8_t *img) {
-    if (img[0x1acec] < 0x3f && img[0x1acd2] < 0x16 && img[0x1acd2] != 1)
+    /* El original despacha sin tocar el comando si 0x1acec < 0x3f (bcs a 0x103ae). */
+    if (img[0x1acec] >= 0x3f && img[0x1acd2] < 0x16 && img[0x1acd2] != 1)
         wr16(img + 0x1a50e, 0x9005);
     run_command_keep_sp(img, 0);
 }
