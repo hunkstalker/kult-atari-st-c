@@ -15,7 +15,7 @@ sound.c — envoltorio de escritura del PSG (0x1929a).  FUN_0001929a @ 0x1929a (
 | `0x1906a` | `sound_vector` | FUN_0001906a @ 0x1906a: arranca el Timer A (0x18fc4), apunta el vector $134 a la variante 0x190f6 y reinicia el puntero de sample a 0x192ca. | test_sound |
 | `0x18f7a` | `supexec_b` | ---- envoltorios XBIOS Supexec (0x18f6e..0x18fa4) ----  Todos saltan el `trap #14/$26` cuando 0x1ab4f != 0 (el original tambien): el candidato ejecuta la rutina destino directamente. Cada envoltorio elige una entrada distinta; 0x18f7a usa 0x18fc6 (D1 explicito) y 0x18f8e la canonica 0x18fc4. | test_sound |
 | `0x18f84` | `sound_stop_supexec` | sound stop supexec | test_sound |
-| `0x18f8e` | `sound_play_a` | ciclo de "modo/vista" $1acca (0..3). Cada rama fija $1acc6, corre 0x14496 y pinta con los blitters 111b6/114ba/117fe/11afa (o sus envoltorios). Los casos 1/3... | test_sound, test_video |
+| `0x18f8e` | `sound_play_a` | Supexec wrapper cuyo destino es 0x18fc4 (sound_timer_start, D1=0). | test_sound, test_video |
 | `0x18f98` | `sound_play_b` | sound play b | test_sound, test_video |
 | `0x18fa2` | `supexec_a` | supexec a | test_sound |
 | `0x18fa4` | `sound_stop` | sound stop | test_sound |

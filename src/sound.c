@@ -140,7 +140,7 @@ void sound_stop_supexec(uint8_t *img) {
     if (img[A_FRAME_1AB4F] == 0)
         sound_off(img);
 }
-/* 0x18f8e — ciclo de "modo/vista" $1acca (0..3). Cada rama fija $1acc6, corre 0x14496 y pinta con los blitters 111b6/114ba/117fe/11afa (o sus envoltorios). Los casos 1/3... */
+/* 0x18f8e — Supexec wrapper cuyo destino es 0x18fc4 (sound_timer_start, D1=0). */
 void sound_play_a(uint8_t *img, uint32_t bank) {
     if (img[A_FRAME_1AB4F] == 0)
         sound_timer_start(img, bank);
