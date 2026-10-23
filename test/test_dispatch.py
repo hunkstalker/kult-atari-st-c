@@ -12,6 +12,7 @@ import harness
 from harness import differential, report
 
 RUN = 0x103ae
+RUN_COMMAND = 0x103a8
 VM_BYTES = 0x10630
 COMMAND = 0x1a50e
 SCRIPT_END = 0x1a4e0
@@ -26,6 +27,8 @@ harness._lib.vm_run.argtypes = [_u8p, ctypes.c_uint32]
 harness._lib.vm_run.restype = ctypes.c_uint32
 harness._lib.run_command_keep_sp.argtypes = [_u8p, ctypes.c_uint32]
 harness._lib.run_command_keep_sp.restype = None
+harness._lib.run_command_keep_sp_a6.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.run_command_keep_sp_a6.restype = ctypes.c_uint32
 
 
 def _screen_pokes():
@@ -118,6 +121,19 @@ def test_run_command_zero_nibble():
     assert not diffs, report(diffs)
 
 
+def test_run_command_keep_sp_a6_nibble0():
+    """La variante que devuelve A6 debe coincidir con el A6 final del oráculo.
+    La usa icon_ring_loop para modelar el tail-call de 0x1592e (T-083)."""
+    pokes = {TEMPL + 0x10: bytes([0]),
+             SCRIPT_END: (SCRIPT + 100).to_bytes(4, "big")}
+    pokes[COMMAND] = (0x0010).to_bytes(2, "big")
+    diffs, info = differential(
+        RUN, {"_pokes": pokes},
+        lambda lib, buf: lib.run_command_keep_sp_a6(buf, 0))
+    assert not diffs, report(diffs)
+    assert info["ret"] == info["regs"]["a6"]
+
+
 def test_run_command_ab_noop():
     """0xa035 -> índice 52 de cmd_jump_table = 0x11014 (rts)."""
     pokes = {COMMAND: (0xA035).to_bytes(2, "big")}
@@ -137,9 +153,21 @@ def test_run_command_ab_copy_screen():
                             lambda lib, buf: lib.run_command_keep_sp(buf, 0))
     assert not diffs, report(diffs)
 
-# NOTA: la rama 0xf000/otra restaura A7 desde $1a826 (solo válido por run_command
-# 0x103a8, que guarda A7). No se prueba por run_command_keep_sp porque el oráculo
-# usaría un A7 basura al hacer rts; se cubrirá con run_command cuando se reconstruya.
+# La rama 0xf000/otra restaura A7 desde $1a826 (solo valido por run_command
+# 0x103a8, que guarda A7). El caso se prueba con run_command y STACK_TOP; con
+# run_command_keep_sp aislado el oracle usaria un A7 basura al hacer rts.
+
+
+def test_run_command_f000_unwind():
+    """run_command con 0xfxxx: el VM del sub-guion termina y el original vuelve
+    al llamante de run_command (A7 restaurado desde $1a826), saltandose el
+    despacho anidado. El boundary del port debe reproducir ese retorno no local."""
+    pokes = _template_chain(0x40)
+    pokes[COMMAND] = (0xF010).to_bytes(2, "big")
+    diffs, _ = differential(
+        RUN_COMMAND, {"_pokes": pokes},
+        lambda lib, buf: lib.run_command(buf, harness.emu.STACK_TOP))
+    assert not diffs, report(diffs)
 
 
 def test_run_command_text_box():

@@ -250,20 +250,26 @@ uint32_t elem_list_build(uint8_t *img, uint32_t index) {
 /* Exposicion con las salidas de registro (A6/D0/D1) que 0x18a98 necesita: el
  * original deja D0/D1 = x/y del script (o los de 0x1285a en la rama 0xff) y A6
  * avanzado. El envoltorio clasico devuelve solo A6. */
-uint32_t elem_command(uint8_t *img, uint32_t script, uint32_t *script_out, uint32_t *x_out,
-                        uint32_t *y_out) {
+uint32_t elem_command_ex(uint8_t *img, uint32_t script, uint32_t *script_out, uint32_t *x_out,
+                        uint32_t *y_out, int *aborted) {
     uint32_t px = 0, py = 0, h = 0;
+    if (aborted)
+        *aborted = 0;
     py = img[script + 1];
     if (py == 0xff) {
         script += 2;
         if (img[A_DAT_1AD0A] != 0) {
             *script_out = script; *x_out = px; *y_out = h;
+            if (aborted)
+                *aborted = 1;
             return script;
         }
         draw_selection_frame(img);
         uint32_t out[4];
         if (!elem_class_find(img, px, py, 0, h, out)) {
             *script_out = script; *x_out = px; *y_out = h;
+            if (aborted)
+                *aborted = 1;
             return script;
         }
         px = out[0]; py = out[1]; h = out[3];
@@ -297,10 +303,22 @@ uint32_t elem_command(uint8_t *img, uint32_t script, uint32_t *script_out, uint3
     return script;
 }
 
+/* 0x128a4 — variante de compatibilidad: no comunica el aborto a 0x1294c. */
+uint32_t elem_command(uint8_t *img, uint32_t script, uint32_t *script_out, uint32_t *x_out,
+                        uint32_t *y_out) {
+    return elem_command_ex(img, script, script_out, x_out, y_out, 0);
+}
+
 /* 0x128a4 — ---- handlers de comando 0x11xxx (encadenan la salida de 0x128a4) ---- 0x128a4 deja en el fichero de registros lo que sus llamantes encadenan: d2 = ancho (0x... */
-uint32_t elem_command_wrap(uint8_t *img, uint32_t script) {
+/* 0x128a4 — envoltorio con estado de aborto para los 12 llamantes. */
+uint32_t elem_command_wrap_ex(uint8_t *img, uint32_t script, int *aborted) {
     uint32_t script_out, x_out, y_out;
-    return elem_command(img, script, &script_out, &x_out, &y_out);
+    return elem_command_ex(img, script, &script_out, &x_out, &y_out, aborted);
+}
+
+/* 0x128a4 — envoltorio clasico (tests y llamantes que no necesitan aborto). */
+uint32_t elem_command_wrap(uint8_t *img, uint32_t script) {
+    return elem_command_wrap_ex(img, script, 0);
 }
 
 void reveal_region(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);

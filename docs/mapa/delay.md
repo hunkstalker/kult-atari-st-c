@@ -6,7 +6,7 @@ delay.c — esperas de VBL y retardo por ciclos del original.  wait_vbl      @ 0
 
 | dir | nombre | qué hace | pruebas |
 |---|---|---|---|
-| `0x13594` | `wait_vbl` | espera de VBL. (El original deja D0 con el valor anterior del contador; ningún llamante lo consume, así que el out-param no se modela.) | test_delay |
+| `0x13594` | `wait_vbl` | espera de VBL. (El original deja D0 con el valor anterior del contador; ningún llamante lo consume, así que el out-param no se modela.) | test_delay, test_video |
 | `0x16d1e` | `wait_vbl_even` | espera de VBL + contador par (paso de los wipes de texto). | test_delay |
 
 ## Estado (globales A_* usadas)

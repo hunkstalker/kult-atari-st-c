@@ -493,6 +493,9 @@ uint32_t object_info_card(uint8_t *img, uint32_t script) {
         if (img[p] == 0xff) {
             p = (p + 1) & 0xffffffffu;
             text_block_build(img, p, (p + 3) & 0xffffffffu);
+            /* 0x129d6 deja A5 al final del bloque de 3 bytes; sin este avance
+             * el bucle relee el bloque como entradas de la ficha. */
+            p = (p + 3) & 0xffffffffu;
         }
         bitmap = (bitmap + 4) & 0xffffffffu;
         uint32_t o[8];
@@ -506,11 +509,11 @@ uint32_t object_info_card(uint8_t *img, uint32_t script) {
                 else
                     screen_clean(img);
             } else {
-                wait = ((wait << 16) | (wait >> 16)) & 0xffffffffu;
-                wait = (wait >> 4) & 0xffffffffu;
-                do {
-                    wait = (wait - 1) & 0xffffffffu;
-                } while (wait != 0);
+                /* 0x16ec2-0x16ec8: swap + lsr.l #4 deja D1 = wait<<12; el
+                 * bucle original es `subq.l #1,d1` (8 ciclos) + `bne.w` (10),
+                 * 18 ciclos por iteracion. En el diferencial es no-op. */
+                uint32_t loops = ((wait << 16) | (wait >> 16)) >> 4;
+                cpu_delay_cycles((uint64_t)loops * 18u);
             }
         }
         if (end == p) break;
@@ -818,19 +821,13 @@ void portrait_intro(uint8_t *img) {
         run_text_entry(img, 0x1997e);
         wait_vbl(img);
         copy_screen(img);
-        {
-            uint32_t spin = 0xffff;
-            while (spin != 0xffff)
-                spin = (spin - 1) & 0xffff;
-        }
+        /* dbra d0 con d0=0xffff: 65536 iteraciones (no-op en diferencial). */
+        cpu_delay(0x10000u);
         run_text_entry(img, 0x19981);
         wait_vbl(img);
         copy_screen(img);
-        {
-            uint32_t spin = 0xffff;
-            while (spin != 0xffff)
-                spin = (spin - 1) & 0xffff;
-        }
+        /* dbra d0 con d0=0xffff: 65536 iteraciones (no-op en diferencial). */
+        cpu_delay(0x10000u);
         if (i == 0) break;
     }
     run_text_entry(img, 0x19984);

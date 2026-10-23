@@ -3,7 +3,7 @@
 **Objetivo:** llevar el C de `src/` al estándar de un *port nativo* (como hacen
 PokeSwift, Ship of Harkinian, re3…): identificadores con nombre semántico y
 control de flujo legible, **sin cambiar comportamiento** (lo garantizan las
-pruebas diferenciales; eran 478 al hacer este plan, hoy 499). La traza al original se conserva por el **registro**
+pruebas diferenciales; eran 478 al hacer este plan, hoy 518). La traza al original se conserva por el **registro**
 `work/names.txt`, el comentario `/* 0xADDR — … */` de cada función y el repo del
 decomp congelado; **no** por el texto del identificador.
 
@@ -132,13 +132,13 @@ Cada tanda = un commit. Dentro de cada módulo, función a función.
    aplicarlo (script o edición), **sin tocar la lógica**.
 3. Convertir los `goto` seguros; dejar los de colas compartidas con comentario.
 4. `make build/libkult.so` + `pytest test/test_<modulo>.py`; corregir.
-5. `make mapa`; `make test` completo (hoy 499 verde) y `test_readability` verde.
+5. `make mapa`; `make test` completo (hoy 518 verde) y `test_readability` verde.
 6. Actualizar la tabla de progreso de este documento y commitear.
 
 ## 5. Aceptación y red de seguridad
 
 - **Comportamiento:** las pruebas diferenciales deben seguir verdes (478 en la
-  fecha de este plan, hoy 499); son la garantía de que renombrar no cambia nada.
+  fecha de este plan, hoy 518); son la garantía de que renombrar no cambia nada.
 - **Legibilidad:** `test/test_readability.py` verde (0 sin dirección, 0
   identificadores de decompilador).
 - **Compilación:** 0 warnings (`-Wall -Wextra`).

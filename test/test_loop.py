@@ -2327,6 +2327,20 @@ def test_fun_16dec():
     assert info["ret"] == info["regs"]["a6"]
 
 
+def test_fun_16dec_text_block():
+    """0x16dec: tras 0xff, 0x129d6 consume el bloque de texto de 3 bytes y deja
+    A5 al final. El bucle exterior no debe releer esos bytes como entradas."""
+    pokes = _f16dec_pokes()
+    # Entrada de ficha: [len=6][lista=1][0xff][3 bytes de texto][fin]
+    pokes[0x246E6] = bytes([6, 1, 0xFF, 0, 0, 0])
+    diffs, info = differential(
+        FUN_16DEC, {"a6": 0x52000, "_pokes": pokes},
+        lambda lib, buf: lib.object_info_card(buf, 0x52000),
+        schedule=_vbl_k(1), wait_sites=[VBL_SITE], max_insns=1_200_000)
+    assert not diffs, report(diffs)
+    assert info["ret"] == info["regs"]["a6"]
+
+
 def test_fun_16dec_pista():
     pokes = _f16dec_pokes(e0=0x25)
     for i in range(0x24):
@@ -2545,8 +2559,10 @@ def test_fun_17a1a():
 
 
 FUN_18A98 = 0x18A98
-harness._lib.attract.argtypes = [_u8p, ctypes.c_uint32]
-harness._lib.attract.restype = ctypes.c_uint32
+harness._lib.attract_once.argtypes = [_u8p, ctypes.c_uint32]
+harness._lib.attract_once.restype = ctypes.c_uint32
+harness._lib.attract_loop.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32]
+harness._lib.attract_loop.restype = ctypes.c_uint32
 
 
 def _f18a98_pokes(first):
@@ -2589,7 +2605,7 @@ def test_fun_18a98():
     pokes = _f18a98_pokes(first=False)
     diffs, info = differential(
         FUN_18A98, {"a6": 0x30000, "_pokes": pokes},
-        lambda lib, buf: lib.attract(buf, 0x30000),
+        lambda lib, buf: lib.attract_once(buf, 0x30000),
         schedule=_vbl_k(53), wait_sites=[VBL_SITE], max_insns=20_000_000,
         stop_pc=0x18C80)
     assert not diffs, report(diffs)
@@ -2602,11 +2618,52 @@ def test_fun_18a98_first():
               "value": (k % 255) + 1} for k in range(1, 270)]
     diffs, info = differential(
         FUN_18A98, {"a6": 0x30000, "_pokes": pokes},
-        lambda lib, buf: lib.attract(buf, 0x30000),
+        lambda lib, buf: lib.attract_once(buf, 0x30000),
         schedule=sched, wait_sites=[VBL_SITE], max_insns=40_000_000,
         stop_pc=0x18C80)
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
+
+
+def test_fun_18a98_abort():
+    for kind in ("flag", "clase"):
+        pokes = _f18a98_pokes(first=False)
+        pokes[0x19715] = bytes([0xFF])
+        pokes[0x1ad0a] = bytes([1 if kind == "flag" else 0])
+        if kind == "clase":
+            pokes[0x1a81e] = (0x60000).to_bytes(4, "big")
+            pokes[0x60000] = (0).to_bytes(4, "big")
+            pokes[0x1a772] = (0x40000).to_bytes(4, "big")
+            pokes[0x40003] = bytes([0x37])
+            for i in range(24):
+                base = 0x19e19 + i * 6
+                pokes[base] = bytes([0x80])
+                for k in range(1, 6):
+                    pokes[base + k] = bytes([(i + k) & 0xFF])
+        # 0x18a98 empuja A6 (0x30000) antes del bsr: el addq.l #4/a7+rts del
+        # original salta al valor salvado, no al centinela del arnés. Se difiere ahí.
+        diffs, info = differential(
+            FUN_18A98, {"a6": 0x30000, "_pokes": pokes},
+            lambda lib, buf: lib.attract_once(buf, 0x30000),
+            max_insns=40_000_000, stop_pc=0x30000)
+        assert not diffs, f"{kind}\n{report(diffs)}"
+        assert info["ret"] == 0x19716, f"{kind}: {info['ret']:#x}"
+        assert info["regs"]["a6"] == 0x19716, f"{kind} a6"
+
+
+def test_fun_18a98_loop_once():
+    # 0x18c80: tras la primera pasada, el original llama a f_01834a con D5=0x64
+    # y vuelve a 0x18c80. Acotamos a una iteración (max_loops=1) y comparamos
+    # con el oráculo parado en el `bra` del bucle (0x18c8a).
+    pokes = _f18a98_pokes(first=False)
+    diffs, info = differential(
+        FUN_18A98, {"a6": 0x30000, "_pokes": pokes},
+        lambda lib, buf: lib.attract_loop(buf, 0x30000, 1),
+        schedule=_vbl_k(54), wait_sites=[VBL_SITE], max_insns=40_000_000,
+        stop_pc=0x18C8A)
+    assert not diffs, report(diffs)
+    assert info["ret"] == 0x30001
+    assert info["regs"]["a6"] == 0x30001
 
 
 FUN_12CE4 = 0x12CE4

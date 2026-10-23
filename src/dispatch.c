@@ -16,6 +16,7 @@
 
 #include "machine.h"
 #include "addrs.h"
+#include "run_boundary.h"
 
 void  walk_entry(uint8_t *, uint32_t, uint32_t, uint32_t *, uint32_t *);
 uint32_t copy_screen_a6(uint8_t *, uint32_t);      /* copy_screen (byte handler 68 / cmd 105) */
@@ -98,6 +99,7 @@ uint32_t text_box_icon(uint8_t *, uint32_t);
 void textform_fwd_entry(uint8_t *, uint32_t);
 void textform_rev_entry(uint8_t *, uint32_t);
 uint32_t icon_ring_loop(uint8_t *, uint32_t);
+uint32_t icon_ring_loop_ex(uint8_t *, uint32_t, int *);
 uint32_t view_mode_cycle(uint8_t *, uint32_t);
 uint32_t text_table_paint(uint8_t *, uint32_t);
 uint32_t scene_mode_apply(uint8_t *, uint32_t);
@@ -168,6 +170,10 @@ void obj_wait_cmd_a(uint8_t *);
 void obj_wait_cmd_b(uint8_t *);
 uint32_t load_room(uint8_t *);
 uint32_t save_room(uint8_t *);
+
+/* Resultado de byte_handler para un tail-call: abandona el VM exterior y
+ * devuelve el A6 final codificado en los bits bajos (los A6 reales < 2^24). */
+#define VM_TAIL_FLAG 0x80000000u
 
 static uint32_t byte_handler(uint32_t b, uint8_t *img, uint32_t script) {
     uint32_t n;
@@ -248,7 +254,11 @@ static uint32_t byte_handler(uint32_t b, uint8_t *img, uint32_t script) {
     case 55: return text_box_icon(img, script);
     case 57: textform_fwd_entry(img, script); return addr_add(script, 2);
     case 58: textform_rev_entry(img, script); return addr_add(script, 2);
-    case 61: return icon_ring_loop(img, script);
+    case 61: {
+        int tail = 0;
+        uint32_t r = icon_ring_loop_ex(img, script, &tail);
+        return tail ? (VM_TAIL_FLAG | (r & 0x7fffffffu)) : r;
+    }
     case 62: return view_mode_cycle(img, script);
     case 65: return text_table_paint(img, script);
     case 66: return scene_mode_apply(img, script);
@@ -295,6 +305,8 @@ uint32_t vm_run(uint8_t *img, uint32_t script) {
         if (script == be32(img + A_TEMPL_PTR)) return script;
         if (byte >= 0x6b || byte == 0) return script;
         script = byte_handler(byte, img, script);
+        if (script & VM_TAIL_FLAG)
+            return script & ~VM_TAIL_FLAG;
     }
 }
 
@@ -477,39 +489,59 @@ static void kult_dbg_cmd(uint32_t cmd, int implemented) {
                 (unsigned)(cmd & 0x3ff) - 1, implemented ? "ok" : "SIN HANDLER");
 }
 
-/* 0x103ae — repite la carga de A:CLEAR.BIN (0x291c B en 0x1a752) hasta que exista (si falla lanza 0x918e); al exito reinicia la pila (A7 = 0x1d1fe), marca $1ad0f, avanza... */
-void run_command_keep_sp(uint8_t *img, uint32_t script) {
+/* 0x103ae — despacho de comando. Devuelve el A6 final de la VM, que solo
+ * necesitan los llamantes que modelan el retorno doble/tail-call de 0x1592e
+ * (`icon_ring_loop`). `run_command_keep_sp` conserva la firma historica. */
+uint32_t run_command_keep_sp_a6(uint8_t *img, uint32_t script) {
     uint32_t cmd = be16(img + A_THE_COMMAND);
     if (getenv("KULT_DBG_RUN"))
         fprintf(stderr, "[run] cmd=%04x script=%05x\n", (unsigned)cmd, (unsigned)script);
-    if (cmd == 0) return;
+    if (cmd == 0) return script;
     uint32_t nibble = cmd & 0xf000;
     if (nibble == 0x0000) {
-        vm_run(img, A_TEMPL_DATA + cmd);
+        return vm_run(img, A_TEMPL_DATA + cmd);
     } else if (nibble == 0xa000 || nibble == 0xb000) {
         cmd_handler(img, (cmd & 0x3ff) - 1, script);
+        return script;
     } else if (nibble == 0x9000) {
         draw_text_box_variant(img, cmd);                        /* caja de texto */
+        return script;
     } else {
         uint32_t end_out, entry_out;
         walk_entry(img, A_TEMPL_DATA, (cmd & 0x3ff) - 1, &end_out, &entry_out);
         wr32(img + A_TEMPL_PTR, end_out);
-        vm_run(img, entry_out);
+        uint32_t r = vm_run(img, entry_out);
+        /* 0x103e0/0x103e4: solo 0xfxxx restaura A7 desde $1a826. El rts del
+         * VM vuelve al llamante de run_command (unwind), no al handler que
+         * despacho el comando. Sin boundary activo se mantiene el retorno
+         * normal como fallback. */
+        if (nibble == 0xf000 && run_unwind_boundary_active())
+            run_unwind_to_boundary();
+        return r;
     }
+}
+
+/* 0x103ae — variante compatible: despacha e ignora el A6 final. */
+void run_command_keep_sp(uint8_t *img, uint32_t script) {
+    (void)run_command_keep_sp_a6(img, script);
 }
 
 /* FUN_00010390 @ 0x10390: handler de byte que lee un word de script[1..2], lo marca con el
  * nibble 0xf000 (comando de plantilla) y salta al despacho. El comando formado es
- * siempre 0xf000, asi que 0x103ae toma la rama `walk_entry(TEMPL, cmd-1) + vm_run` y
- * deja A6 = fin del sub-guion; el handler DEVUELVE ese A6 (el `bra f_0103ae` deja
- * que el rts del sub-VM vuelva al VM llamante, que continua en esa direccion). */
+ * siempre 0xf000, asi que 0x103ae toma la rama `walk_entry(TEMPL, cmd-1) + vm_run`.
+ * Dentro de un boundary de run_command, el original restaura A7 desde $1a826 y el
+ * rts del sub-VM vuelve al llamante de run_command (unwind). Fuera de boundary se
+ * conserva el retorno anidado, que es lo que ejercitan los tests directos. */
 uint32_t dispatch_a6(uint8_t *img, uint32_t script) {
     uint32_t cmd = (((uint32_t)img[script + 2] << 8) | img[script + 1]) | 0xf000;
     wr16(img + A_THE_COMMAND, cmd & 0xffff);
     uint32_t end_out, entry_out;
     walk_entry(img, A_TEMPL_DATA, (cmd & 0x3ff) - 1, &end_out, &entry_out);
     wr32(img + A_TEMPL_PTR, end_out);
-    return vm_run(img, entry_out);
+    uint32_t r = vm_run(img, entry_out);
+    if (run_unwind_boundary_active())
+        run_unwind_to_boundary();
+    return r;
 }
 
 /* FUN_000186ee @ 0x186ee: reproduce la paleta 0x10, lanza el comando 0x916b (caja de

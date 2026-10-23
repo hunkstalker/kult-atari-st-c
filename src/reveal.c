@@ -94,14 +94,17 @@ void masked_word4(uint8_t *img, uint32_t dest, uint32_t bits, uint32_t phase) {
 /* FUN_00012f28 @ 0x12f28: revelado pixel a pixel del elemento. Tras 128a4 reescala
  * x/ancho <<2, fija el total (alto*ancho) en 0x1a49e y recorre las posiciones en
  * pasos de 0x11 (mod total) pintando el bit (0x12fb6) con retardo entre pasos. */
-uint32_t elem_command_wrap(uint8_t *, uint32_t);
+uint32_t elem_command_wrap_ex(uint8_t *, uint32_t, int *);
 uint32_t elem_blit_vbl(uint8_t *, uint32_t);
 
 /* 0x12f28 — reveal pixelado del elemento (dbf 0x64 / skip $1a570) */
 uint32_t reveal_pixel(uint8_t *img, uint32_t script) {
     if (img[A_SKIP_TRANSITION] != 0)
         return elem_blit_vbl(img, script);
-    script = elem_command_wrap(img, script);
+    int aborted;
+    script = elem_command_wrap_ex(img, script, &aborted);
+    if (aborted)
+        return script;
     uint32_t x = be16(img + A_ELEM_1A532);
     uint32_t w = be16(img + A_ELEM_1A52E);
     uint32_t h = be16(img + A_ELEM_1A52C);

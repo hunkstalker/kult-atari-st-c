@@ -313,6 +313,68 @@ def test_fun_11f2e():
     _run_cmd(FUN_11F2E, harness._lib.blit_dispatch_b)
 
 
+def _abort_pokes(kind):
+    """Script [00 ff] con las dos salidas de 0x128a4; A_ELEM_* ya validos."""
+    pokes = _cmd_elem_pokes(16, 3)
+    pokes[0x50000] = bytes([0x00, 0xFF])
+    pokes[0x1ad0a] = bytes([1 if kind == "flag" else 0])
+    if kind == "clase":
+        pokes[0x1a81e] = (0x60000).to_bytes(4, "big")
+        pokes[0x60000] = (0).to_bytes(4, "big")
+        pokes[0x1a772] = (0x40000).to_bytes(4, "big")
+        pokes[0x40003] = bytes([0x37])
+        for i in range(24):
+            base = 0x19e19 + i * 6
+            pokes[base] = bytes([0x80])
+            for k in range(1, 6):
+                pokes[base + k] = bytes([(i + k) & 0xFF])
+    return pokes
+
+
+def _run_abort(entry, fn):
+    for kind in ("flag", "clase"):
+        pokes = _abort_pokes(kind)
+        diffs, info = differential(
+            entry, {"a6": 0x50000, "_pokes": pokes},
+            lambda lib, buf, f=fn: f(buf, 0x50000),
+            max_insns=20_000_000)
+        assert not diffs, f"{entry:#x} {kind}\n{report(diffs)}"
+        assert info["ret"] == 0x50002, f"{entry:#x} {kind}: {info['ret']:#x}"
+        assert info["regs"]["a6"] == 0x50002, f"{entry:#x} {kind} a6"
+
+
+def test_fun_11f02_abort():
+    _run_abort(FUN_11F02, harness._lib.blit_dispatch_a)
+
+
+def test_fun_11f2e_abort():
+    _run_abort(FUN_11F2E, harness._lib.blit_dispatch_b)
+
+
+def test_fun_11f64_abort():
+    _run_abort(0x11F64, harness._lib.overlay_dispatch_1)
+
+
+def test_fun_11f98_abort():
+    _run_abort(0x11F98, harness._lib.overlay_dispatch_2)
+
+
+def test_fun_132aa_abort():
+    _run_abort(FUN_132AA, harness._lib.reveal_box_build)
+
+
+def test_fun_132ec_abort():
+    _run_abort(FUN_132EC, harness._lib.reveal_box_wait_a)
+
+
+def test_fun_1332e_abort():
+    _run_abort(FUN_1332E, harness._lib.reveal_box_wait_b)
+
+
+def test_fun_134da_abort():
+    _run_abort(FUN_134DA, harness._lib.elem_blit_vbl)
+
+
 FUN_132AA = 0x132AA
 harness._lib.reveal_box_build.argtypes = [_u8p, ctypes.c_uint32]
 harness._lib.reveal_box_build.restype = ctypes.c_uint32

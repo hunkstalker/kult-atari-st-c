@@ -113,7 +113,7 @@ Regla de oro: una pieza está hecha solo si su prueba diferencial pasa.
   entrada y compara **imagen de memoria + registros**; los efectos de hardware
   (paleta, PSG, …) van a un "ledger" de eventos que también se compara.
 - Baseline: las 469 pruebas del intento anterior pasan con el C viejo (verificado
-  al montar este repo). La suite nueva tiene **499** pruebas verdes (478 al
+  al montar este repo). La suite nueva tiene **518** pruebas verdes (478 al
   terminar el portado; crecieron con la revisión del C, `docs/REVISION.md`).
 
 ## 6. Piloto: PALETA (HECHO)
@@ -137,7 +137,7 @@ Piezas implicadas (en A `matching/`):
 0. **Setup** — HECHO (este repo, arnés, docs).
 1. **Piloto paleta** — HECHO (estilo acordado, §4.1).
 2. **Escalar por subsistemas** — HECHO: **todo el juego** portado (33 módulos,
-   417 símbolos de función en `names.txt`, 416 definiciones en `src/`; hoy 499
+   423 símbolos de función en `names.txt`, 422 definiciones en `src/`; hoy 518
    pruebas). El orden tentativo (paleta/cursor → input → vídeo/blit → texto/UI →
    animación → salas/transiciones → VM/guion → bucle → sonido → música) se
    cubrió; el detalle de tandas está en `docs/LEGIBILIDAD.md`.

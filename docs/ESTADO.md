@@ -11,11 +11,24 @@ La reimplementación en C cubre **todo el juego**. El decomp canónico en ASM
 este repo (`/app/kult-atari-st-c`) es la versión en C, fiel en **comportamiento**
 y verificada con el **diferencial** contra el oráculo (Musashi).
 
-- `src/`: **33 módulos**, ~12.460 líneas.
-- Nombres: **417 funciones** + **221 globales** en `work/names.txt` (registro único).
-- Pruebas: **499** diferenciales en verde, **0 warnings**.
+- `src/`: **33 módulos**, ~12.620 líneas.
+- Nombres: **423 funciones** + **221 globales** en `work/names.txt` (registro único).
+- Pruebas: **518** diferenciales en verde, **0 warnings**.
 - Legibilidad: **0** identificadores de registro/decompilador en código.
 - API pública del core + visibilidad on-target cerradas.
+
+## Baseline congelada
+
+- Tag: **`core-base-20261023`** (commit final de esta tanda).
+- Estado previo: **`core-pre-fixes-20261023`** (499 tests), para diff/rollback.
+- Alcance incluido: correcciones de camino/flujo y timing del core derivadas del
+  ASM; tests de regresión.
+- Fuera: T-082/audio, HAL (`platform/`, `boot/`, `app/`), diagnóstico y modelo
+  global de CPU del port.
+- Comparación útil:
+  `git diff core-pre-fixes-20261023..core-base-20261023`.
+- Política: cambios futuros al core exigen evidencia ASM + test; lo específico de
+  PC se queda en `kult-port-pc-compilation`.
 
 ## Cómo ejecutar
 
@@ -94,9 +107,12 @@ mapa (el harness necesita `dlsym`). Detalle en `docs/VISIBILIDAD.md`.
      prueba**; H-SCR1/H-LN1/H-SP1/H-TX1..TX5 *intencionales* justificados
      (palabras altas residuales, `bgt`/V y `dbra` inalcanzables) y H-SCR2/H-SE1
      (BAJA) arreglados. **0 ALTA/MEDIA abiertos.**
-   Resultado: **499 pruebas** verdes, `make regscan` `ids_reg=0`, `make core` OK,
-   0 warnings. **Queda pendiente la validación del usuario** (sus preguntas y
-   verificaciones); por eso este repo **no se congela** todavía.
+   Resultado: **518 pruebas** verdes, `make regscan` `ids_reg=0`, `make core` OK,
+   0 warnings. La base fue **validada en Windows (2026-10-23)** y queda
+   **congelada** como `core-base-20261023`. Las correcciones de caminos/timing
+   descubiertas en esa validación (T-081/T-083/T-087/T-088/T-089 y
+   T-073c/T-085/T-086/T-090) se aplicaron aquí. Quedan fuera, por ser HAL/audio o
+   diagnóstico, T-082 (`mode.c`), `platform/`, `boot/`, `app/` y las trazas.
 2. **Siguiente: la compilación** (`kult-port-pc-compilation`, nuevo repo), que
    **nace de este C** y **une Atari ST + Amiga**, con mejoras y **todos los
    idiomas**. Plan definitivo: **`docs/PLAN_COMPILACION.md`**; topología de

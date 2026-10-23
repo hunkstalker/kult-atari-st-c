@@ -9,7 +9,7 @@ contradice a este, manda este.
 | repo | papel | garantía | regla |
 |---|---|---|---|
 | `/app/kult-atari-st-decomp` | decomp **ASM** del original Atari ST | **byte a byte** (`sha256 2e85f223…`) | **congelado**; no se toca |
-| `/app/kult-atari-st-c` | **reimplementación en C** del ST, legible y renombrada | **mismo comportamiento** (diferencial Musashi) | es la **base**; revisión interna cerrada, **pendiente de validación del usuario** |
+| `/app/kult-atari-st-c` | **reimplementación en C** del ST, legible y renombrada | **mismo comportamiento** (diferencial Musashi) | es la **base congelada** (`core-base-20261023`) |
 | `/app/kult-port-pc-compilation` | **la compilación**: une **Atari ST + Amiga**, mejoras y **todos los idiomas** | por capas: core verificado + backends | **nace de `kult-atari-st-c`** (plan en ese repo) |
 | `/app/kult-port-legacy` | predecesor de modding | — | **solo referencia**; no se toca |
 
@@ -23,11 +23,12 @@ byte. Es la **verdad/especificación** y está **congelado**: no se modifica.
 La reimplementación en C moderno, legible y documentado, fiel en comportamiento
 y verificada con el **diferencial** (imagen + registros + ledger de efectos
 off-image) contra el oráculo Musashi. Cobertura: **todo el juego** (33 módulos,
-499 pruebas). Su revisión (P0/P1/P2) está **cerrada internamente**; queda
-**pendiente la validación del usuario** (preguntas y verificaciones).
+**518 pruebas**). Su revisión (P0/P1/P2) está **cerrada** y la base fue
+**validada en Windows (2026-10-23)**.
 
-**No se congela**: el código probablemente ya no se toque, pero sigue siendo el
-repo de trabajo hasta que el usuario valide. Es la **base** de la compilación.
+**Congelada** como `core-base-20261023`: es la base canónica de la compilación.
+Cambios futuros al core exigen evidencia ASM + test; lo específico de PC va en
+`kult-port-pc-compilation`.
 
 ### `kult-port-pc-compilation` — la compilación (proyecto nuevo)
 El objetivo de producto: un Kult **nativo en C para PC** que **una las versiones

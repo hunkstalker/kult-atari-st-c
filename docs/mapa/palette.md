@@ -7,7 +7,7 @@ palette.c — paleta del shifter (familia 0x135da / 0x162ce..0x16300).  Estado (
 | dir | nombre | qué hace | pruebas |
 |---|---|---|---|
 | `0x16300` | `xbios_setpalette` | XBIOS Setpalette(*(A_PALETTE_PTR)): trap #14, función 6. Efecto de hardware (off-image); el candidato lo registra por os_setpalette(). | test_palette |
-| `0x135da` | `set_palette` | `bsr.w 0x16300; rts`: alias público del Setpalette. | test_palette |
+| `0x135da` | `set_palette` | `bsr.w 0x16300; rts`: alias público del Setpalette. | test_palette, test_video |
 | `0x162e2` | `set_palette_entry` | fija una entrada de paleta: copia los 5 words de A_PAL_TABLE + d0*0xa a *(A_PALETTE_PTR)+2 y, al no tener `rts`, cae en 0x16300 (aplica la paleta). Es la entrada que usan 0x162da y 0x162ce. | test_palette |
 | `0x162da` | `set_palette_current` | d0 = byte A_PAL_INDEX_CUR (0x1acf4) y cae en 0x162e2. | test_palette |
 | `0x162ce` | `set_palette_from_entry` | d0 = A6[1] (índice tomado del guion), avanza A6 +2 y cae en 0x162e2. Devuelve el A6 resultante para poder comprobarlo como registro de salida. | test_palette |

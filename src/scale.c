@@ -212,7 +212,7 @@ void scale_blit(uint8_t *img, uint32_t w_in, uint32_t h_in, uint32_t phase,
 /* FUN_00013702 @ 0x13702 (byte 16): 128a4 + setup de 0x1a544/0x1a542/0x1a486;
  * escribe [filas][cols] en la entrada de icono que 128a4 deja en A2 (+0xe) y llama
  * al escalador 0x13a18. Devuelve A6 + 2 (los dos bytes leidos). */
-uint32_t elem_command_wrap(uint8_t *, uint32_t);
+uint32_t elem_command_wrap_ex(uint8_t *, uint32_t, int *);
 uint32_t elem_blit_vbl(uint8_t *, uint32_t);
 uint32_t screen_address(uint8_t *, uint32_t, uint32_t, uint32_t *);
 
@@ -226,7 +226,10 @@ uint32_t scale_prep(uint8_t *img, uint32_t script) {
         if (k == 0)
             break;
     }
-    script = elem_command_wrap(img, script);
+    int aborted;
+    script = elem_command_wrap_ex(img, script, &aborted);
+    if (aborted)
+        return script;
     uint32_t phase;
     uint32_t addr = screen_address(img, be16(img + A_ELEM_1A532),
                                      be16(img + A_ELEM_1A530), &phase);
@@ -386,7 +389,10 @@ uint32_t screen_address_raw(uint8_t *, uint32_t, uint32_t, uint32_t *);
 uint32_t scale_loop(uint8_t *img, uint32_t script) {
     if (img[A_SKIP_TRANSITION] != 0)
         return elem_blit_vbl(img, script);
-    script = elem_command_wrap(img, script);
+    int aborted;
+    script = elem_command_wrap_ex(img, script, &aborted);
+    if (aborted)
+        return script;
     uint32_t x = be16(img + A_ELEM_1A532);
     uint32_t y = be16(img + A_ELEM_1A530);
     uint32_t w = be16(img + A_ELEM_1A52E);

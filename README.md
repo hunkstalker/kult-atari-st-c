@@ -56,9 +56,9 @@ docs/                 PROYECTOS, PLAN_COMPILACION, ESTADO, PLAN, PROMPT_SESION,
 
 **Completado**: la reimplementación cubre **todo el juego**.
 
-- `src/`: **33 módulos** (~12.400 líneas de C), **417 funciones** identificadas
+- `src/`: **33 módulos** (~12.620 líneas de C), **423 funciones** identificadas
   (0 placeholders) y **221 globales** con nombre.
-- `test/`: **499 pruebas diferenciales** verdes contra el oráculo (Musashi),
+- `test/`: **518 pruebas diferenciales** verdes contra el oráculo (Musashi),
   **0 warnings** de compilación.
 - Convenciones, registro único de nombres (`names.txt`), generación de
   `addrs.h`/`docs/mapa/`, API/visibilidad on-target y **legibilidad** (0
@@ -69,9 +69,9 @@ docs/                 PROYECTOS, PLAN_COMPILACION, ESTADO, PLAN, PROMPT_SESION,
   visibilidad on-target: `docs/VISIBILIDAD.md`.
 - **Siguiente:** **la compilación** (`kult-port-pc-compilation`), que nace de
   este core y une **Atari ST + Amiga**, con mejoras y todos los idiomas. Plan:
-  **`docs/PLAN_COMPILACION.md`**. La revisión del C de este repo está cerrada
-  internamente (`docs/REVISION.md` §7/§9/§11), **pendiente de validación del
-  usuario**.
+  **`docs/PLAN_COMPILACION.md`**. La revisión del C está cerrada y la base fue
+  **validada en Windows (2026-10-23)**; queda **congelada** como
+  `core-base-20261023` (`docs/REVISION.md` §7/§9/§11).
 
 ## Cómo se verifica
 

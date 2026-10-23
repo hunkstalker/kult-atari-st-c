@@ -109,6 +109,39 @@ def test_fun_13702():
         assert info["ret"] == info["regs"]["a6"], "a6"
 
 
+def _abort_pokes(kind):
+    pokes = _elem_pokes(16, 3)
+    pokes[0x50000] = bytes([0x00, 0xFF])
+    pokes[0x1ad0a] = bytes([1 if kind == "flag" else 0])
+    if kind == "clase":
+        pokes[0x1a81e] = (0x60000).to_bytes(4, "big")
+        pokes[0x60000] = (0).to_bytes(4, "big")
+        pokes[0x1a772] = (0x40000).to_bytes(4, "big")
+        pokes[0x40003] = bytes([0x37])
+        for i in range(24):
+            base = 0x19e19 + i * 6
+            pokes[base] = bytes([0x80])
+            for k in range(1, 6):
+                pokes[base + k] = bytes([(i + k) & 0xFF])
+    return pokes
+
+
+def _run_abort(entry, fn):
+    for kind in ("flag", "clase"):
+        pokes = _abort_pokes(kind)
+        diffs, info = differential(
+            entry, {"a6": 0x50000, "_pokes": pokes},
+            lambda lib, buf, f=fn: f(buf, 0x50000),
+            max_insns=20_000_000)
+        assert not diffs, f"{entry:#x} {kind}\n{report(diffs)}"
+        assert info["ret"] == 0x50002, f"{entry:#x} {kind}: {info['ret']:#x}"
+        assert info["regs"]["a6"] == 0x50002, f"{entry:#x} {kind} a6"
+
+
+def test_fun_13702_abort():
+    _run_abort(FUN_13702, harness._lib.scale_prep)
+
+
 FUN_1398E = 0x1398E
 harness._lib.scale_list_build.argtypes = [_u8p, ctypes.c_uint32, ctypes.c_uint32,
                                      ctypes.c_uint32, ctypes.c_uint32]
@@ -180,3 +213,7 @@ def test_fun_13740():
                 schedule=sched, wait_sites=[0x1359a])
             assert not diffs, f"skip={skip} w={w} h={h}\n{report(diffs)}"
             assert info["ret"] == info["regs"]["a6"], "a6"
+
+
+def test_fun_13740_abort():
+    _run_abort(FUN_13740, harness._lib.scale_loop)

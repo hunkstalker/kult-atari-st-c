@@ -22,6 +22,10 @@ static inline void frame_gate_delay(uint8_t *img) {
 
 static inline void cpu_delay(uint32_t units) { (void)units; }
 
+/* Retardo de CPU por ciclos exactos (bucles que no son `dbf`). En el
+ * diferencial es un no-op: solo cuenta el tiempo en el ejecutable. */
+static inline void cpu_delay_cycles(uint64_t cycles) { (void)cycles; }
+
 /* Logger de diagnostico del motor nativo: no-op en el diferencial. */
 static inline FILE *kult_dbgfile(void) { return NULL; }
 

@@ -29,7 +29,9 @@
     pal_next_byte;
     prompt_wait;
     psg_trap3;
+    icon_ring_loop_ex;
     run_command_keep_sp;
+    run_command_keep_sp_a6;
     save_clear_bin;
     save_scena;
     set_palette;

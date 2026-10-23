@@ -12,6 +12,7 @@ la misma imagen y compara memoria + registros + el ledger de eventos off-image.
 - `crt0_init` (0x135e2): arranque; XBIOS Getrez/Physbase/Kbdvbase + GEMDOS Super.
 """
 import ctypes
+import struct
 
 import harness
 from harness import differential, report
@@ -135,6 +136,41 @@ def test_palette_cycle():
             schedule=sched, wait_sites=[VBL_SITE] if sched else None,
             max_insns=3_000_000)
         assert not diffs, f"color={color:#x} target={target:#x}\n{report(diffs)}"
+
+
+def test_palette_cycle_solar_eyes_timing():
+    """T-090: SOLAR EYES (0xa00a) con la paleta capturada del replay.
+
+    El original hace 12 pasadas (6 hacia 0x777 y 6 de vuelta al target); cada
+    pasada es wait_vbl + `dbra d0` con d0=0xffff + set_palette. El oráculo mide
+    ~7.879.396 ciclos (~985 ms a 8 MHz). El port debe cobrar ese `dbra` con
+    cpu_delay(0x10000); el diferencial no compara tiempo, así que se fija aquí
+    el coste del original como regresión de la evidencia.
+    """
+    pal = bytes.fromhex(
+        "0000011202230232054403340000070204430325040005300734075405460777")
+    target = bytes.fromhex("01120223023205440334")     # A_PAL_TABLE[$1acf4=0]
+    pokes = {
+        PALETTE_PTR: PAL_BUF.to_bytes(4, "big"),
+        PAL_INDEX_CUR: bytes([0x00]),
+        FRAME_1AB4F: bytes([0x01]),                     # sonido enmascarado
+        DAT_1ABFA: (0).to_bytes(2, "big"),
+        THE_COMMAND: (0).to_bytes(2, "big"),
+        VBL_COUNTER: bytes([0x00]),
+    }
+    for i, word in enumerate(struct.unpack(">16H", pal)):
+        pokes[PAL_BUF + i * 2] = word.to_bytes(2, "big")
+    for i, word in enumerate(struct.unpack(">5H", target)):
+        pokes[PAL_TABLE + i * 2] = word.to_bytes(2, "big")
+    diffs, info = differential(
+        PALETTE_CYCLE, {"_pokes": pokes},
+        lambda lib, buf: lib.palette_cycle(buf),
+        schedule=_vbl_k(12), wait_sites=[VBL_SITE], max_insns=8_000_000)
+    assert not diffs, report(diffs)
+    cycles = info["regs"]["cycles"]
+    assert 7_800_000 <= cycles <= 7_950_000, (
+        f"palette_cycle SOLAR EYES: {cycles} ciclos, se esperaban ~7.879.396")
+    assert len(info["regs"]["sched"]) == 72, "12 pasadas x 6 stores de VBL"
 
 
 def test_palette_cycle_sound():

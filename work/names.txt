@@ -28,6 +28,7 @@ fn 0x135da set_palette               # xbios_setpalette
 fn 0x101be game_loop                 # do{ ... } while: update subsistemas + comando pendiente + repintado
 fn 0x1031c handle_frame_input        # gestiona botones/hints y comandos pendientes por frame
 fn 0x103a8 run_command               # despacha por (the_command & 0xf000); tabla en cmd_jump_table
+fn 0x103ae run_command_keep_sp_a6    # variante C que devuelve el A6 final (tail-call 0x1592e)
 fn 0x103ae run_command_keep_sp       # variante de run_command (equivalente a runCommandKeepSp de ScummVM)
 fn 0x1042c draw_text_box             # calcula geometria de caja de texto y la dibuja
 fn 0x10440 draw_text_box_variant     # idem (otra ruta de entrada)
@@ -452,6 +453,7 @@ var 0x134 sound_timer_vector    # vector de interrupcion del timer B (sonido)
 
 # ==== importados del C viejo (func_XXXX + alias) ====
 fn 0x128a4 elem_command
+fn 0x128a4 elem_command_ex
 fn 0x14138 run_text_entry_ex
 fn 0x12950 walk_entry
 fn 0x10390 dispatch_a6
@@ -495,6 +497,7 @@ fn 0x127f0 masked_save_blit
 fn 0x127fa masked_save_row
 fn 0x1285a elem_class_find
 fn 0x128a4 elem_command_wrap
+fn 0x128a4 elem_command_wrap_ex
 fn 0x1296c elem_bitmap_build
 fn 0x129c8 elem_list_build
 fn 0x129d6 text_block_build
@@ -563,6 +566,7 @@ fn 0x155b8 mode_queue_wrap
 fn 0x155c4 save_room
 fn 0x155dc clock
 fn 0x1566a icon_ring
+fn 0x15888 icon_ring_loop_ex    # variante con salida de tail-call (0x1592e)
 fn 0x15888 icon_ring_loop
 fn 0x15934 copy_rows_a
 fn 0x15944 copy_rows
@@ -669,6 +673,8 @@ fn 0x18944 icon_repeat
 fn 0x18a10 track_advance
 fn 0x18a30 screen_clean
 fn 0x18a98 attract
+fn 0x18a98 attract_once
+fn 0x18c80 attract_loop
 fn 0x18c8e icon_anim_a
 fn 0x18cb2 icon_anim_b
 fn 0x18ce0 icon_anim_c

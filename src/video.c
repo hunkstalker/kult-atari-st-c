@@ -13,6 +13,7 @@
 #include "machine.h"
 #include "os.h"
 #include "sched.h"
+#include "kult_port.h"
 #include "addrs.h"
 
 
@@ -95,8 +96,8 @@ void run_command_keep_sp(uint8_t *, uint32_t);
 
 /* 0x16310 — ciclo de paleta (lo llama el comando idx 9, 0x14f5e): guarda la
  * paleta en A_SAVE_DESC, gira los 5 colores del buffer (tope 7/0x70/0x700) hasta
- * que una pasada no cambie (VBL + Setpalette por pasada; el busy-wait de 65536
- * del original no se reconstruye, no tiene efecto observable), despacha $1abfa y
+ * que una pasada no cambie (VBL + busy-wait de 65536 + Setpalette por pasada;
+ * el busy-wait se cobra con cpu_delay(0x10000), T-090), despacha $1abfa y
  * acerca los 5 colores al target 0x1a10a[$1acf4]. Al entrar suena 0x17 con
  * sound_play_b (0x18f98) y al pasar a la fase 2 con sound_play_a (0x18f8e). */
 void palette_cycle(uint8_t *img) {
@@ -128,8 +129,10 @@ void palette_cycle(uint8_t *img) {
         if (changed == 0)
             break;
         wait_vbl(img);
-        /* El original hace un busy-wait de 65536 iteraciones (`dbra d0` con
-         * d0=0xffff) antes de set_palette; no tiene efecto observable. */
+        /* 0x16396: `dbra d0` con d0=0xffff (65536 iteraciones) antes de
+         * set_palette. En el diferencial es no-op; en el port cobra el tiempo
+         * real del original (mismo patrón que T-085/T-086). */
+        cpu_delay(0x10000u);
         set_palette(img);
     }
     sound_play_a(img, 0x17);
@@ -164,6 +167,8 @@ void palette_cycle(uint8_t *img) {
         if (changed == 0)
             return;
         wait_vbl(img);
+        /* 0x16454: segundo `dbra d0` con d0=0xffff, como la fase 1. */
+        cpu_delay(0x10000u);
         set_palette(img);
     }
 }

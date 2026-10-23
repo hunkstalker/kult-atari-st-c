@@ -1,10 +1,10 @@
 # REVISIÓN del C (previa a la compilación)
 
-> **Estado: cerrada internamente.** P0 (§7), P1 (§9) y P2 (§11) auditados, 0
-> ALTA/MEDIA abiertos. 499 pruebas verdes, `make regscan` `ids_reg=0`,
-> `make core` OK. **Pendiente de validación del usuario** (preguntas y
-> verificaciones). La compilación (`kult-port-pc-compilation`) nace de este core;
-> plan en **`docs/PLAN_COMPILACION.md`**.
+> **Estado: cerrada y congelada.** P0 (§7), P1 (§9) y P2 (§11) auditados, 0
+> ALTA/MEDIA abiertos. **518 pruebas** verdes, `make regscan` `ids_reg=0`,
+> `make core` OK. Base **validada en Windows (2026-10-23)** y congelada como
+> **`core-base-20261023`**. La compilación (`kult-port-pc-compilation`) nace de
+> este core; plan en **`docs/PLAN_COMPILACION.md`**.
 
 Objetivo: auditar el C ya escrito y **renombrado** —antes de construir encima la
 compilación— para asegurar que es fiel, correcto y legible. No se modifica el
@@ -152,10 +152,11 @@ rutas no probadas / riesgo de UB; **BAJA** = nombre/comentario/estilo.
 - Todos los módulos **P0, P1 y P2** revisados con checklist completa.
 - Hallazgos ALTA/MEDIA arreglados **con prueba** o marcados *intencional* con
   justificación (p. ej. reconstrucción de una cola del original).
-- `make test` verde (499), `make regscan` `ids_reg=0`, `make core` OK.
+- `make test` verde (518), `make regscan` `ids_reg=0`, `make core` OK.
 - `docs/REVISION.md` con el **registro de hallazgos** (§7/§9/§11) y
-  `docs/ESTADO.md` actualizado. Revisión cerrada internamente; **pendiente de
-  validación del usuario**. Después, la compilación (`docs/PLAN_COMPILACION.md`).
+  `docs/ESTADO.md` actualizado. Revisión cerrada y **validada en Windows
+  (2026-10-23)**; base congelada como `core-base-20261023`. Después, la
+  compilación (`docs/PLAN_COMPILACION.md`).
 
 ## 7. Registro de hallazgos
 
@@ -625,12 +626,12 @@ añadieron casos de cobertura (fases, clip, índices con palabra alta, fase 15,
 ### Cierre de la revisión (P0 + P1 + P2)
 
 - **33/33 módulos** auditados con la checklist de §3.
-- **499 pruebas** diferenciales verdes, `make regscan` `ids_reg=0`, `make core`
+- **518 pruebas** diferenciales verdes, `make regscan` `ids_reg=0`, `make core`
   OK, 0 warnings.
 - Hallazgos P2: **2 ALTA/MEDIA arreglados con prueba** (H-MB1, H-OV1); el resto
   ALTA/MEDIA se justifica *intencional* por ser inobservable/inalcanzable o no
   construible en el arnés (H-SCR1, H-LN1, H-TX1..TX3). No queda ningún ALTA/MEDIA
   abierto. Los BAJA se arreglan o se documentan.
-- La revisión del C queda **cerrada internamente** (pendiente de validación del
+- La revisión del C queda **cerrada y congelada** (validada en Windows;
   usuario): se abre **la compilación**, que nace de esta base; plan definitivo en
   `docs/PLAN_COMPILACION.md`.

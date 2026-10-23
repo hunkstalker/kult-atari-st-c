@@ -545,6 +545,9 @@ def test_fun_1566a_anillo():
 FUN_15888 = 0x15888
 harness._lib.icon_ring_loop.argtypes = [_u8p, ctypes.c_uint32]
 harness._lib.icon_ring_loop.restype = ctypes.c_uint32
+harness._lib.icon_ring_loop_ex.argtypes = [_u8p, ctypes.c_uint32,
+                                           ctypes.POINTER(ctypes.c_int)]
+harness._lib.icon_ring_loop_ex.restype = ctypes.c_uint32
 
 
 def test_fun_15888_sin_acierto():
@@ -578,3 +581,43 @@ def test_fun_15888_sin_acierto():
         schedule=schedule, wait_sites=[IKBD_SITE, VBL_SITE])
     assert not diffs, report(diffs)
     assert info["ret"] == info["regs"]["a6"]
+
+
+def test_fun_15888_ex_sin_tail():
+    """icon_ring_loop_ex expone el flag de tail-call; en la rama 0xffff no lo
+    activa y devuelve el mismo A6 que el wrapper."""
+    pokes = {
+        0x1A45E: (0x90000).to_bytes(4, "big"),
+        0x1A450: (0x00).to_bytes(2, "big"),
+        0x1A452: (0x00).to_bytes(2, "big"),
+        0x1A575: bytes([0xFF]),
+        0x1A576: bytes([0x10]),
+        0x1AB45: bytes([0x75]),
+        0x1AB47: bytes([0x64]),
+        0x1AB4F: bytes([0x00]),
+        0x1ACD4: bytes([0x10]),
+        0x1A44F: bytes([0xFF]),
+        0x1A456: bytes([0x00]),
+        0x1A4E0: (0x2AAAA).to_bytes(4, "big"),
+        SCRIPT: bytes([0x00, 0x01, 0x75, 0x00, 0x00]),
+    }
+    for i in range(0x4000):
+        pokes[0x90000 + i] = bytes([(i * 3 + 1) & 0xFF])
+    schedule = [
+        {"pc": IKBD_SITE, "nth": 1, "addr": IKBD_PACKET, "width": 1, "value": 0x01},
+        {"pc": IKBD_SITE, "nth": 2, "addr": IKBD_PACKET, "width": 1, "value": 0x01},
+        {"pc": VBL_SITE, "nth": 1, "addr": VBL_COUNTER, "width": 1, "value": 0x11},
+        {"pc": VBL_SITE, "nth": 2, "addr": VBL_COUNTER, "width": 1, "value": 0x12},
+    ]
+    tail = ctypes.c_int(-1)
+
+    def glue(lib, buf):
+        tail.value = -1
+        return lib.icon_ring_loop_ex(buf, SCRIPT, ctypes.byref(tail))
+
+    diffs, info = differential(
+        FUN_15888, {"a6": SCRIPT, "_pokes": pokes}, glue,
+        schedule=schedule, wait_sites=[IKBD_SITE, VBL_SITE])
+    assert not diffs, report(diffs)
+    assert info["ret"] == info["regs"]["a6"]
+    assert tail.value == 0

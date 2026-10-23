@@ -123,3 +123,44 @@ def test_fun_12f28():
                 schedule=sch, wait_sites=[0x1359a])
             assert not diffs, f"skip={skip} w={w} h={h}\n{report(diffs)}"
             assert info["ret"] == info["regs"]["a6"], "a6"
+
+
+def _abort_pokes(kind):
+    """Fixture de las dos salidas anticipadas de 0x128a4 (0x1294c).
+
+    Deja A_ELEM_* con un descriptor valido y la pantalla poblada: si el llamante
+    no se entera del retorno doble, 0x12f28 revela y cambia la imagen; el
+    original sale sin tocar A_ELEM_* ni la pantalla.
+    """
+    pokes = _elem_pokes(16, 17)
+    pokes[0x50000] = bytes([0x00, 0xFF])
+    pokes[0x1a532] = (8).to_bytes(2, "big")
+    pokes[0x1a530] = (4).to_bytes(2, "big")
+    pokes[0x1a52c] = (17).to_bytes(2, "big")
+    pokes[0x1a52e] = (16).to_bytes(2, "big")
+    pokes[0x1a528] = (DEST - 0x8000).to_bytes(4, "big")
+    pokes[0x1ad0a] = bytes([1 if kind == "flag" else 0])
+    if kind == "clase":
+        pokes[0x1a81e] = (0x60000).to_bytes(4, "big")
+        pokes[0x60000] = (0).to_bytes(4, "big")
+        pokes[0x1a81a] = (0).to_bytes(4, "big")
+        pokes[0x1acc9] = bytes([0x11])
+        pokes[0x1a772] = (0x40000).to_bytes(4, "big")
+        pokes[0x40003] = bytes([0x37])
+        for i in range(24):
+            base = 0x19e19 + i * 6
+            pokes[base] = bytes([0x80])
+            for k in range(1, 6):
+                pokes[base + k] = bytes([(i + k) & 0xFF])
+    return pokes
+
+
+def test_fun_12f28_abort():
+    """0x128a4 sale por 0x1294c: 0x12f28 no debe revelar ni tocar A_ELEM_*."""
+    for kind in ("flag", "clase"):
+        pokes = _abort_pokes(kind)
+        diffs, info = differential(
+            FUN_12F28, {"a6": 0x50000, "_pokes": pokes},
+            lambda lib, buf: lib.reveal_pixel(buf, 0x50000))
+        assert not diffs, f"{kind}\n{report(diffs)}"
+        assert info["ret"] == 0x50002, f"{kind}: {info['ret']:#x}"

@@ -32,7 +32,7 @@ handlers.c — handlers de comando pequenos (0x121xx-0x127xx).  FUN_0001228a @ 0
 | `0x1332e` | `reveal_box_wait_b` | 0x1332e: como 0x132aa pero con 0x13eae. | test_handlers |
 | `0x13490` | `icon_reveal_h` | 0x13490: revela la caja del icono A6[1] con 0x13e14. | — |
 | `0x134b2` | `icon_reveal_v` | 0x134b2: revela la caja del icono A6[1] con 0x13eae. | — |
-| `0x103a8` | `run_command` | FUN_000103a8 @ 0x103a8: guarda A7 en 0x1a826 y cae en run_command_keep_sp (0x103ae). | test_dispatch, test_handlers |
+| `0x103a8` | `run_command` | FUN_000103a8 @ 0x103a8: guarda A7 en 0x1a826 y cae en run_command_keep_sp (0x103ae). | test_a7_unwind, test_dispatch, test_handlers |
 | `0x1031c` | `handle_frame_input` | FUN_0001031c @ 0x1031c (handle_frame_input): espera un frame; mientras el flag 0x1ab4f este puesto, el cursor este bajo (>=0x96) y el contador de VBL sea impar, repite. Luego restaura el cursor (0x1060a), repinta los marcos de overlay A/B (0x10a54/0x10acc) si cambiaron sus selectores, y dibuja el cursor (0x10526). | test_family151, test_handlers, test_objwait |
 | `0x14798` | `rect_hit_test` | FUN_00014798 @ 0x14798: devuelve el C si (d0b,d1b) cae en el rect [a4..a4+3] (bytes). FUN_0001478a @ 0x1478a carga (cursor_x>>2, cursor_y) y cae en el. | — |
 | `0x1478a` | `rect_hit_test_a` | rect hit test a | — |

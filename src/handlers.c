@@ -14,6 +14,7 @@
 
 #include "machine.h"
 #include "addrs.h"
+#include "run_boundary.h"
 
 void prompt_wait(uint8_t *);
 void hint_select_off(uint8_t *, uint32_t, uint32_t *);
@@ -260,7 +261,7 @@ uint32_t wait_button_b(uint8_t *img, uint32_t script) {
  * (y de `screen_address`) en el mismo punto en que el original los tendria.
  */
 
-uint32_t elem_command_wrap(uint8_t *, uint32_t);
+uint32_t elem_command_wrap_ex(uint8_t *, uint32_t, int *);
 void grid_fill(uint8_t *, uint32_t, uint32_t, uint32_t, uint32_t);
 void row_blit_a(uint8_t *, uint32_t, uint32_t, uint32_t);
 void row_blit_b(uint8_t *, uint32_t, uint32_t, uint32_t);
@@ -283,7 +284,10 @@ static elem_regs elem_after_128a4(uint8_t *img) {
  * el, 128a4 + 126e0 (compone el bitmap en 0xd8f0) y 11ece (d1=alto-1, a1=0xd8f0 +
  * (alto-1)*0x40). */
 uint32_t blit_dispatch_a(uint8_t *img, uint32_t script) {
-    script = elem_command_wrap(img, script);
+    int aborted;
+    script = elem_command_wrap_ex(img, script, &aborted);
+    if (aborted)
+        return script;
     elem_regs r = elem_after_128a4(img);
     if (img[A_SKIP_TRANSITION] != 0) {
         blit_rect_vbl(img, r.dest, r.src, r.cols, r.rows, r.phase);
@@ -298,7 +302,10 @@ uint32_t blit_dispatch_a(uint8_t *img, uint32_t script) {
 /* FUN_00011f2e @ 0x11f2e: idem pero 11ee8; el segundo 0x10fec usa y = *(0x1a530)+alto-1
  * y a1 = 0xd8f0. */
 uint32_t blit_dispatch_b(uint8_t *img, uint32_t script) {
-    script = elem_command_wrap(img, script);
+    int aborted;
+    script = elem_command_wrap_ex(img, script, &aborted);
+    if (aborted)
+        return script;
     elem_regs r = elem_after_128a4(img);
     if (img[A_SKIP_TRANSITION] != 0) {
         blit_rect_vbl(img, r.dest, r.src, r.cols, r.rows, r.phase);
@@ -385,7 +392,10 @@ void scroll_down(uint8_t *img, uint32_t passes_in, uint32_t d2in, uint32_t d3in,
 uint32_t overlay_dispatch_1(uint8_t *img, uint32_t script) {
     if (img[A_SKIP_TRANSITION] != 0)
         return elem_blit_vbl(img, script);
-    script = elem_command_wrap(img, script);
+    int aborted;
+    script = elem_command_wrap_ex(img, script, &aborted);
+    if (aborted)
+        return script;
     elem_regs r = elem_after_128a4(img);
     uint32_t bitmap = r.src + be32(img + A_DAT_1A534) - 2;
     blit_rect_vbl(img, r.dest, bitmap, 1, r.rows, r.phase);
@@ -399,7 +409,10 @@ uint32_t overlay_dispatch_1(uint8_t *img, uint32_t script) {
 uint32_t overlay_dispatch_2(uint8_t *img, uint32_t script) {
     if (img[A_SKIP_TRANSITION] != 0)
         return elem_blit_vbl(img, script);
-    script = elem_command_wrap(img, script);
+    int aborted;
+    script = elem_command_wrap_ex(img, script, &aborted);
+    if (aborted)
+        return script;
     elem_regs r = elem_after_128a4(img);
     uint32_t phase;
     uint32_t addr = screen_address(img, be16(img + A_ELEM_1A532) + r.cols - 1,
@@ -493,7 +506,10 @@ static uint32_t border_after_127e0(uint8_t *img, elem_regs r) {
 
 /* 0x132aa: 128a4 + 127e0 + 13370 + 12466 (la rama 0x1a570!=0 es 0x134da). */
 uint32_t reveal_box_build(uint8_t *img, uint32_t script) {
-    script = elem_command_wrap(img, script);
+    int aborted;
+    script = elem_command_wrap_ex(img, script, &aborted);
+    if (aborted)
+        return script;
     elem_regs r = elem_after_128a4(img);
     if (img[A_SKIP_TRANSITION] != 0) {
         blit_rect_vbl(img, r.dest, r.src, r.cols, r.rows, r.phase);
@@ -508,7 +524,10 @@ uint32_t reveal_box_build(uint8_t *img, uint32_t script) {
 
 /* 0x132ec: como 0x132aa pero con 0x13e14. */
 uint32_t reveal_box_wait_a(uint8_t *img, uint32_t script) {
-    script = elem_command_wrap(img, script);
+    int aborted;
+    script = elem_command_wrap_ex(img, script, &aborted);
+    if (aborted)
+        return script;
     elem_regs r = elem_after_128a4(img);
     if (img[A_SKIP_TRANSITION] != 0) {
         blit_rect_vbl(img, r.dest, r.src, r.cols, r.rows, r.phase);
@@ -523,7 +542,10 @@ uint32_t reveal_box_wait_a(uint8_t *img, uint32_t script) {
 
 /* 0x1332e: como 0x132aa pero con 0x13eae. */
 uint32_t reveal_box_wait_b(uint8_t *img, uint32_t script) {
-    script = elem_command_wrap(img, script);
+    int aborted;
+    script = elem_command_wrap_ex(img, script, &aborted);
+    if (aborted)
+        return script;
     elem_regs r = elem_after_128a4(img);
     if (img[A_SKIP_TRANSITION] != 0) {
         blit_rect_vbl(img, r.dest, r.src, r.cols, r.rows, r.phase);
@@ -574,10 +596,24 @@ void overlay_a_frame(uint8_t *);
 void overlay_b_frame(uint8_t *);
 void wait_vbl(uint8_t *);
 
+/* Pila de boundaries de run_command (0x103a8): el original guarda A7 en
+ * $1a826 y 0x103ae lo restaura para comandos 0xfxxx; el rts del VM vuelve al
+ * llamante de run_command, saltandose el resto del despacho anidado. */
+kult_run_boundary *g_kult_run_boundary_top;
+
 /* FUN_000103a8 @ 0x103a8: guarda A7 en 0x1a826 y cae en run_command_keep_sp (0x103ae). */
 void run_command(uint8_t *img, uint32_t stack) {
+    kult_run_boundary boundary;
+    kult_run_boundary *volatile prev = g_kult_run_boundary_top;
     wr32(img + A_RUN_STACK, stack);
-    run_command_keep_sp(img, 0);
+    boundary.prev = prev;
+    g_kult_run_boundary_top = &boundary;
+    if (setjmp(boundary.env) == 0) {
+        run_command_keep_sp(img, 0);
+        g_kult_run_boundary_top = prev;
+    } else {
+        g_kult_run_boundary_top = prev;
+    }
 }
 
 /* FUN_0001031c @ 0x1031c (handle_frame_input): espera un frame; mientras el flag
@@ -743,7 +779,10 @@ void mode_queue_wrap(uint8_t *img) {
 /* FUN_000134da @ 0x134da: rama compartida por los dispatchers 0x11xxx con
  * 0x1a570 != 0: 0x128a4 y rebliteo (0x124da). */
 uint32_t elem_blit_vbl(uint8_t *img, uint32_t script) {
-    script = elem_command_wrap(img, script);
+    int aborted;
+    script = elem_command_wrap_ex(img, script, &aborted);
+    if (aborted)
+        return script;
     elem_regs r = elem_after_128a4(img);
     blit_rect_vbl(img, r.dest, r.src, r.cols, r.rows, r.phase);
     return script;

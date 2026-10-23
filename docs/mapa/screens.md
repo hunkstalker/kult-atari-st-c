@@ -25,7 +25,9 @@ screens.c — buffers de pantalla y direccionamiento planar.  copy_screen       
 | `0x15944` | `copy_rows` | variante de `screen_copies` sobre screen_ptr_b que limpia el flag 0x1a573 (0x15934 lo deja a 1 y usa screen_ptr_a). | — |
 | `0x15934` | `copy_rows_a` | copy rows a | test_family151 |
 | `0x18a30` | `screen_clean` | screen clean | test_loop |
-| `0x18a98` | `attract` | attract | test_loop |
+| `0x18a98` | `attract_once` | primera pasada de attract. Termina en 0x18c78 con el reset de la lista de iconos y devuelve A6 = script+1. El bucle infinito posterior se modela en attract_loop/attract. | test_loop |
+| `0x18c80` | `attract_loop` | bucle final de attract: l_018c80: move.l #$64,d5; bsr f_01834a; bra l_018c80 El original no retorna nunca. max_loops=0 es el comportamiento real (infinito); un valor >0 solo lo usan las pruebas para acotar la ejecución. | test_loop |
+| `0x18a98` | `attract` | attract completo: primera pasada + bucle infinito de estrellas. | — |
 
 ## Estado (globales A_* usadas)
 

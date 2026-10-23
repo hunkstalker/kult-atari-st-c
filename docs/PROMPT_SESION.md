@@ -17,14 +17,13 @@ canónica: **`docs/PROYECTOS.md`**):
 
 ## Estado y tareas
 
-- Este repo cubre **todo el juego** (33 módulos, **499 pruebas** diferenciales
+- Este repo cubre **todo el juego** (33 módulos, **518 pruebas** diferenciales
   verdes, 0 warnings, `make regscan` `ids_reg=0`, `make core` OK). La revisión
   del C (P0/P1/P2) está **cerrada internamente** (registro en
   `docs/REVISION.md` §7/§9/§11).
-- **Pendiente 1 — validación del usuario:** hay preguntas y verificaciones
-  abiertas sobre el C; por eso este repo **no se congela**. Resolverlas antes de
-  dar por bueno el core.
-- **Pendiente 2 — la compilación:** el proyecto nuevo (`kult-port-pc-compilation`)
+- **Validación:** completada en Windows (2026-10-23). La base está **congelada**
+  como `core-base-20261023`; cambios futuros exigen evidencia ASM + test.
+- **Siguiente — la compilación:** el proyecto nuevo (`kult-port-pc-compilation`)
   que une **Atari ST + Amiga**, con mejoras y **todos los idiomas**. Nace de este
   C; `kult-port-legacy` es solo referencia.
 
