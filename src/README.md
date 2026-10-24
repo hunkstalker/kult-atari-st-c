@@ -2,7 +2,7 @@
 
 Aquí va el C moderno y legible, un fichero por subsistema (`palette.c`,
 `cursor.c`, `text.c`, …), escrito a partir del ASM de
-`/app/kult-atari-st-decomp/matching/`.
+`../kult-atari-st-decomp/matching/`.
 
 Convenciones y primera tarea (piloto de paleta): ver `../docs/PLAN.md`.
 

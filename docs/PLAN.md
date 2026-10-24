@@ -1,24 +1,21 @@
 # PLAN — Reimplementación de Kult (Atari ST) en C legible
 
-Documento maestro de **este** repo (`/app/kult-atari-st-c`). Para retomar en una
-sesión nueva, ver `docs/PROMPT_SESION.md`.
+Documento maestro de **este** repo. Para retomar en una sesión nueva, ver
+`AGENTS.md`.
 
 ## 0. Resumen
 
-Cuatro repos, con papeles distintos (fuente canónica: **`docs/PROYECTOS.md`**):
+Dos repos, con papeles distintos (fuente canónica: **`docs/PROYECTOS.md`**):
 
 | repo | papel | garantía |
 |---|---|---|
-| `/app/kult-atari-st-decomp` (A) | decomp canónico **en ensamblador** | **byte a byte** con el original |
-| `/app/kult-atari-st-c` (B, este) | **reimplementación en C** legible (base) | **mismo comportamiento** |
-| `/app/kult-port-pc-compilation` | **la compilación** (Atari ST + Amiga, idiomas, mejoras) | por capas sobre el core verificado |
-| `/app/kult-port-legacy` | predecesor de modding (referencia) | solo referencia |
+| `../kult-atari-st-decomp` (A) | decomp canónico **en ensamblador** | **byte a byte** con el original |
+| este repo (B) | **reimplementación en C** legible | **mismo comportamiento** |
 
-- **A no se toca**: es la verdad/especificación. Su `matching/` reproduce el PRG
+- **A no se toca**: es la verdad/especificación. Su `matching/` reproduce el
   original byte a byte (sha256 `2e85f223…`).
 - **B es el trabajo**: escribir, desde A, un C moderno, legible, documentado y
-  con **todo identificado**, fiel en comportamiento. Plan de la compilación que
-  nace de B: **`docs/PLAN_COMPILACION.md`**.
+  con **todo identificado**, fiel en comportamiento.
 - A se identificará **de paso** en B (nombres y documentación viven aquí); A se
   queda como referencia congelada.
 
@@ -35,18 +32,13 @@ Cuatro repos, con papeles distintos (fuente canónica: **`docs/PROYECTOS.md`**):
 
 ## 2. Materiales
 
-- **Especificación (ASM):** `/app/kult-atari-st-decomp/matching/`
+- **Especificación (ASM):** `../kult-atari-st-decomp/matching/`
   (`auto_*.s` por función, `*.s` manuales, `data_*.s` de tablas). Ensambla byte a
   byte con `vasm`.
-- **Índice y nombres:** `/app/kult-atari-st-decomp/work/decomp.c` (índice de
+- **Índice y nombres:** `../kult-atari-st-decomp/work/decomp.c` (índice de
   funciones) y `work/names.txt` (177 nombres ya puestos).
-- **Original:** `work/disk_a/KULT.PRG` (tu copia; gitignored).
-- **Análisis de comportamiento:** `docs/REFERENCIA_F4.md` (copiado del intento
-  anterior; incluye "trampas" y fórmulas ya deducidas). **Referencia**, no se
-  copia código.
 - **Verificación:** `tools/recreate_kit/` (arnés diferencial + oráculo Musashi).
-- **Pruebas previas:** `reference/test_f4/` (469 pruebas del intento anterior).
-  Atadas a los nombres viejos → **referencia de comportamiento**, se reescriben.
+- **Pruebas:** `test/` (518 pruebas diferenciales).
 
 ## 3. Método (por cada pieza)
 
@@ -143,13 +135,7 @@ Piezas implicadas (en A `matching/`):
    cubrió; el detalle de tandas está en `docs/LEGIBILIDAD.md`.
    - **Revisión del C** — HECHA: `docs/REVISION.md` (§7 P0, §9 P1, §11 P2;
      0 ALTA/MEDIA abiertos).
-3. **La compilación** — proyecto `kult-port-pc-compilation`, que **nace de este
-   C** y **une Atari ST + Amiga**, con mejoras y **todos los idiomas**.
-   `kult-port-legacy` (ex `kult-port`) queda como **referencia** (guardado por
-   ranuras, textos ES, overlay F1, etc.). Plan definitivo:
-   **`docs/PLAN_COMPILACION.md`**.
-
 ## 8. Legal
 
-El juego sigue bajo copyright (Piko Interactive). No se distribuyen assets ni
-binarios; el usuario aporta su copia. Lo derivado del juego está gitignored.
+El juego original sigue bajo copyright de sus respectivos titulares. Este
+repositorio contiene únicamente código y no incluye material del juego.

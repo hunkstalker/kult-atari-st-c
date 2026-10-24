@@ -44,6 +44,4 @@ día se prefiere `-fvisibility=hidden`, `KULT_API` ya está listo en la cabecera
 
 Al añadir una entrada pública, añádela a **los dos** sitios: `kult_core.map` y
 `include/kult_api.h` (el test falla si se desincronizan). La API es la frontera
-que consumirá el motor nativo de **la compilación** (`kult-port-pc-compilation`);
-el predecesor **`kult-port-legacy`** conserva una referencia de comportamiento en
-`runtime/native/`.
+pública del core.

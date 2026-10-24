@@ -1,4 +1,4 @@
-# AGENTS.md — relevo de `/app/kult-atari-st-c`
+# AGENTS.md — relevo de kult-atari-st-c
 
 Documento de arranque para un agente que retoma el trabajo. Es el punto de
 entrada; el detalle vive en `docs/`.
@@ -8,37 +8,28 @@ entrada; el detalle vive en `docs/`.
 Reimplementación en **C legible** de *Kult: The Temple of Flying Saucers*
 (Atari ST, 1989), **fiel en comportamiento** al original.
 
-- **Especificación congelada (no se toca):** `/app/kult-atari-st-decomp`
+- **Especificación congelada (no se toca):** `../kult-atari-st-decomp`
   (`matching/auto_*.s` por función, `*.s` manuales, `data_*.s`). Ensambla al
   original **byte a byte**.
 - **Este repo:** el C, verificado con **diferencial** contra el oráculo (Musashi)
   del kit (`tools/recreate_kit`): compara memoria + registros + ledger de
   efectos off-image (paleta, PSG, IKBD…).
-- **`/app/kult-port-legacy`:** ex `kult-port`, predecesor de modding; **no se
-  toca**, queda como **referencia**. La compilación nueva vive en
-  `kult-port-pc-compilation` (ver **`docs/PROYECTOS.md`** y
-  **`docs/PLAN_COMPILACION.md`**).
+- Este repositorio contiene **solo código**; no produce un ejecutable jugable ni
+  incluye material del juego original.
 
 ## Estado (a día de hoy)
 
-- **Todo el juego portado:** 33 módulos, ~12.5k líneas, 499 pruebas
+- **Todo el juego portado:** 33 módulos, ~12.5k líneas, 518 pruebas
   diferenciales verdes, 0 warnings, `make regscan` `ids_reg=0`, `make core` OK.
-- **Revisión del C: cerrada internamente.** P0 (§7), P1 (§9) y P2 (§11)
-  auditados; 0 ALTA/MEDIA abiertos. Registro completo en `docs/REVISION.md`.
-  **Pendiente de validación del usuario** (sus preguntas/verificaciones).
+- **Revisión del C: cerrada y validada.** P0 (§7), P1 (§9) y P2 (§11)
+  auditados; 0 ALTA/MEDIA abiertos. Base validada en Windows (2026-10-23) y
+  congelada como `core-base-20261023`. Registro completo en `docs/REVISION.md`.
 - Detalle de estado y censo: `docs/ESTADO.md`.
-
-## Tarea siguiente: la compilación
-
-Este repo es la **base** de **la compilación** (`kult-port-pc-compilation`), que
-une **Atari ST + Amiga**, mejoras y **todos los idiomas**. Nace de este C
-verificado; `kult-port-legacy` es solo referencia. Plan definitivo:
-**`docs/PLAN_COMPILACION.md`**; topología de repos: **`docs/PROYECTOS.md`**.
 
 ## Método por función (resumen)
 
 1. Abrir el `auto_*.s` de la función en
-   `/app/kult-atari-st-decomp/matching/` (si no existe como `auto_`, buscar la
+   `../kult-atari-st-decomp/matching/` (si no existe como `auto_`, buscar la
    etiqueta `f_XXXXXX` en `*.s` manuales) y comparar con el cuerpo C
    instrucción a instrucción: anchos `.b/.w/.l`, signo, banderas C/Z/N/V,
    pre/post-incremento, bucles `dbra` (¡do-while!), orden de escritura, colas
@@ -55,37 +46,32 @@ legibilidad).
 
 ## Comandos
 
+Desde la raíz del repo:
+
 ```sh
-cd /app/kult-atari-st-c
-make test                      # compila src/*.c y pasa el diferencial (499)
+make test                      # ejecuta el diferencial (518)
 make test PYTEST_ARGS=-n0      # serial (depuración)
 make regscan                   # debe dar ids_reg=0
 make core                      # build on-target con la API restringida
 make mapa / make addrs         # regenerar fichas / direcciones
 ```
 
-El arnés necesita `work/disk_a/KULT.PRG` (copia del usuario, gitignored); si
-falta, copiarlo desde `/app/kult-port-legacy/work/disk_a/KULT.PRG`.
-
 ## Reglas de trabajo
 
 - **Reproducir/medir antes de tocar.** Una hipótesis, un cambio.
 - **Toda corrección deja su prueba diferencial** (salvo divergencia inobservable,
   que se marca *intencional* con justificación en el registro).
-- Commit por módulo; no tocar `/app/kult-atari-st-decomp` ni `/app/kult-port-legacy`.
+- Commit por módulo; no tocar `../kult-atari-st-decomp`.
 - `make regscan` debe seguir en `ids_reg=0`. **Todo en español.**
 
 ## Documentos clave
 
 | archivo | para qué |
 |---|---|
-| `docs/PROYECTOS.md` | **topología canónica de los 4 repos** y reglas |
-| `docs/PLAN_COMPILACION.md` | **plan de la compilación** (`kult-port-pc-compilation`) |
+| `docs/PROYECTOS.md` | relación entre este repo y el decomp |
 | `docs/ESTADO.md` | estado exacto, censo, cómo continuar |
 | `docs/REVISION.md` | plan de revisión y **registro** (§7/§9/§11) |
-| `docs/PROMPT_SESION.md` | prompt listo para pegar en una sesión nueva |
 | `docs/PLAN.md` | plan maestro y convenciones (§4.1) |
-| `docs/REFERENCIA_F4.md` | trampas del oráculo/kit (leer la sección final) |
 | `docs/mapa/<módulo>.md` | ficha por módulo (funciones, globales, pruebas) |
 | `docs/LEGIBILIDAD.md` | tandas de legibilidad (histórico) |
 | `docs/VISIBILIDAD.md` | API pública on-target (`kult_core.map`) |

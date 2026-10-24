@@ -6,5 +6,5 @@
 
 Cada prueba ejecuta el **original** en el oráculo (Musashi) con una entrada y
 compara con tu C (memoria + registros; el hardware va por el *ledger*).
-Patrón: ver `reference/test_f4/` (pruebas del intento anterior) y la doc del kit
-en `tools/recreate_kit/README.md`.
+Patrón: ver las pruebas existentes en `test/` y la doc del kit en
+`tools/recreate_kit/README.md`.

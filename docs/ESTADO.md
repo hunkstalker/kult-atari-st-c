@@ -7,9 +7,9 @@ método y las convenciones, `docs/PLAN.md`; para el detalle por tandas,
 ## Resumen
 
 La reimplementación en C cubre **todo el juego**. El decomp canónico en ASM
-(`/app/kult-atari-st-decomp`, byte a byte) es la especificación y **no se toca**;
-este repo (`/app/kult-atari-st-c`) es la versión en C, fiel en **comportamiento**
-y verificada con el **diferencial** contra el oráculo (Musashi).
+(`../kult-atari-st-decomp`, byte a byte) es la especificación y **no se toca**;
+este repo es la versión en C, fiel en **comportamiento** y verificada con el
+**diferencial** contra el oráculo (Musashi).
 
 - `src/`: **33 módulos**, ~12.620 líneas.
 - Nombres: **423 funciones** + **221 globales** en `work/names.txt` (registro único).
@@ -27,15 +27,15 @@ y verificada con el **diferencial** contra el oráculo (Musashi).
   global de CPU del port.
 - Comparación útil:
   `git diff core-pre-fixes-20261023..core-base-20261023`.
-- Política: cambios futuros al core exigen evidencia ASM + test; lo específico de
-  PC se queda en `kult-port-pc-compilation`.
+- Política: cambios futuros al core exigen evidencia ASM + test.
 
 ## Cómo ejecutar
 
+Desde la raíz del repo:
+
 ```sh
-cd /app/kult-atari-st-c
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # una vez
-make test                      # compila src/*.c y pasa el diferencial
+make test                      # ejecuta el diferencial
 make test PYTEST_ARGS=-n0      # serial (depuración)
 make addrs                     # regenera include/addrs.h desde names.txt
 make mapa                      # regenera docs/mapa/
@@ -43,8 +43,10 @@ make regscan                   # deuda de legibilidad por módulo (debe dar 0)
 make core                      # build on-target con la API restringida
 ```
 
-El arnés necesita `work/disk_a/KULT.PRG` (copia del usuario, gitignored); si
-falta, copiarlo desde `/app/kult-port-legacy/work/disk_a/KULT.PRG`.
+> **Windows:** el arnés y `make test` están pensados para Linux (o WSL). El kit
+> usa `.venv/bin/python`; en Windows nativo la ruta sería
+> `.venv\Scripts\python.exe` y el flujo no está soportado tal cual. Usa
+> **WSL** y crea el venv dentro de WSL.
 
 ## Estructura de `src/`
 
@@ -113,12 +115,8 @@ mapa (el harness necesita `dlsym`). Detalle en `docs/VISIBILIDAD.md`.
    descubiertas en esa validación (T-081/T-083/T-087/T-088/T-089 y
    T-073c/T-085/T-086/T-090) se aplicaron aquí. Quedan fuera, por ser HAL/audio o
    diagnóstico, T-082 (`mode.c`), `platform/`, `boot/`, `app/` y las trazas.
-2. **Siguiente: la compilación** (`kult-port-pc-compilation`, nuevo repo), que
-   **nace de este C** y **une Atari ST + Amiga**, con mejoras y **todos los
-   idiomas**. Plan definitivo: **`docs/PLAN_COMPILACION.md`**; topología de
-   repos: **`docs/PROYECTOS.md`**. El predecesor `kult-port` se renombró a
-   **`kult-port-legacy`** y queda como **referencia** (no se toca).
-- Trampas conocidas del oráculo/kit: `docs/REFERENCIA_F4.md` (sección final).
+2. **Siguiente:** no hay tareas pendientes del core. La revisión está cerrada;
+   cualquier cambio futuro exige evidencia ASM + prueba diferencial.
 - Al auditar apareció una clase de fallo recurrente del import+renombrado:
   llamada a la **función hermana equivocada** (H-V1: `sound_play_b` por
   `sound_play_a`) y **condiciones invertidas** (H-C2, H-L1, H-L2, H-L3).
@@ -137,9 +135,4 @@ mapa (el harness necesita `dlsym`). Detalle en `docs/VISIBILIDAD.md`.
 8. **Revisión P2 del C** (`docs/REVISION.md` §11): 13 módulos; H-MB1 (truncado
    `lsl.w` de `hint_entry`) y H-OV1 (desplazamientos lógicos mod 64 del 68k)
    arreglados con prueba, 2 BAJA arreglados y 7 intencionales justificados;
-   494 → 499 pruebas. **Revisión cerrada internamente; se abre la compilación.**
-9. **Topología y compilación** (`docs/PROYECTOS.md`, `docs/PLAN_COMPILACION.md`):
-   `kult-port` → `kult-port-legacy` (referencia); el proyecto nuevo
-   `kult-port-pc-compilation` une Atari ST + Amiga con todos los idiomas y nace de
-   este C. Determinación Amiga: hace falta su **spec (decomp) + core**; primer
-   hito = comparación por rutina Amiga↔ST.
+   494 → 499 pruebas. **Revisión cerrada internamente.**

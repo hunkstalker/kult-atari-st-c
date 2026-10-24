@@ -1,19 +1,17 @@
-# REVISIÓN del C (previa a la compilación)
+# REVISIÓN del C
 
 > **Estado: cerrada y congelada.** P0 (§7), P1 (§9) y P2 (§11) auditados, 0
 > ALTA/MEDIA abiertos. **518 pruebas** verdes, `make regscan` `ids_reg=0`,
 > `make core` OK. Base **validada en Windows (2026-10-23)** y congelada como
-> **`core-base-20261023`**. La compilación (`kult-port-pc-compilation`) nace de
-> este core; plan en **`docs/PLAN_COMPILACION.md`**.
+> **`core-base-20261023`**.
 
-Objetivo: auditar el C ya escrito y **renombrado** —antes de construir encima la
-compilación— para asegurar que es fiel, correcto y legible. No se modifica el
-comportamiento salvo que la revisión encuentre un fallo real (entonces: arreglo +
-prueba + commit).
+Objetivo: auditar el C ya escrito y **renombrado** para asegurar que es fiel,
+correcto y legible. No se modifica el comportamiento salvo que la revisión
+encuentre un fallo real (entonces: arreglo + prueba + commit).
 
 Los §1–§6 son el plan y el método; §7, §9 y §11 son el registro de hallazgos de
 P0, P1 y P2. La revisión se hizo en sesiones nuevas y limpias, sin tocar el
-predecesor (`kult-port-legacy`).
+decomp (`../kult-atari-st-decomp`).
 
 ## 1. Por qué revisar (riesgos conocidos)
 
@@ -67,7 +65,7 @@ parametrizados), 0 warnings, `ids_reg=0`.
 
 ### 3.1 Fidelidad de comportamiento vs ASM
 Para cada función, comparar el cuerpo C con su `auto_*.s` en
-`/app/kult-atari-st-decomp/matching/`:
+`../kult-atari-st-decomp/matching/`:
 - [ ] **Anchos**: operaciones `.b`/`.w`/`.l` → tipo correcto (`uint8/16/32_t`),
       sin truncar ni extender de más.
 - [ ] **Signo**: `ext.w`/`ext.l`, `lsl/lsr/asr`, comparaciones `bcc/bcs/bge/blt`
@@ -155,8 +153,7 @@ rutas no probadas / riesgo de UB; **BAJA** = nombre/comentario/estilo.
 - `make test` verde (518), `make regscan` `ids_reg=0`, `make core` OK.
 - `docs/REVISION.md` con el **registro de hallazgos** (§7/§9/§11) y
   `docs/ESTADO.md` actualizado. Revisión cerrada y **validada en Windows
-  (2026-10-23)**; base congelada como `core-base-20261023`. Después, la
-  compilación (`docs/PLAN_COMPILACION.md`).
+  (2026-10-23)**; base congelada como `core-base-20261023`.
 
 ## 7. Registro de hallazgos
 
@@ -290,8 +287,7 @@ cociente de `divu` con signo; el C lo usaba sin extensión. Arreglado.
 
 **[H-SC1] ALTA · scale · `scale_prep`/`scale_loop`** (`0x13702`/`0x13740`): el
 retorno doble de `0x128a4` (`l_01294c`: `addq.l #4,a7; rts`) no se modela; el C
-continúa el cuerpo. Intencional y documentado en `docs/REFERENCIA_F4.md`
-(no modelable en el arnés; se verifica con `stop_pc=0x1294c`).
+continúa el cuerpo. Intencional (no modelable en el arnés; se verifica con `stop_pc=0x1294c`).
 **[H-SC2] MEDIA · scale** `divu.w` por 0 (`scale_setup` con `h_in=0xffff`,
 `scale_loop` con `den=0`): el ASM hace trap; el C tendría UB. Intencional: el
 juego no alcanza esos valores. **[H-SC3] BAJA**: `phase_start`/`phase` muertos.
@@ -369,8 +365,6 @@ nada (una hipótesis, un cambio), igual que en P0.
 - `make test` verde (492+), `make regscan` `ids_reg=0`, `make core` OK.
 - Registro §7 ampliado y `docs/ESTADO.md` actualizado.
 
-Solo al cerrar P1 (y P2) se abre **la compilación** (`docs/PLAN_COMPILACION.md`).
-
 ---
 
 ## 9. Registro de hallazgos P1
@@ -434,7 +428,7 @@ Módulos P1 sin hallazgo de comportamiento: `vm`, `misc`, `textform`, `icons`,
 - **[H-el1] ALTA · `elem_command` (0x128a4)**: el retorno doble de `l_01294c`
   (`addq.l #4,a7; rts`) no se propaga a los 12 llamantes (`blit_dispatch_a/b`,
   `overlay_dispatch_1/2`, `reveal_pixel`, `reveal_box_*`, `elem_blit_vbl`,
-  `scale_prep/loop`, `attract`). Intencional (ver H-SC1 y `REFERENCIA_F4`).
+  `scale_prep/loop`, `attract`). Intencional (ver H-SC1).
 - **[H-el2] MEDIA · `walk_entry`**: `element.c` la declaraba `uint32_t`; la
   definición (`vm.c`) es `void` (UB de declaraciones). Alineado.
 - **[H-el3] BAJA · `text_block_build` (0x129d6)**: producto `mulu.w` (palabras
@@ -451,7 +445,7 @@ Los hooks `cpu_delay`/`KULT_REVEAL_GATE` (reveal) y `frame_gate_delay`/
 - `make test` 494 verde, `make regscan` `ids_reg=0`, `make core` OK.
 - Falta **P2** (`palette`, `cursor`, `input`, `delay`, `boxdraw`, `line`,
   `maskblit`, `sprite`, `text`, `overlay`, `screens`, `state`, `stubs`) para
-  cerrar la revisión y abrir la compilación.
+  cerrar la revisión.
 
 ---
 
@@ -501,8 +495,7 @@ Orden: de menor a mayor. `overlay` va último (blitters con muchas trampas).
 - Blitters de overlay: el mapeo de longs por pasada es **1 plano→3, 2→7, 3→0xb,
   4→0xf** (no al revés); el tail de `0x117fe` hace `andi.w #$f,d0` (fase 0–15);
   el avance persistente de A0/A1/A2 incluye los `+8` internos.
-- `0x128a4`/`0x134da` y `0x15944` A2 fuera de ventana, etc. (ver
-  `docs/REFERENCIA_F4.md`, sección final).
+- `0x128a4`/`0x134da` y `0x15944` A2 fuera de ventana, etc.
 
 ### 10.3 Criterio de cierre P2 (y de la revisión)
 
@@ -510,7 +503,6 @@ Orden: de menor a mayor. `overlay` va último (blitters con muchas trampas).
 - ALTA/MEDIA arreglados **con prueba** o *intencional* justificado.
 - `make test` verde (494+), `make regscan` `ids_reg=0`, `make core` OK.
 - Registro §7/§9/§11 ampliado y `docs/ESTADO.md` actualizado.
-- **Entonces** se abre **la compilación** (plan en `docs/PLAN_COMPILACION.md`).
 
 ---
 
@@ -633,5 +625,4 @@ añadieron casos de cobertura (fases, clip, índices con palabra alta, fase 15,
   construible en el arnés (H-SCR1, H-LN1, H-TX1..TX3). No queda ningún ALTA/MEDIA
   abierto. Los BAJA se arreglan o se documentan.
 - La revisión del C queda **cerrada y congelada** (validada en Windows;
-  usuario): se abre **la compilación**, que nace de esta base; plan definitivo en
-  `docs/PLAN_COMPILACION.md`.
+  usuario).
