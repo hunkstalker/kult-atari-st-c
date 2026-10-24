@@ -1,4 +1,4 @@
-/* addrs.h — direcciones con nombre de los globales de KULT.PRG (base 0x10000).
+/* addrs.h — direcciones con nombre de los globales (base 0x10000).
  *
  * GENERADO por tools/gen_addrs.py desde work/names.txt. NO EDITAR A MANO.
  * Para añadir/mover un global: edita work/names.txt y ejecuta

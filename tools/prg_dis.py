@@ -16,7 +16,7 @@ Usage: python3 prg_dis.py FILE.PRG [--data] [--start OFF] [--len N] [--base ADDR
 pc-relative targets) are RUNTIME addresses instead of image offsets. It matters for
 position-DEPENDENT programs that relocate themselves to a fixed address and then use
 absolute operands — a listing at the default base 0 is off by the load base on every
-line and silently mismatches the project's names.txt. See docs/m68k-disassembly.md.
+line and silently mismatches the project's names.txt.
 """
 import struct
 import sys
@@ -40,8 +40,8 @@ BIOS = {0x00: "Getmpb", 0x01: "Bconstat", 0x02: "Bconin", 0x03: "Bconout",
 # Key = the XBIOS opcode NUMBER. TOS references print these in DECIMAL (Dosound 32, Vsync 37,
 # Supexec 38) — convert before writing the key here. The original table pasted several decimal
 # numbers straight in as hex literals (0x20 "Supexec", when 0x20 = 32 = Dosound), which mislabelled
-# Joust's whole sound layer until the body reads caught it — see docs/tos-os-calls.md's warning.
-# Hand-mirrored in AtariOsTrapAnnotate.java; change both together.
+# Joust's whole sound layer until the body reads caught it.
+# Hand-mirrored in the companion Java annotator; change both together.
 XBIOS = {0x00: "Initmous", 0x02: "Physbase", 0x03: "Logbase", 0x04: "Getrez",
          0x05: "Setscreen", 0x06: "Setpalette", 0x07: "Setcolor", 0x08: "Floprd",
          0x09: "Flopwr", 0x0E: "Iorec", 0x0F: "Rsconf", 0x11: "Random",
@@ -68,8 +68,8 @@ def parse_header(d):
 # DRI relocation stream: after the first fixup offset (a longword), one byte per step.
 # RELOC_SKIP is the trap — it advances the cursor and fixes up NOTHING, and a parser that adds a
 # fixup for it corrupts one longword every RELOC_SKIP_BYTES. That bug shipped in
-# tools/ghidra_scripts/PrgLoader.java and silently corrupted every project's Ghidra DB; see
-# docs/binary-formats.md. This function is the canonical implementation the Java one mirrors, and
+# a Ghidra PRG loader and silently corrupted every project's Ghidra DB; see
+# the PRG/DRI format notes. This function is the canonical implementation the Java one mirrors, and
 # tools/recreate_kit/test/test_reloc_table.py pins the two together.
 RELOC_END = 0
 RELOC_SKIP = 1
@@ -80,7 +80,7 @@ def parse_reloc(d, h):
     """Return set of image offsets (relative to text base = 0) needing relocation.
 
     Only ONE shape here is "no relocations": ABSFLAG set (header +26), which says the linker
-    emitted no table at all — see docs/binary-formats.md. A file that ends before the table's
+    emitted no table at all — see the PRG/DRI format notes. A file that ends before the table's
     first fixup longword is TRUNCATED, and that raises: the differential oracle's loader
     (tools/recreate_kit/oracle/loader.py) has no note to read, so a returned empty set would make
     it load such a .PRG unrelocated and run it wrong, silently. Interactive callers that still
@@ -198,7 +198,7 @@ EXG_FORMS = {(0xc, 5, 0): "exg d%d,d%d", (0xc, 5, 1): "exg a%d,a%d", (0xc, 6, 1)
 # tools/recreate_kit/test/test_prg_dis.py catches); the REGISTER forms print as a perfectly ordinary
 # `add.b d0,d1` and no automatic check can see them, which is why the reference encodings in that
 # test pin the order explicitly. Missing the ABCD half cost two wrong routine NAMES in
-# projects/wonderboy/names.txt ($51ac's `abcd d1,d0` read as a mask) before the bytes were re-read.
+# another project's names.txt ($51ac's `abcd d1,d0` read as a mask) before the bytes were re-read.
 PAIR_OPS = {0x8: "sbcd", 0x9: "subx", 0xb: "cmpm", 0xc: "abcd", 0xd: "addx"}
 PAIR_BYTE_ONLY = (0x8, 0xc)      # SBCD/ABCD have no .w/.l: those opmodes are EXG (C) or illegal (8)
 PAIR_EA_REGISTER, PAIR_EA_MEMORY = 0, 1

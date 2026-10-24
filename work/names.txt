@@ -1,5 +1,5 @@
-# KULT.PRG (Atari ST, Exxos/ERE 1989) — mapa de nombres para Ghidra.
-# Ghidra address = image offset + 0x10000 (PrgLoader base 0x10000).
+# KULT (Atari ST, Exxos/ERE 1989) — mapa de nombres para Ghidra.
+# Ghidra address = image offset + 0x10000.
 # Formato:  fn <addr> <nombre>   |   var <addr> <nombre>   |   cmt <addr> <texto>
 # Solo nombres con evidencia; el resto queda como FUN_xxxx.
 

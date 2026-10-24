@@ -15,8 +15,6 @@ tools/recreate_kit/oracle/build/
 tools/recreate_kit/*.o
 tools/recreate_kit/*.so
 
-# assets del juego (copia del usuario; NUNCA se versionan)
+# datos locales (copia del usuario; NUNCA se versionan)
 work/*
 !work/names.txt
-work/disk_a/
-work/disk_b/

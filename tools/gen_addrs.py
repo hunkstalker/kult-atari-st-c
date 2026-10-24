@@ -28,7 +28,7 @@ ADDRS = ROOT / "include" / "addrs.h"
 _VAR_RE = re.compile(r"^var\s+0x([0-9a-fA-F]+)\s+(\S+)(?:\s+#\s*(.*))?$")
 _HEADER_RE = re.compile(r"^#\s?(.*\S)\s*$")
 
-_BANNER = """/* addrs.h — direcciones con nombre de los globales de KULT.PRG (base 0x10000).
+_BANNER = """/* addrs.h — direcciones con nombre de los globales (base 0x10000).
  *
  * GENERADO por tools/gen_addrs.py desde work/names.txt. NO EDITAR A MANO.
  * Para añadir/mover un global: edita work/names.txt y ejecuta
