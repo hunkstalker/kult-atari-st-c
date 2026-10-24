@@ -10,7 +10,8 @@ Reimplementación en **C legible** de *Kult: The Temple of Flying Saucers*
 
 - **Especificación congelada (no se toca):** `../kult-atari-st-decomp`
   (`matching/auto_*.s` por función, `*.s` manuales, `data_*.s`). Ensambla al
-  original **byte a byte**.
+  original **byte a byte**. Las rutas `../...` asumen que el decomp está clonado
+  junto a este repo.
 - **Este repo:** el C, verificado con **diferencial** contra el oráculo (Musashi)
   del kit (`tools/recreate_kit`): compara memoria + registros + ledger de
   efectos off-image (paleta, PSG, IKBD…).

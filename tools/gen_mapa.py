@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """gen_mapa.py — genera docs/mapa/ (fichas por modulo + mapa de modulos).
 
-Fuente: src/*.c (cabecera, funciones y globals A_* que usan), work/names.txt
+Fuente: src/*.c (cabecera, funciones y globals A_* que usan), symbols/names.txt
 (direccion de cada funcion) y test/test_*.py (que prueba cada funcion).
 
 Uso:
@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 TEST = ROOT / "test"
-NAMES = ROOT / "work" / "names.txt"
+NAMES = ROOT / "symbols" / "names.txt"
 OUT = ROOT / "docs" / "mapa"
 
 _FUNC_RE = re.compile(

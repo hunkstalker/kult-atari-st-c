@@ -1,7 +1,7 @@
 /* addrs.h — direcciones con nombre de los globales (base 0x10000).
  *
- * GENERADO por tools/gen_addrs.py desde work/names.txt. NO EDITAR A MANO.
- * Para añadir/mover un global: edita work/names.txt y ejecuta
+ * GENERADO por tools/gen_addrs.py desde symbols/names.txt. NO EDITAR A MANO.
+ * Para añadir/mover un global: edita symbols/names.txt y ejecuta
  *     python3 tools/gen_addrs.py --write
  * (test/test_conventions.py falla si este fichero no coincide con names.txt).
  */

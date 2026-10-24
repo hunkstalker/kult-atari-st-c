@@ -2,10 +2,10 @@
 
 Fijan las reglas acordadas en el piloto (docs/PLAN.md §4.1):
 
-1. `work/names.txt` es el **único registro de nombres**: sin nombres duplicados
+1. `symbols/names.txt` es el **único registro de nombres**: sin nombres duplicados
    (fn+var) y sin dos funciones en la misma dirección (los `var` sí pueden
    solapar: son vistas distintas de los mismos bytes).
-2. `include/addrs.h` es **generado** desde `work/names.txt` (`tools/gen_addrs.py`):
+2. `include/addrs.h` es **generado** desde `symbols/names.txt` (`tools/gen_addrs.py`):
    si no coincide, falla y dice cómo regenerarlo.
 3. Toda función definida en `src/*.c` lleva un nombre de `names.txt` (nada de
    funciones anónimas ni de nombres inventados en C).
@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 import gen_addrs  # noqa: E402
 
-NAMES = ROOT / "work" / "names.txt"
+NAMES = ROOT / "symbols" / "names.txt"
 ADDRS = ROOT / "include" / "addrs.h"
 
 _FN_RE = re.compile(r"^fn\s+0x([0-9a-fA-F]+)\s+(\S+)")
@@ -53,7 +53,7 @@ _ADDRS_TEXT = ADDRS.read_text()
 def test_names_have_no_duplicates():
     all_names = [n for _, n in fns] + [n for _, n in vars_]
     dupes = sorted({n for n in all_names if all_names.count(n) > 1})
-    assert not dupes, f"nombres duplicados en work/names.txt: {dupes}"
+    assert not dupes, f"nombres duplicados en symbols/names.txt: {dupes}"
 
 
 def test_fn_addresses_are_unique():
@@ -65,7 +65,7 @@ def test_fn_addresses_are_unique():
 def test_addrs_header_is_generated():
     expected = gen_addrs.generate(NAMES.read_text())
     assert _ADDRS_TEXT == expected, (
-        "include/addrs.h no coincide con work/names.txt.\n"
+        "include/addrs.h no coincide con symbols/names.txt.\n"
         "Regenera con:  python3 tools/gen_addrs.py --write")
 
 
@@ -77,7 +77,7 @@ def test_c_functions_are_named():
             if name not in known:
                 unknown.setdefault(name, []).append(path.name)
     assert not unknown, (
-        "funciones C sin nombre en work/names.txt (añade `fn 0xADDR nombre`): "
+        "funciones C sin nombre en symbols/names.txt (añade `fn 0xADDR nombre`): "
         + ", ".join(f"{n} ({','.join(f)})" for n, f in sorted(unknown.items())))
 
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""gen_addrs.py — genera include/addrs.h desde work/names.txt.
+"""gen_addrs.py — genera include/addrs.h desde symbols/names.txt.
 
 Única fuente de los globales: las líneas `var 0x<addr> <nombre>` de
-`work/names.txt`. Cada una produce `#define A_<NOMBRE> 0x<addr>` (nombre en
+`symbols/names.txt`. Cada una produce `#define A_<NOMBRE> 0x<addr>` (nombre en
 mayúsculas). Las líneas de sección de names.txt (`# ---- ... ----`) que
 preceden a vars se copian como comentarios; las secciones de funciones (fn) se
 ignoran, así que en addrs.h solo aparecen los globales.
@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-NAMES = ROOT / "work" / "names.txt"
+NAMES = ROOT / "symbols" / "names.txt"
 ADDRS = ROOT / "include" / "addrs.h"
 
 _VAR_RE = re.compile(r"^var\s+0x([0-9a-fA-F]+)\s+(\S+)(?:\s+#\s*(.*))?$")
@@ -30,8 +30,8 @@ _HEADER_RE = re.compile(r"^#\s?(.*\S)\s*$")
 
 _BANNER = """/* addrs.h — direcciones con nombre de los globales (base 0x10000).
  *
- * GENERADO por tools/gen_addrs.py desde work/names.txt. NO EDITAR A MANO.
- * Para añadir/mover un global: edita work/names.txt y ejecuta
+ * GENERADO por tools/gen_addrs.py desde symbols/names.txt. NO EDITAR A MANO.
+ * Para añadir/mover un global: edita symbols/names.txt y ejecuta
  *     python3 tools/gen_addrs.py --write
  * (test/test_conventions.py falla si este fichero no coincide con names.txt).
  */

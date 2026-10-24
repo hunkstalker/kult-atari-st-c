@@ -12,7 +12,7 @@ este repo es la versión en C, fiel en **comportamiento** y verificada con el
 **diferencial** contra el oráculo (Musashi).
 
 - `src/`: **33 módulos**, ~12.620 líneas.
-- Nombres: **423 funciones** + **221 globales** en `work/names.txt` (registro único).
+- Nombres: **423 funciones** + **221 globales** en `symbols/names.txt` (registro único).
 - Pruebas: **518** diferenciales en verde, **0 warnings**.
 - Legibilidad: **0** identificadores de registro/decompilador en código.
 - API pública del core + visibilidad on-target cerradas.
@@ -23,8 +23,8 @@ este repo es la versión en C, fiel en **comportamiento** y verificada con el
 - Estado previo: **`core-pre-fixes-20261023`** (499 tests), para diff/rollback.
 - Alcance incluido: correcciones de camino/flujo y timing del core derivadas del
   ASM; tests de regresión.
-- Fuera: T-082/audio, HAL (`platform/`, `boot/`, `app/`), diagnóstico y modelo
-  global de CPU del port.
+- Fuera: T-082/audio, HAL (`platform/`, `boot/`, `app/`; fuera de este repo),
+  diagnóstico y modelo global de CPU del port.
 - Comparación útil:
   `git diff core-pre-fixes-20261023..core-base-20261023`.
 - Política: cambios futuros al core exigen evidencia ASM + test.
@@ -51,7 +51,7 @@ make core                      # build on-target con la API restringida
 ## Estructura de `src/`
 
 Un fichero por subsistema; cada función lleva `/* 0xADDR — qué hace */` y su
-nombre es el de `work/names.txt`:
+nombre es el de `symbols/names.txt`:
 
 | área | módulos |
 |---|---|
@@ -114,7 +114,8 @@ mapa (el harness necesita `dlsym`). Detalle en `docs/VISIBILIDAD.md`.
    **congelada** como `core-base-20261023`. Las correcciones de caminos/timing
    descubiertas en esa validación (T-081/T-083/T-087/T-088/T-089 y
    T-073c/T-085/T-086/T-090) se aplicaron aquí. Quedan fuera, por ser HAL/audio o
-   diagnóstico, T-082 (`mode.c`), `platform/`, `boot/`, `app/` y las trazas.
+   diagnóstico, T-082 (`mode.c`), `platform/`, `boot/`, `app/` y las trazas; estos
+   últimos quedan fuera de este repo.
 2. **Siguiente:** no hay tareas pendientes del core. La revisión está cerrada;
    cualquier cambio futuro exige evidencia ASM + prueba diferencial.
 - Al auditar apareció una clase de fallo recurrente del import+renombrado:

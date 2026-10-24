@@ -34,9 +34,9 @@ def _table_targets():
 
 
 def _name_addr():
-    """nombre de funcion -> direccion, desde work/names.txt."""
+    """nombre de funcion -> direccion, desde symbols/names.txt."""
     m = {}
-    for ln in open(os.path.join(ROOT, "work", "names.txt"), encoding="utf-8"):
+    for ln in open(os.path.join(ROOT, "symbols", "names.txt"), encoding="utf-8"):
         mm = re.match(r"fn\s+0x([0-9a-fA-F]+)\s+(\S+)", ln)
         if mm:
             m.setdefault(mm.group(2), int(mm.group(1), 16))

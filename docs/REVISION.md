@@ -86,7 +86,7 @@ Para cada función, comparar el cuerpo C con su `auto_*.s` en
       modeladas como llamada/continuación, no duplicadas ni reordenadas.
 
 ### 3.2 Nombres y comentarios
-- [ ] El nombre C = nombre en `work/names.txt` (convención §4.1).
+- [ ] El nombre C = nombre en `symbols/names.txt` (convención §4.1).
 - [ ] El comentario `/* 0xADDR — … */` corresponde a la etiqueta real del ASM y
       describe **lo que hace** (no un copia-pega erróneo del vecino).
 - [ ] Out-params y valores de retorno documentados y coherentes con la firma.

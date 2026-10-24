@@ -14,7 +14,7 @@ from harness import differential, report
 
 import os as _os, re as _re
 _NAME = {}
-for _ln in open(_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "work", "names.txt")):
+for _ln in open(_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "symbols", "names.txt")):
     _m = _re.match(r"fn\s+0x([0-9a-fA-F]+)\s+(\S+)", _ln)
     if _m:
         _NAME[int(_m.group(1), 16)] = _m.group(2)

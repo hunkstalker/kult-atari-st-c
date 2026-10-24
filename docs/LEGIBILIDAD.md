@@ -4,7 +4,7 @@
 PokeSwift, Ship of Harkinian, re3…): identificadores con nombre semántico y
 control de flujo legible, **sin cambiar comportamiento** (lo garantizan las
 pruebas diferenciales; eran 478 al hacer este plan, hoy 518). La traza al original se conserva por el **registro**
-`work/names.txt`, el comentario `/* 0xADDR — … */` de cada función y el repo del
+`symbols/names.txt`, el comentario `/* 0xADDR — … */` de cada función y el repo del
 decomp congelado; **no** por el texto del identificador.
 
 Contexto y por qué B/C (y no A): ver el análisis en `docs/PLAN.md` §4 y la

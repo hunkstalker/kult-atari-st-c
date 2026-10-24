@@ -17,4 +17,3 @@ tools/recreate_kit/*.so
 
 # datos locales (copia del usuario; NUNCA se versionan)
 work/*
-!work/names.txt

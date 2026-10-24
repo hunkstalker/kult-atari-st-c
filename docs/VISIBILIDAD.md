@@ -9,7 +9,7 @@ ninguno de sus ~400 símbolos internos (`copy_screen`, `set_palette`, `attn_*`,
 ## Por qué no un prefijo de módulo
 
 Renombrar los símbolos a `kult_*` en `src/` habría roto la correspondencia 1:1
-con `work/names.txt` (que es el registro de nombres y la fuente de `addrs.h`) y
+con `symbols/names.txt` (que es el registro de nombres y la fuente de `addrs.h`) y
 habría que tocarlos todos otra vez. La visibilidad se resuelve en la **frontera
 de enlace**, no en el nombre.
 

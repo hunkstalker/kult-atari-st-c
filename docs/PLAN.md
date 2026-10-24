@@ -9,7 +9,7 @@ Dos repos, con papeles distintos (fuente canónica: **`docs/PROYECTOS.md`**):
 
 | repo | papel | garantía |
 |---|---|---|
-| `../kult-atari-st-decomp` (A) | decomp canónico **en ensamblador** | **byte a byte** con el original |
+| [kult-atari-st-decomp](https://github.com/hunkstalker/kult-atari-st-decomp) (A) | decomp canónico **en ensamblador** | **byte a byte** con el original |
 | este repo (B) | **reimplementación en C** legible | **mismo comportamiento** |
 
 - **A no se toca**: es la verdad/especificación. Su `matching/` reproduce el
@@ -32,11 +32,12 @@ Dos repos, con papeles distintos (fuente canónica: **`docs/PROYECTOS.md`**):
 
 ## 2. Materiales
 
-- **Especificación (ASM):** `../kult-atari-st-decomp/matching/`
+- **Especificación (ASM):** `matching/` del repo
+  [`kult-atari-st-decomp`](https://github.com/hunkstalker/kult-atari-st-decomp)
   (`auto_*.s` por función, `*.s` manuales, `data_*.s` de tablas). Ensambla byte a
   byte con `vasm`.
-- **Índice y nombres:** `../kult-atari-st-decomp/work/decomp.c` (índice de
-  funciones) y `work/names.txt` (177 nombres ya puestos).
+- **Índice y nombres:** `work/decomp.c` del repo decomp (índice de funciones) y
+  `symbols/names.txt` (registro de nombres).
 - **Verificación:** `tools/recreate_kit/` (arnés diferencial + oráculo Musashi).
 - **Pruebas:** `test/` (518 pruebas diferenciales).
 
@@ -60,7 +61,7 @@ Regla de oro: una pieza está hecha solo si su prueba diferencial pasa.
   `text.c`, `sound.c`, `rooms.c`, `loop.c`, …).
 - **Nombres:** `snake_case` descriptivo; comentario con la dirección original en
   cada función y en cada global.
-- **Globals:** `work/names.txt` es la **única fuente**; `include/addrs.h` se
+- **Globals:** `symbols/names.txt` es la **única fuente**; `include/addrs.h` se
   **genera** con `tools/gen_addrs.py` (`make addrs`). Cada `var 0xADDR nombre`
   produce `#define A_NOMBRE 0xADDR`. `test/test_conventions.py` falla si el
   fichero no coincide (y prohíbe nombres duplicados y funciones sin nombre).
@@ -80,7 +81,7 @@ Regla de oro: una pieza está hecha solo si su prueba diferencial pasa.
 
 ### 4.1 Convenciones confirmadas en el piloto de la paleta (2026-10-17)
 
-- **Nombres:** el símbolo C es **exactamente el nombre de `work/names.txt`**
+- **Nombres:** el símbolo C es **exactamente el nombre de `symbols/names.txt`**
   (p. ej. `set_palette_entry`, `xbios_setpalette`, `set_palette_current`). Así la
   búsqueda por nombre sirve en los dos repos y `names.txt` es la única fuente de
   nombres; el `.c` agrupa por subsistema. (Se descartó el prefijo de módulo
